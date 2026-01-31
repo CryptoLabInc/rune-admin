@@ -27,7 +27,48 @@ fi
 log_info "Starting local development Vault..."
 log_warn "⚠️  This is for TESTING ONLY. DO NOT use in production!"
 
-# Start Vault container
+# Check if Docker image exists
+if ! docker images | grep -q "envector/vault-mcp"; then
+    log_warn "Docker image 'envector/vault-mcp:latest' not found."
+    log_info "Running Vault directly with Python instead..."
+
+    # Check if virtual environment exists
+    VENV_PATH=".vault_venv"
+    if [ ! -d "$VENV_PATH" ]; then
+        log_info "Creating Python virtual environment..."
+        python3 -m venv "$VENV_PATH"
+        source "$VENV_PATH/bin/activate"
+        log_info "Installing dependencies..."
+        pip install -q mcp pyenvector uvicorn numpy
+    else
+        log_info "Using existing virtual environment..."
+        source "$VENV_PATH/bin/activate"
+    fi
+
+    # Run vault in background
+    cd mcp/vault
+    log_info "Starting Vault MCP server on http://localhost:50080..."
+    python3 vault_mcp.py server --port 50080 --host 127.0.0.1 &
+    VAULT_PID=$!
+
+    sleep 3
+
+    echo ""
+    echo "${GREEN}Local Development Vault Started (Python)!${NC}"
+    echo ""
+    echo "${YELLOW}Endpoint:${NC} http://localhost:50080"
+    echo "${YELLOW}Token:${NC} envector-team-alpha (or envector-admin-001)"
+    echo "${YELLOW}PID:${NC} $VAULT_PID"
+    echo ""
+    echo "Export these for testing:"
+    echo "  export VAULT_URL=\"http://localhost:50080\""
+    echo "  export VAULT_TOKEN=\"envector-team-alpha\""
+    echo ""
+    echo "Stop with: kill $VAULT_PID"
+    exit 0
+fi
+
+# Start Vault container (if image exists)
 cd mcp/vault
 docker-compose up -d
 
