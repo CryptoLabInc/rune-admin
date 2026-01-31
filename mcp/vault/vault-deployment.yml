@@ -1,0 +1,66 @@
+# vault-deployment.yml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vault-mcp
+spec:
+  replicas: 2  # warm standby
+  selector:
+    matchLabels:
+      app: vault-mcp
+  template:
+    metadata:
+      labels:
+        app: vault-mcp
+    spec:
+      containers:
+      - name: vault-mcp
+        image: envector/vault-mcp:latest
+        
+        volumeMounts:
+        - name: keys
+          mountPath: /secure/keys
+          readOnly: false
+        
+        env:
+        - name: VAULT_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: vault-secrets
+              key: encryption-key
+        
+        ports:
+        - containerPort: 50080
+          protocol: TCP
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+      
+      volumes:
+      - name: keys
+        persistentVolumeClaim:
+          claimName: vault-keys-pvc
+      
+      # Anti-affinity: Don't run both replicas on same node
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - vault-mcp
+            topologyKey: kubernetes.io/hostname
