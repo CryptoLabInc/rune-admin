@@ -13,11 +13,18 @@ This guide shows how to set up HiveMinded for **team collaboration** where multi
 - Each developer uses different AI agent (Claude/Gemini/Codex)
 - Want seamless context sharing without manual sync
 
+## Prerequisites
+
+Before setting up team collaboration, ensure:
+
+1. **All team members have signed up for enVector Cloud** at [https://envector.io](https://envector.io)
+2. **Obtain organization API credentials** (`org-id`, `api-key`) from the enVector Cloud dashboard
+
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│              enVector Cloud (Optional)              │
+│   enVector Cloud (https://envector.io - Required)   │
 │         Stores encrypted vectors only               │
 └─────────────────────────────────────────────────────┘
           ▲               ▲               ▲

@@ -4,7 +4,7 @@ This example shows how 3 developers collaborate on a confidential project using 
 
 ## Scenario
 
-**Project:** Porting [fhenomenon](https://github.com/zotanika/fhenomenon) FHE library to game engine  
+**Project:** Building a new Web3 game using [fhenomenon](https://github.com/zotanika/fhenomenon)
 **Team:** Alice (Claude), Bob (Gemini), Carol (Codex)  
 **Goal:** Share AI agent context seamlessly without manual sync
 

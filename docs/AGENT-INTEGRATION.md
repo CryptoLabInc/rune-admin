@@ -9,6 +9,17 @@ HiveMinded is designed to work with **any AI agent** that can:
 
 This guide shows how to integrate HiveMinded with different agent types.
 
+## Prerequisites
+
+Before integrating any agent, you must:
+
+1. **Sign up for enVector Cloud** at [https://envector.io](https://envector.io)
+   - enVector Cloud is the FHE-encrypted vector database (required)
+   - Obtain your `org-id` and `api-key` from the dashboard
+
+2. **Deploy a Team Vault** (see [Team Setup Guide](TEAM-SETUP.md))
+   - One Vault per team handles FHE encryption keys
+
 ## Supported Agents
 
 ### 1. Claude (Anthropic)

@@ -15,6 +15,19 @@ HiveMinded is an **agent-agnostic framework** for organizational context memory:
 
 **Agent Agnostic**: Works with Claude, Gemini, Codex, or any AI agent that can integrate with MCP (Model Context Protocol).
 
+## Prerequisites
+
+Before using HiveMinded, you must:
+
+1. **Sign up for enVector Cloud** at [https://envector.io](https://envector.io)
+   - enVector Cloud provides the FHE-encrypted vector database for storing and searching organizational context
+   - Create an account and obtain your API credentials (`org-id`, `api-key`)
+   - **Note:** enVector Cloud currently provides minimal setup (cluster creation and API key issuance). Multi-tenant support is not yet available.
+
+2. **Deploy a Team Vault** (see Quick Start below)
+   - Vault manages FHE encryption keys for your team
+   - One Vault per team (not per developer)
+
 ## Quick Start
 
 ### 1. Choose Your Agent
@@ -29,7 +42,7 @@ HiveMinded works with:
 
 ```bash
 # Clone HiveMinded
-git clone https://github.com/CryptoLabInc/HiveMinded.git
+git clone https://github.com/zotanika/HiveMinded.git
 cd HiveMinded
 
 # Install for your agent
@@ -67,7 +80,8 @@ export VAULT_TOKEN="evt_xxx"
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│              enVector Cloud (Optional)              │
+│                   enVector Cloud                    │
+│   https://envector.io - Sign up required            │
 │         Stores encrypted vectors only               │
 └─────────────────────────────────────────────────────┘
           ▲               ▲               ▲
@@ -83,16 +97,24 @@ export VAULT_TOKEN="evt_xxx"
        └─────────────────┴─────────────────┘
                          │
                          ▼
+        ┌────────────────────────────────────┐
+        │     envector-mcp-server(s)         │  ← Scalable
+        │  - Encrypts vectors (EncKey)       │
+        │  - Handles insert/search           │
+        └────────────────┬───────────────────┘
+                         │ EncKey, EvalKey
+                         ▼
               ┌──────────────────────┐
-              │   Team Vault (Keys)  │
-              │   - FHE keys shared  │
+              │   Team Vault (Keys)  │  ← Single instance
+              │   - SecKey (decrypt) │
               │   - One per team     │
               └──────────────────────┘
 ```
 
 **Key Insight:**
 - Each team member runs their preferred agent
-- All agents share the same team Vault (same encryption keys)
+- **envector-mcp-server** handles encryption (scalable, uses public keys)
+- **Team Vault** handles decryption only (single instance, holds SecKey)
 - Context captured by one agent is accessible to all team members
 - No manual synchronization required
 
@@ -117,11 +139,13 @@ HiveMinded/
 │   └── README.md               # Agent integration guide
 │
 ├── mcp/                         # MCP server implementations
-│   ├── vault/                  # FHE key management server
+│   ├── vault/                  # FHE key management + decryption
 │   │   ├── vault_mcp.py
 │   │   ├── docker-compose.yml
 │   │   └── README.md
-│   ├── envector-client/        # enVector cloud client
+│   ├── envector-mcp-server/    # Encryption + search (git submodule)
+│   │   ├── srcs/server.py
+│   │   ├── MANUAL.md
 │   │   └── README.md
 │   └── README.md               # MCP integration guide
 │
@@ -282,7 +306,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Credits
 
-Built by [CryptoLab](https://github.com/CryptoLabInc) using:
+Built by [zotanika](https://github.com/zotanika) using:
 - [MCP](https://modelcontextprotocol.io) - Model Context Protocol by Anthropic
 - Inspired by [claude-mem](https://github.com/cyanheads/claude-mem)
 
@@ -290,4 +314,4 @@ Built by [CryptoLab](https://github.com/CryptoLabInc) using:
 
 - **Documentation**: [docs/](docs/)
 - **Issues**: [GitHub Issues](https://github.com/CryptoLabInc/HiveMinded/issues)
-- **Email**: [zotanika@cryptolab.co.kr](mailto:[zotanika@cryptolab.co.kr])
+- **Email**: [zotanika@gmail.com](mailto:[zotanika@gmail.com])
