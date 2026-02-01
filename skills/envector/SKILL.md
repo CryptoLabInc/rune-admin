@@ -285,7 +285,7 @@ graph TB
         H[FHE Encryption]
     end
     
-    subgraph "enVector Cloud (Our SaaS)"
+    subgraph "enVector Cloud - https://envector.io (Required)"
         I[Encrypted Vector DB]
         J[FHE Search Engine]
     end
@@ -379,15 +379,21 @@ Total: 418ms (feels instant)
 
 ### Prerequisites
 
-1. **Organization has decision-making context worth preserving**
+1. **Sign up for enVector Cloud** (Required)
+   - Visit [https://envector.io](https://envector.io) and create an account
+   - enVector Cloud is the FHE-encrypted vector database that powers organizational memory
+   - Obtain your API credentials (`org-id`, `api-key`) from the dashboard
+   - Note: enVector Cloud is required to use this skill
+
+2. **Organization has decision-making context worth preserving**
    - Product decisions, architecture choices, customer insights
    - Business is knowledge-intensive (not just execution)
 
-2. **Can deploy Vault (Docker container)**
+3. **Can deploy Vault (Docker container)**
    - On-premise, private cloud, or managed Kubernetes
    - Holds FHE keys (never leaves your control)
 
-3. **Budget available**
+4. **Budget available**
    - Tier 1 (Regulated): $100K-$500K/year
    - Tier 2 (High-growth): $50K-$200K/year
    - ROI: 10x+ (time saved + better decisions)
@@ -609,22 +615,24 @@ Day 3, Carol:
 │  Claude Code  │ │ Claude... │ │  Claude Code  │
 │               │ │           │ │               │
 │ Monitor Agent │ │ Monitor.. │ │ Monitor Agent │
-│      ↓ ↑      │ │    ↓ ↑    │ │      ↓ ↑      │
-│  envector     │ │  envector │ │  envector     │
-│  (encrypt/    │ │  (encrypt/│ │  (encrypt/    │
-│   decrypt)    │ │   decrypt)│ │   decrypt)    │
 └───────┬───────┘ └─────┬─────┘ └───────┬───────┘
         │               │               │
-        │ HTTPS + JWT   │ HTTPS + JWT   │ HTTPS + JWT
         └───────────────┴───────────────┘
                         │
                         ▼
         ┌───────────────────────────────┐
-        │   Team Vault (Shared Keys)    │
+        │   envector-mcp-server(s)      │  ← Scalable
+        │   - Encrypts using EncKey     │
+        │   - Handles insert/search     │
+        └───────────────┬───────────────┘
+                        │ EncKey, EvalKey
+                        ▼
+        ┌───────────────────────────────┐
+        │   Team Vault (SecKey Only)    │  ← Single instance
         │   vault-fhenomenon-game.oci   │
         │                               │
-        │   - FHE keys (team-shared)    │
-        │   - One instance per team     │
+        │   - SecKey for decryption     │
+        │   - Distributes public keys   │
         │   - OCI/AWS KMS managed       │
         └───────────────────────────────┘
 ```
@@ -632,7 +640,8 @@ Day 3, Carol:
 **Key Insight:**
 - **NOT "Local Vault per developer"** ❌
 - **ONE shared Vault for entire team** ✓
-- Each developer only needs: endpoint + token
+- **envector-mcp-server**: encrypts (scalable, public keys)
+- **Vault**: decrypts only (single instance, SecKey)
 - Same keys = seamless context sharing
 - No manual synchronization required
 

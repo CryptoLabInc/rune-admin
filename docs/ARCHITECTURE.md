@@ -49,7 +49,7 @@ HiveMinded is an **agent-agnostic organizational context memory system** built o
 1. Watch configured sources (Slack, Notion, GitHub, etc.)
 2. Detect significant decisions (pattern + ML)
 3. Extract context and metadata
-4. Encrypt as vectors (via Vault)
+4. Encrypt as vectors (via envector-mcp-server using public keys from Vault)
 5. Store in enVector Cloud
 
 **Retriever Agent Workflow:**
@@ -75,24 +75,27 @@ HiveMinded is an **agent-agnostic organizational context memory system** built o
 ```
 
 **Vault MCP Server:**
-- Manages FHE keys (never exposed to agents)
-- Encrypts vectors before storage
-- Decrypts search results
+- Manages FHE keys (SecKey never exposed)
+- Distributes public keys (EncKey, EvalKey) to envector-mcp-server
+- Decrypts search results (only component with SecKey)
 - Runs in isolated environment (TEE/secure network)
 
-**enVector MCP Client:**
+**envector-mcp-server:**
+- Receives public keys from Vault at startup
+- Encrypts vectors and queries using EncKey
 - Connects to enVector Cloud
-- Submits encrypted queries
-- Retrieves encrypted results
-- Never sees plaintext data
+- Submits encrypted queries, retrieves encrypted results
+- Scalable (multiple instances can share same keys)
 
 ### 4. Storage Layer (Data Management)
 
 **Purpose**: Store and search encrypted vectors
 
+> **Note**: enVector Cloud ([https://envector.io](https://envector.io)) is required. Sign up to obtain your API credentials before proceeding.
+
 ```
 ┌──────────────────────────────────────────┐
-│         enVector Cloud (Optional)        │
+│   enVector Cloud (https://envector.io)   │
 ├──────────────────────────────────────────┤
 │  - FHE-encrypted vector store            │
 │  - IVF-GAS search (data-oblivious)       │
@@ -124,7 +127,7 @@ Extract Context ("We chose Postgres for JSON support")
 Generate Embedding ([0.1, 0.5, 0.3, ...])
     │
     ▼
-Vault MCP (encrypt with team FHE keys)
+envector-mcp-server (encrypt with EncKey from Vault)
     │
     ▼
 Encrypted Vector ([enc(0.1), enc(0.5), enc(0.3), ...])
@@ -145,7 +148,7 @@ Retriever Agent (parse intent)
 Generate Query Embedding ([0.2, 0.4, 0.4, ...])
     │
     ▼
-Vault MCP (encrypt query)
+envector-mcp-server (encrypt query with EncKey)
     │
     ▼
 Encrypted Query ([enc(0.2), enc(0.4), enc(0.4), ...])
@@ -154,7 +157,7 @@ Encrypted Query ([enc(0.2), enc(0.4), enc(0.4), ...])
 enVector Cloud (FHE search, returns encrypted results)
     │
     ▼
-Vault MCP (decrypt results)
+Vault MCP (decrypt results with SecKey)
     │
     ▼
 Plaintext Results ("Postgres chosen for JSON support...")
@@ -193,22 +196,36 @@ User ("In Q2 2022, team chose Postgres because...")
 
 ### Key Management
 
-**Keys Never Leave Vault:**
+**Secret Key Never Leaves Vault:**
 
 ```
 ┌─────────────────────────────────────────┐
 │            Team Vault                   │
 │  ┌────────────────────────────────┐    │
 │  │  FHE Keys (encrypted at rest)  │    │
-│  │  - Public key: Encrypt vectors │    │
-│  │  - Secret key: Decrypt results │    │
-│  │  - Eval key: FHE operations    │    │
+│  │  - Secret key: Decrypt results │ ← NEVER exposed    │
+│  │  - Public key: Distributed     │    │
+│  │  - Eval key: Distributed       │    │
+│  └────────────────────────────────┘    │
+│                                         │
+│  Operations:                            │
+│  - get_public_key() → EncKey, EvalKey   │
+│  - decrypt(enc_result) → result         │
+│  - NEVER: export SecKey                 │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│       envector-mcp-server(s)            │
+│  ┌────────────────────────────────┐    │
+│  │  Public Keys (from Vault)      │    │
+│  │  - EncKey: Encrypt vectors     │    │
+│  │  - EvalKey: FHE operations     │    │
 │  └────────────────────────────────┘    │
 │                                         │
 │  Operations:                            │
 │  - encrypt(vector) → enc_vector         │
-│  - decrypt(enc_result) → result         │
-│  - NEVER: export keys                   │
+│  - search(enc_query) → enc_results      │
+│  - Scalable: Multiple instances OK      │
 └─────────────────────────────────────────┘
 ```
 
@@ -307,13 +324,19 @@ Cloud (encrypted A)    Cloud (encrypted B)
 **Horizontal Scaling:**
 
 ```
-Load Balancer
+                    ┌──────────────────┐
+                    │   Team Vault     │  ← Single instance per team
+                    │   (SecKey only)  │     (decryption is lightweight)
+                    └────────┬─────────┘
+                             │ EncKey, EvalKey
+                             ▼
+Load Balancer ──────────────────────────────────────
     │
-    ├── Vault Instance 1 (keys 1)
-    ├── Vault Instance 2 (keys 2)
-    └── Vault Instance N (keys N)
-    
-    Each instance: One team or team shard
+    ├── envector-mcp-server 1 (encryption + search)
+    ├── envector-mcp-server 2 (encryption + search)
+    └── envector-mcp-server N (encryption + search)
+
+    Each instance: Same public keys, scales horizontally
 ```
 
 **Data Sharding:**

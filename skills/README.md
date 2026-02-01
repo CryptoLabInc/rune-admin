@@ -8,6 +8,8 @@ This directory contains agent skills that can be loaded by any compatible AI age
 
 **Organizational context memory system**
 
+> **Prerequisite**: Sign up for enVector Cloud at [https://envector.io](https://envector.io) before using this skill. enVector Cloud provides the FHE-encrypted vector database required for organizational memory.
+
 Enables agents to:
 - Capture significant organizational decisions
 - Search encrypted organizational memory

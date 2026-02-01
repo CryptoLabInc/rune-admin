@@ -6,16 +6,16 @@ This directory contains MCP (Model Context Protocol) server implementations for 
 
 ### Vault MCP
 
-**Purpose:** FHE key management and cryptographic operations
+**Purpose:** FHE key management and decryption (SecKey holder)
 
 **Location:** `vault/`
 
 **Features:**
 - Manages FHE encryption keys (team-shared)
-- Encrypts vectors before storage
-- Decrypts search results
+- Distributes public keys (EncKey, EvalKey) to envector-mcp-server
+- Decrypts search results (only component with SecKey)
 - Runs in isolated environment (TEE/secure network)
-- Never exposes keys to agents
+- Never exposes SecKey to agents or other services
 
 **Documentation:** [vault/README.md](vault/README.md)
 
@@ -28,17 +28,29 @@ This directory contains MCP (Model Context Protocol) server implementations for 
 ../scripts/vault-dev.sh
 ```
 
-### enVector Client MCP (Coming Soon)
+### envector-mcp-server
 
-**Purpose:** Connect to enVector Cloud for encrypted search
+**Purpose:** Encryption, vector storage, and search operations
 
-**Location:** `envector-client/`
+**Location:** `envector-mcp-server/` (git submodule)
 
 **Features:**
-- Submits encrypted queries to enVector Cloud
-- Retrieves encrypted results
-- Never sees plaintext data
-- Handles connection pooling and retries
+- Fetches public keys (EncKey, EvalKey) from Vault at startup
+- Encrypts vectors and queries using public keys
+- Connects to enVector Cloud for storage and search
+- Scalable: multiple instances share same keys
+- Never has access to SecKey (cannot decrypt)
+
+**Documentation:** [envector-mcp-server/MANUAL.md](envector-mcp-server/MANUAL.md)
+
+**Deployment:**
+```bash
+# With HiveMinded Vault integration
+python envector-mcp-server/srcs/server.py \
+  --vault-endpoint "http://vault-mcp:50080/mcp" \
+  --vault-token "your-token" \
+  --no-auto-key-setup
+```
 
 ## MCP Protocol Overview
 
@@ -47,45 +59,62 @@ MCP (Model Context Protocol) is a standard protocol for AI agents to communicate
 ### Protocol Flow
 
 ```
-┌──────────┐                  ┌──────────┐
-│  Agent   │                  │   MCP    │
-│          │                  │  Server  │
-└──────────┘                  └──────────┘
-     │                              │
-     │  1. Connect                  │
-     ├─────────────────────────────>│
-     │                              │
-     │  2. List Tools               │
-     ├─────────────────────────────>│
-     │  <tools available>           │
-     │<─────────────────────────────┤
-     │                              │
-     │  3. Call Tool                │
-     │     (encrypt_vector)         │
-     ├─────────────────────────────>│
-     │  <encrypted result>          │
-     │<─────────────────────────────┤
-     │                              │
-     │  4. Call Tool                │
-     │     (decrypt_results)        │
-     ├─────────────────────────────>│
-     │  <decrypted data>            │
-     │<─────────────────────────────┤
+┌──────────┐        ┌─────────────────┐        ┌──────────┐
+│  Agent   │        │ envector-mcp    │        │  Vault   │
+│          │        │    server       │        │   MCP    │
+└──────────┘        └─────────────────┘        └──────────┘
+     │                      │                        │
+     │                      │  1. get_public_key     │
+     │                      ├───────────────────────>│
+     │                      │  <EncKey, EvalKey>     │
+     │                      │<───────────────────────┤
+     │                      │                        │
+     │  2. insert/search    │                        │
+     ├─────────────────────>│                        │
+     │  (plaintext vectors) │                        │
+     │                      │  3. Encrypt & Store    │
+     │                      │     (uses EncKey)      │
+     │  <encrypted results> │                        │
+     │<─────────────────────┤                        │
+     │                      │                        │
+     │  4. decrypt_scores   │                        │
+     ├──────────────────────────────────────────────>│
+     │                      │                        │
+     │  <decrypted data>    │                        │
+     │<──────────────────────────────────────────────┤
 ```
 
 ### Message Format
 
-**Tool Call:**
+**envector-mcp-server: Insert Tool Call:**
 ```json
 {
   "jsonrpc": "2.0",
   "id": 1,
   "method": "tools/call",
   "params": {
-    "name": "encrypt_vector",
+    "name": "insert",
     "arguments": {
-      "vector": [0.1, 0.5, 0.3],
-      "metadata": {"source": "slack"}
+      "index_name": "org-memory",
+      "vectors": [[0.1, 0.5, 0.3, ...]],
+      "metadata": [{"source": "slack", "content": "..."}]
+    }
+  }
+}
+```
+
+**Vault MCP: Decrypt Tool Call:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "decrypt_scores",
+    "arguments": {
+      "token": "your-vault-token",
+      "encrypted_blob_b64": "...",
+      "top_k": 5
     }
   }
 }
@@ -95,11 +124,11 @@ MCP (Model Context Protocol) is a standard protocol for AI agents to communicate
 ```json
 {
   "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "encrypted_vector": [...],
-    "vector_id": "vec_123"
-  }
+  "id": 2,
+  "result": [
+    {"index": 1, "score": 0.95},
+    {"index": 3, "score": 0.82}
+  ]
 }
 ```
 
