@@ -173,5 +173,5 @@ Some ideas for community-contributed skills:
 ## Support
 
 - **Documentation**: See individual skill README
-- **Issues**: [GitHub Issues](https://github.com/zotanika/HiveMinded/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/zotanika/HiveMinded/discussions)
+- **Issues**: [GitHub Issues](https://github.com/CryptoLabInc/rune/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/CryptoLabInc/rune/discussions)

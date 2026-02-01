@@ -36,7 +36,7 @@ from adapter import EnVectorSDKAdapter, EmbeddingAdapter, DocumentPreprocessingA
 
 def fetch_keys_from_vault(vault_endpoint: str, vault_token: str, key_path: str) -> bool:
     """
-    Fetches public keys (EncKey, EvalKey, MetadataKey) from HiveMinded Vault MCP.
+    Fetches public keys (EncKey, EvalKey, MetadataKey) from Rune Vault MCP.
 
     Args:
         vault_endpoint: Vault MCP endpoint URL (e.g., http://vault-mcp:50080/mcp)
@@ -456,7 +456,7 @@ if __name__ == "__main__":
         default=os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"),
         help="Embedding model name for enVector.",
     )
-    # HiveMinded Vault Integration Options
+    # Rune Vault Integration Options
     parser.add_argument(
         "--auto-key-setup",
         action="store_true",
@@ -466,17 +466,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--no-auto-key-setup",
         action="store_true",
-        help="Disable automatic key generation. Use when keys are provided from HiveMinded Vault.",
+        help="Disable automatic key generation. Use when keys are provided from Rune Vault.",
     )
     parser.add_argument(
         "--vault-endpoint",
         default=os.getenv("VAULT_MCP_ENDPOINT", None),
-        help="HiveMinded Vault MCP endpoint URL for fetching public keys (e.g., http://vault-mcp:50080/mcp).",
+        help="Rune Vault MCP endpoint URL for fetching public keys (e.g., http://vault-mcp:50080/mcp).",
     )
     parser.add_argument(
         "--vault-token",
         default=os.getenv("VAULT_TOKEN", None),
-        help="Authentication token for HiveMinded Vault.",
+        help="Authentication token for Rune Vault.",
     )
     args = parser.parse_args()
     run_mode = args.mode.lower()
@@ -512,7 +512,7 @@ if __name__ == "__main__":
     ENVECTOR_EVAL_MODE = args.envector_eval_mode
     ENCRYPTED_QUERY = args.encrypted_query # Plain-Cipher Query Setting
 
-    # HiveMinded Vault Integration
+    # Rune Vault Integration
     # Determine auto_key_setup: --no-auto-key-setup takes precedence
     AUTO_KEY_SETUP = args.auto_key_setup and not args.no_auto_key_setup
     VAULT_ENDPOINT = args.vault_endpoint
@@ -520,16 +520,16 @@ if __name__ == "__main__":
 
     # If Vault endpoint is provided, fetch keys from Vault
     if VAULT_ENDPOINT and VAULT_TOKEN:
-        print(f"[HiveMinded] Fetching public keys from Vault: {VAULT_ENDPOINT}")
+        print(f"[Rune] Fetching public keys from Vault: {VAULT_ENDPOINT}")
         if fetch_keys_from_vault(VAULT_ENDPOINT, VAULT_TOKEN, ENVECTOR_KEY_PATH):
-            print("[HiveMinded] Successfully fetched keys from Vault")
+            print("[Rune] Successfully fetched keys from Vault")
             AUTO_KEY_SETUP = False  # Keys provided externally, no need to auto-generate
         else:
-            print("[HiveMinded] Warning: Failed to fetch keys from Vault, falling back to local keys")
+            print("[Rune] Warning: Failed to fetch keys from Vault, falling back to local keys")
     elif VAULT_ENDPOINT and not VAULT_TOKEN:
-        print("[HiveMinded] Warning: Vault endpoint provided but no token specified. Skipping Vault integration.")
+        print("[Rune] Warning: Vault endpoint provided but no token specified. Skipping Vault integration.")
     elif not AUTO_KEY_SETUP:
-        print(f"[HiveMinded] Using externally provided keys from: {ENVECTOR_KEY_PATH}")
+        print(f"[Rune] Using externally provided keys from: {ENVECTOR_KEY_PATH}")
 
     envector_adapter = EnVectorSDKAdapter(
         address=ENVECTOR_ADDRESS,

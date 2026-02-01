@@ -1,6 +1,6 @@
-# Contributing to HiveMinded
+# Contributing to Rune
 
-Thank you for your interest in contributing to HiveMinded! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Rune! This document provides guidelines and instructions for contributing.
 
 ## Ways to Contribute
 
@@ -34,11 +34,11 @@ Thank you for your interest in contributing to HiveMinded! This document provide
 ```bash
 # Fork on GitHub
 # Then clone your fork
-git clone https://github.com/YOUR-USERNAME/HiveMinded.git
-cd HiveMinded
+git clone https://github.com/YOUR-USERNAME/rune.git
+cd rune
 
 # Add upstream remote
-git remote add upstream https://github.com/zotanika/HiveMinded.git
+git remote add upstream https://github.com/CryptoLabInc/rune.git
 ```
 
 ### 2. Create Branch
@@ -172,7 +172,7 @@ export async function encryptVector(
 #!/bin/bash
 set -e
 
-# Deploy Vault to cloud provider
+# Deploy Rune Vault to cloud provider
 # Usage: ./deploy-vault.sh --provider oci --team-name myteam
 
 log_info() {
@@ -214,7 +214,7 @@ Brief description of the feature.
 ## Usage
 
 ```python
-from hiveminded import YourFeature
+from rune import YourFeature
 
 feature = YourFeature()
 result = feature.do_something()
@@ -297,8 +297,8 @@ Once approved:
 
 ```bash
 # Clone repository
-git clone https://github.com/zotanika/HiveMinded.git
-cd HiveMinded
+git clone https://github.com/CryptoLabInc/rune.git
+cd rune
 
 # Install Python dependencies
 pip install -r requirements.txt
@@ -334,7 +334,7 @@ pytest tests/integration/
 pytest tests/test_vault.py
 
 # With coverage
-pytest --cov=hiveminded tests/
+pytest --cov=rune tests/
 
 # Verbose output
 pytest -v tests/
@@ -365,7 +365,7 @@ What actually happened.
 **Environment**
 - OS: macOS 14.0
 - Python: 3.11.5
-- HiveMinded: 0.1.0
+- Rune: 0.1.0
 - Agent: Claude Desktop 1.0
 
 **Logs**
@@ -418,4 +418,4 @@ Contributors are recognized in:
 - Release notes
 - Project README
 
-Thank you for contributing to HiveMinded! 🙏
+Thank you for contributing to Rune! 🙏

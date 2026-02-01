@@ -1,6 +1,6 @@
 # Claude Integration Setup Guide
 
-This guide provides **verified, working** configurations for integrating HiveMinded with Claude.
+This guide provides **verified, working** configurations for integrating Rune with Claude.
 
 ## Prerequisites
 
@@ -28,13 +28,13 @@ Create or edit: `.mcp/settings.json` in your workspace root
 ```json
 {
   "servers": {
-    "hiveminded-vault": {
+    "rune-vault": {
       "type": "stdio",
       "command": "python3",
       "args": [
-        "/Users/YOUR_USERNAME/repo/cryptolab/HiveMinded/mcp/vault/vault_mcp.py"
+        "/Users/YOUR_USERNAME/repo/cryptolab/rune/mcp/vault/vault_mcp.py"
       ],
-      "cwd": "/Users/YOUR_USERNAME/repo/cryptolab/HiveMinded/mcp/vault",
+      "cwd": "/Users/YOUR_USERNAME/repo/cryptolab/rune/mcp/vault",
       "env": {
         "VAULT_TOKEN": "envector-team-alpha"
       }
@@ -58,7 +58,7 @@ pwd  # Copy this output
 1. Open VS Code with Claude extension
 2. Open Command Palette (Cmd+Shift+P / Ctrl+Shift+P)
 3. Search for "MCP: Show Connected Servers"
-4. You should see "hiveminded-vault" listed
+4. You should see "rune-vault" listed
 
 ### Test the Integration
 Ask Claude:
@@ -84,10 +84,10 @@ Edit: `~/Library/Application Support/Claude/config.json`
     "hiveminded-vault": {
       "command": "python3",
       "args": [
-        "/Users/YOUR_USERNAME/repo/cryptolab/HiveMinded/mcp/vault/vault_mcp.py"
+        "/Users/YOUR_USERNAME/repo/cryptolab/rune/mcp/vault/vault_mcp.py"
       ],
       "env": {
-        "PYTHONPATH": "/Users/YOUR_USERNAME/repo/cryptolab/HiveMinded/.vault_venv/lib/python3.12/site-packages",
+        "PYTHONPATH": "/Users/YOUR_USERNAME/repo/cryptolab/rune/.vault_venv/lib/python3.12/site-packages",
         "VAULT_TOKEN": "envector-team-alpha"
       }
     }
@@ -118,13 +118,13 @@ Edit: `%APPDATA%\Claude\config.json`
 ```json
 {
   "mcpServers": {
-    "hiveminded-vault": {
+    "rune-vault": {
       "command": "python",
       "args": [
-        "C:\\Users\\YOUR_USERNAME\\repo\\cryptolab\\HiveMinded\\mcp\\vault\\vault_mcp.py"
+        "C:\\Users\\YOUR_USERNAME\\repo\\cryptolab\\rune\\mcp\\vault\\vault_mcp.py"
       ],
       "env": {
-        "PYTHONPATH": "C:\\Users\\YOUR_USERNAME\\repo\\cryptolab\\HiveMinded\\.vault_venv\\Lib\\site-packages",
+        "PYTHONPATH": "C:\\Users\\YOUR_USERNAME\\repo\\cryptolab\\rune\\.vault_venv\\Lib\\site-packages",
         "VAULT_TOKEN": "envector-team-alpha"
       }
     }
@@ -168,7 +168,7 @@ Edit: `%APPDATA%\Claude\config.json`
 
 **Solution:** Add `cwd` to point to vault directory:
 ```json
-"cwd": "/absolute/path/to/HiveMinded/mcp/vault"
+"cwd": "/absolute/path/to/rune/mcp/vault"
 ```
 
 ### Error: "Access Denied: Invalid Token"
@@ -195,7 +195,7 @@ Edit: `%APPDATA%\Claude\config.json`
 ### Test 1: List Available Tools
 Ask Claude:
 ```
-What MCP tools do you have from the hiveminded-vault server?
+What MCP tools do you have from the rune-vault server?
 ```
 
 Expected:
@@ -291,7 +291,7 @@ After successful integration:
 
 ## Support
 
-**Issues:** https://github.com/zotanika/HiveMinded/issues  
+**Issues:** https://github.com/CryptoLabInc/rune/issues  
 **Documentation:** [docs/AGENT-INTEGRATION.md](../docs/AGENT-INTEGRATION.md)  
 **Demo:** Run `python3 mcp/vault/demo_local.py`
 

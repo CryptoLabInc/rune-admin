@@ -1,10 +1,10 @@
 ---
-name: retriever-agent
+name: retriever
 role: Context Retrieval and Synthesis
 description: Searches organizational memory for relevant decisions, synthesizes context from multiple sources, and provides actionable insights. Handles FHE decryption securely through Vault.
 ---
 
-# Retriever Agent: Context Retrieval and Synthesis
+# Retriever: Context Retrieval and Synthesis
 
 ## Purpose
 

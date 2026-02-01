@@ -1,6 +1,6 @@
-# Mocked enVector-Vault (eV^2)
+# Mocked Rune Vault (eV^2)
 
-This directory contains the implementation of a Mocked enVector-Vault running as an **MCP Server**.
+This directory contains the implementation of a Mocked Rune Vault running as an **MCP Server**.
 It acts as a Trusted Client responsible for holding Secret Keys and performing sensitive decryption operations.
 
 ## Architecture

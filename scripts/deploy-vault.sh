@@ -16,7 +16,7 @@ NC='\033[0m'
 
 usage() {
     cat << EOF
-HiveMinded Vault Deployment v${VERSION}
+Rune Vault Deployment v${VERSION}
 
 Usage: $0 --provider <provider> --team-name <name> [options]
 
@@ -225,7 +225,7 @@ if [ -z "$TEAM_NAME" ]; then
 fi
 
 # Main deployment
-log_info "HiveMinded Vault Deployment v${VERSION}"
+log_info "Rune Vault Deployment v${VERSION}"
 log_info "Provider: $PROVIDER"
 log_info "Team: $TEAM_NAME"
 

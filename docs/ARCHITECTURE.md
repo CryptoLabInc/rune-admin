@@ -1,8 +1,8 @@
-# HiveMinded Architecture
+# Rune Architecture
 
 ## System Overview
 
-HiveMinded is an **agent-agnostic organizational context memory system** built on three core principles:
+Rune is an **agent-agnostic organizational context memory system** built on three core principles:
 
 1. **Capture**: Automatically identify and capture significant decisions
 2. **Encrypt**: Store as FHE-encrypted vectors (searchable but cryptographically private)
@@ -45,14 +45,14 @@ HiveMinded is an **agent-agnostic organizational context memory system** built o
 └──────────────────┘  └──────────────────┘
 ```
 
-**Monitor Agent Workflow:**
+**Scribe Workflow:**
 1. Watch configured sources (Slack, Notion, GitHub, etc.)
 2. Detect significant decisions (pattern + ML)
 3. Extract context and metadata
 4. Encrypt as vectors (via envector-mcp-server using public keys from Vault)
 5. Store in enVector Cloud
 
-**Retriever Agent Workflow:**
+**Retriever Workflow:**
 1. Parse user query (understand intent)
 2. Generate search embeddings
 3. Search encrypted memory (FHE)
@@ -68,13 +68,13 @@ HiveMinded is an **agent-agnostic organizational context memory system** built o
 │            MCP Protocol                  │
 ├──────────────────────────────────────────┤
 │  Servers:                                │
-│  - Vault MCP: Key management             │
+│  - Rune Vault: Key management             │
 │  - enVector MCP: Cloud search            │
 │  - (custom MCP servers)                  │
 └──────────────────────────────────────────┘
 ```
 
-**Vault MCP Server:**
+**Rune Vault MCP Server:**
 - Manages FHE keys (SecKey never exposed)
 - Distributes public keys (EncKey, EvalKey) to envector-mcp-server
 - Decrypts search results (only component with SecKey)
@@ -118,7 +118,7 @@ HiveMinded is an **agent-agnostic organizational context memory system** built o
 Slack Thread
     │
     ▼
-Monitor Agent (detects significant decision)
+Scribe (detects significant decision)
     │
     ▼
 Extract Context ("We chose Postgres for JSON support")
@@ -142,7 +142,7 @@ enVector Cloud (store encrypted)
 User Query ("Why did we choose Postgres?")
     │
     ▼
-Retriever Agent (parse intent)
+Retriever (parse intent)
     │
     ▼
 Generate Query Embedding ([0.2, 0.4, 0.4, ...])
@@ -163,7 +163,7 @@ Vault MCP (decrypt results with SecKey)
 Plaintext Results ("Postgres chosen for JSON support...")
     │
     ▼
-Retriever Agent (synthesize answer)
+Retriever (synthesize answer)
     │
     ▼
 User ("In Q2 2022, team chose Postgres because...")
@@ -200,7 +200,7 @@ User ("In Q2 2022, team chose Postgres because...")
 
 ```
 ┌─────────────────────────────────────────┐
-│            Team Vault                   │
+│            Rune Vault                   │
 │  ┌────────────────────────────────┐    │
 │  │  FHE Keys (encrypted at rest)  │    │
 │  │  - Secret key: Decrypt results │ ← NEVER exposed    │
@@ -263,7 +263,7 @@ Cloud (encrypted A)    Cloud (encrypted B)
 ┌─────────────────────────────────────────┐
 │       Your Infrastructure               │
 │  ┌────────────────────────────────┐    │
-│  │  Team Vault (your keys)        │    │
+│  │  Rune Vault (your keys)        │    │
 │  │  - OCI Vault / AWS KMS / GCP   │    │
 │  │  - OR self-hosted              │    │
 │  └────────────────────────────────┘    │
@@ -290,7 +290,7 @@ Cloud (encrypted A)    Cloud (encrypted B)
 ┌─────────────────────────────────────────┐
 │       Your Datacenter                   │
 │  ┌────────────────────────────────┐    │
-│  │  Team Vault (your keys)        │    │
+│  │  Rune Vault (your keys)        │    │
 │  └────────────────────────────────┘    │
 │  ┌────────────────────────────────┐    │
 │  │  enVector Service (your infra) │    │
@@ -325,7 +325,7 @@ Cloud (encrypted A)    Cloud (encrypted B)
 
 ```
                     ┌──────────────────┐
-                    │   Team Vault     │  ← Single instance per team
+                    │      Rune Vault      │  ← Single instance per team
                     │   (SecKey only)  │     (decryption is lightweight)
                     └────────┬─────────┘
                              │ EncKey, EvalKey
@@ -428,7 +428,6 @@ See [skills/README.md](../skills/README.md)
 - [ ] Multi-modal context (images, audio, video)
 - [ ] Real-time collaboration
 - [ ] Advanced ML capture (better precision)
-- [ ] Web UI for context browsing
 - [ ] API gateway for non-MCP agents
 - [ ] Cross-team context sharing (with permission)
 

@@ -1,6 +1,6 @@
 # MCP Servers
 
-This directory contains MCP (Model Context Protocol) server implementations for HiveMinded.
+This directory contains MCP (Model Context Protocol) server implementations for Rune.
 
 ## Available Servers
 
@@ -45,7 +45,7 @@ This directory contains MCP (Model Context Protocol) server implementations for 
 
 **Deployment:**
 ```bash
-# With HiveMinded Vault integration
+# With Rune Vault integration
 python envector-mcp-server/srcs/server.py \
   --vault-endpoint "http://vault-mcp:50080/mcp" \
   --vault-token "your-token" \

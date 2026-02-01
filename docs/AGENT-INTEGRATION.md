@@ -2,12 +2,12 @@
 
 ## Overview
 
-HiveMinded is designed to work with **any AI agent** that can:
+Rune is designed to work with **any AI agent** that can:
 1. Load skills/tools
 2. Connect to MCP (Model Context Protocol) servers
 3. Execute structured workflows
 
-This guide shows how to integrate HiveMinded with different agent types.
+This guide shows how to integrate Rune with different agent types.
 
 ## Prerequisites
 
@@ -17,7 +17,7 @@ Before integrating any agent, you must:
    - enVector Cloud is the FHE-encrypted vector database (required)
    - Obtain your `org-id` and `api-key` from the dashboard
 
-2. **Deploy a Team Vault** (see [Team Setup Guide](TEAM-SETUP.md))
+2. **Deploy a Rune Vault** (see [Team Setup Guide](TEAM-SETUP.md))
    - One Vault per team handles FHE encryption keys
 
 ## Supported Agents
@@ -29,7 +29,7 @@ Before integrating any agent, you must:
 #### Installation
 
 ```bash
-# Install HiveMinded skills
+# Install Rune skills
 ./install.sh --agent claude
 
 # Skills installed to: ~/.claude/skills/envector
@@ -44,7 +44,7 @@ Edit `~/.claude/config.json`:
   "mcpServers": {
     "vault": {
       "command": "python",
-      "args": ["path/to/HiveMinded/mcp/vault/vault_mcp.py"],
+      "args": ["path/to/rune/mcp/vault/vault_mcp.py"],
       "env": {
         "VAULT_URL": "https://vault-your-team.oci.envector.io",
         "VAULT_TOKEN": "evt_xxx"
@@ -75,7 +75,7 @@ Gemini supports custom extensions through Google AI Studio.
 #### Installation
 
 ```bash
-# Install HiveMinded skills
+# Install Rune skills
 ./install.sh --agent gemini
 
 # Skills installed to: ~/.gemini/skills/envector
@@ -114,7 +114,7 @@ Codex in GitHub Copilot can be extended with custom skills.
 #### Installation
 
 ```bash
-# Install HiveMinded skills
+# Install Rune skills
 ./install.sh --agent codex
 
 # Skills installed to: ~/.codex/skills/envector
@@ -170,7 +170,7 @@ For custom agents, implement MCP client interface.
 #### Python Implementation
 
 ```python
-from hiveminded import ContextMemory, MCPClient
+from rune import ContextMemory, MCPClient
 
 class CustomAgent:
     def __init__(self, vault_url, vault_token):
@@ -235,7 +235,7 @@ results = agent.search_context("Why did we choose Postgres?")
 #### JavaScript/TypeScript Implementation
 
 ```typescript
-import { ContextMemory, MCPClient } from 'hiveminded';
+import { ContextMemory, MCPClient } from 'rune';
 
 class CustomAgent {
   private memory: ContextMemory;
@@ -295,7 +295,7 @@ const results = await agent.searchContext('Why did we choose Postgres?');
 
 ### MCP Server Interface
 
-HiveMinded requires one MCP server: **Vault MCP**
+Rune requires one MCP server: **Vault MCP**
 
 #### Vault MCP Endpoints
 
@@ -376,10 +376,10 @@ class MCPClient:
 
 ## Agent Workflow Patterns
 
-### Pattern 1: Monitor Agent (Capture)
+### Pattern 1: Scribe (Capture)
 
 ```python
-class MonitorAgent:
+class Scribe:
     def __init__(self, memory):
         self.memory = memory
         self.sources = []  # Slack, Notion, GitHub, etc.
@@ -414,10 +414,10 @@ class MonitorAgent:
         return any(re.search(p, content.text, re.I) for p in patterns)
 ```
 
-### Pattern 2: Retriever Agent (Search)
+### Pattern 2: Retriever (Search)
 
 ```python
-class RetrieverAgent:
+class Retriever:
     def __init__(self, memory):
         self.memory = memory
     

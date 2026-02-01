@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Configure agent environment for HiveMinded
+# Configure agent environment for Rune
 
 VERSION="0.1.0"
 AGENT=""
@@ -14,7 +14,7 @@ NC='\033[0m'
 
 usage() {
     cat << EOF
-HiveMinded Agent Configuration v${VERSION}
+Rune Agent Configuration v${VERSION}
 
 Usage: $0 --agent <agent-type>
 

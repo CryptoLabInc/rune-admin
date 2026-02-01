@@ -1,10 +1,10 @@
 ---
-name: monitor-agent
+name: scribe
 role: Organizational Context Capture
 description: Continuously monitors team communications and artifacts to identify and capture significant decisions, architectural rationale, and institutional knowledge. Converts high-value context into encrypted vector embeddings for organizational memory.
 ---
 
-# Monitor Agent: Organizational Context Capture
+# Scribe: Organizational Context Capture
 
 ## Purpose
 
@@ -251,7 +251,7 @@ def review_queue():
   },
   
   "metadata": {
-    "captured_by": "monitor-agent",
+    "captured_by": "scribe",
     "reviewed_by": "user_123",
     "confidence": 0.95,
     "tags": ["architecture", "microservices", "scaling"]
@@ -527,7 +527,7 @@ def delete_my_decisions(user_id, date_range):
 ### Example Config
 
 ```yaml
-# monitor-agent.yml
+# scribe.yml
 capture:
   sources:
     slack:
@@ -610,11 +610,11 @@ monitoring:
 
 ## Next Steps
 
-After deploying Monitor Agent:
+After deploying Scribe:
 1. Review first 50 captures (ensure quality)
 2. Adjust confidence thresholds
 3. Add organization-specific patterns
 4. Train model on feedback
 5. Monitor capture rate and precision
 
-See [Retriever Agent](../retriever-agent/AGENT.md) for how captured context gets retrieved.
+See [Retriever](../agents/retriever.md) for how captured context gets retrieved.

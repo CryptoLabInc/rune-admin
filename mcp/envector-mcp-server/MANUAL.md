@@ -136,11 +136,11 @@ Arguments to run Python scripts:
 
     > ⚠️ **Note**: MCP server holds the key for homomorphic encryption as MCP server is a enVector Client.
 
-- 🔐 HiveMinded Vault Integration (Optional)
-    - `--vault-endpoint`: HiveMinded Vault MCP endpoint URL for fetching public keys.
-    - `--vault-token`: Authentication token for HiveMinded Vault.
+- 🔐 Rune Vault Integration (Optional)
+    - `--vault-endpoint`: Rune Vault MCP endpoint URL for fetching public keys.
+    - `--vault-token`: Authentication token for Rune Vault.
 
-    > 💡 **HiveMinded Integration**: When integrated with HiveMinded, the Vault MCP manages cryptographic keys centrally. The envector-mcp-server fetches public keys (EncKey, EvalKey) from Vault at startup, while SecKey remains securely in Vault for decryption operations. See [HiveMinded Architecture](#hiveminded-integration) for details.
+    > 💡 **Rune Integration**: When integrated with Rune, the Vault MCP manages cryptographic keys centrally. The envector-mcp-server fetches public keys (EncKey, EvalKey) from Vault at startup, while SecKey remains securely in Vault for decryption operations. See [Rune Architecture](#rune-integration) for details.
 
 - ⚙️ Embedding options
     - `--embedding-mode`: Mode of the embedding model. Supports `femb` (FastEmb), `hf` (huggingface), `sbert` (SBERT; sentence-transformers), and `openai` (OpenAI API). For `openai`, required to set environmental variable `OPENAI_API_KEY`.
@@ -315,15 +315,15 @@ Basic format is `JSON-RPC 2.0`
     + Check TypeHint
 
 
-## HiveMinded Integration
+## Rune Integration
 
-When used with [HiveMinded](https://github.com/zotanika/HiveMinded), the envector-mcp-server operates in a distributed key management architecture:
+When used with [Rune](https://github.com/CryptoLabInc/rune), the envector-mcp-server operates in a distributed key management architecture:
 
 ### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    HiveMinded Architecture                      │
+│                       Rune Architecture                         │
 └─────────────────────────────────────────────────────────────────┘
 
                     ┌──────────────────────┐
@@ -351,7 +351,7 @@ When used with [HiveMinded](https://github.com/zotanika/HiveMinded), the envecto
                     └──────────────────────┘
 ```
 
-### Configuration for HiveMinded
+### Configuration for Rune
 
 #### Option 1: Fetch keys from Vault at startup (Recommended)
 
@@ -375,7 +375,7 @@ python srcs/server.py \
     --no-auto-key-setup
 ```
 
-### Environment Variables for HiveMinded
+### Environment Variables for Rune
 
 ```bash
 # Disable auto key generation

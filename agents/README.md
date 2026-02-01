@@ -4,13 +4,13 @@ This directory contains agent specifications and implementation guides.
 
 ## Agent Types
 
-### Monitor Agent
+### Scribe
 
 **Role:** Context capture
 
 **Purpose:** Continuously monitors team communications and artifacts to identify and capture significant decisions, architectural rationale, and institutional knowledge.
 
-**Specification:** [monitor-agent.md](monitor-agent.md)
+**Specification:** [scribe.md](scribe.md)
 
 **Key Features:**
 - Watches multiple sources (Slack, Notion, GitHub, meetings)
@@ -18,13 +18,13 @@ This directory contains agent specifications and implementation guides.
 - Extracts context and metadata
 - Encrypts and stores in organizational memory
 
-### Retriever Agent
+### Retriever
 
 **Role:** Context retrieval and synthesis
 
 **Purpose:** Searches organizational memory for relevant decisions, synthesizes context from multiple sources, and provides actionable insights.
 
-**Specification:** [retriever-agent.md](retriever-agent.md)
+**Specification:** [retriever.md](retriever.md)
 
 **Key Features:**
 - Understands user intent
@@ -35,7 +35,7 @@ This directory contains agent specifications and implementation guides.
 
 ## Agent Integration
 
-### How Agents Work with HiveMinded
+### How Agents Work with Rune
 
 ```
 ┌──────────────────────────────────────┐
@@ -45,14 +45,14 @@ This directory contains agent specifications and implementation guides.
 │  1. Load skills from skills/         │
 │  2. Connect to MCP servers           │
 │  3. Execute agent behaviors          │
-│     - Monitor: Capture context       │
+│     - Scribe: Capture context        │
 │     - Retriever: Search & synthesize │
 └──────────────────────────────────────┘
 ```
 
 ### Agent Workflow
 
-**Monitor Agent Workflow:**
+**Scribe Workflow:**
 
 ```
 1. Watch configured sources
@@ -78,7 +78,7 @@ This directory contains agent specifications and implementation guides.
    └─ Store in enVector Cloud
 ```
 
-**Retriever Agent Workflow:**
+**Retriever Workflow:**
 
 ```
 1. Parse user query
@@ -103,7 +103,7 @@ This directory contains agent specifications and implementation guides.
 ### Python Example
 
 ```python
-from hiveminded import ContextMemory, MonitorAgent, RetrieverAgent
+from rune import ContextMemory, Scribe, Retriever
 
 # Initialize memory
 memory = ContextMemory(
@@ -111,14 +111,14 @@ memory = ContextMemory(
     vault_token="evt_xxx"
 )
 
-# Monitor agent
-monitor = MonitorAgent(memory)
-monitor.watch_source("slack", channels=["#engineering"])
-monitor.watch_source("github", repos=["owner/repo"])
-monitor.start()
+# Scribe
+scribe = Scribe(memory)
+scribe.watch_source("slack", channels=["#engineering"])
+scribe.watch_source("github", repos=["owner/repo"])
+scribe.start()
 
-# Retriever agent
-retriever = RetrieverAgent(memory)
+# Retriever
+retriever = Retriever(memory)
 answer = retriever.answer_query("Why did we choose Postgres?")
 print(answer)
 ```
@@ -126,7 +126,7 @@ print(answer)
 ### JavaScript/TypeScript Example
 
 ```typescript
-import { ContextMemory, MonitorAgent, RetrieverAgent } from 'hiveminded';
+import { ContextMemory, Scribe, Retriever } from 'rune';
 
 // Initialize memory
 const memory = new ContextMemory({
@@ -134,14 +134,14 @@ const memory = new ContextMemory({
   vaultToken: 'evt_xxx'
 });
 
-// Monitor agent
-const monitor = new MonitorAgent(memory);
-monitor.watchSource('slack', { channels: ['#engineering'] });
-monitor.watchSource('github', { repos: ['owner/repo'] });
-await monitor.start();
+// Scribe
+const scribe = new Scribe(memory);
+scribe.watchSource('slack', { channels: ['#engineering'] });
+scribe.watchSource('github', { repos: ['owner/repo'] });
+await scribe.start();
 
-// Retriever agent
-const retriever = new RetrieverAgent(memory);
+// Retriever
+const retriever = new Retriever(memory);
 const answer = await retriever.answerQuery('Why did we choose Postgres?');
 console.log(answer);
 ```
@@ -151,7 +151,7 @@ console.log(answer);
 You can implement custom agent behaviors by extending base classes:
 
 ```python
-from hiveminded import BaseAgent
+from rune import BaseAgent
 
 class CustomAgent(BaseAgent):
     def __init__(self, memory):
@@ -194,7 +194,7 @@ export AGENT_SEARCH_LIMIT=10        # Max results per search
 **~/.claude/agent-config.yaml** (example for Claude):
 
 ```yaml
-monitor:
+scribe:
   sources:
     slack:
       enabled: true
@@ -229,26 +229,26 @@ retriever:
 ### Unit Tests
 
 ```python
-# tests/test_monitor_agent.py
+# tests/test_scribe.py
 import pytest
-from hiveminded import MonitorAgent, ContextMemory
+from rune import Scribe, ContextMemory
 
 @pytest.fixture
 def mock_memory():
     return MockContextMemory()
 
-def test_monitor_detects_decision(mock_memory):
-    monitor = MonitorAgent(mock_memory)
+def test_scribe_detects_decision(mock_memory):
+    scribe = Scribe(mock_memory)
     
     text = "Decision: We chose Postgres for JSON support"
-    is_significant = monitor.is_significant(text)
+    is_significant = scribe.is_significant(text)
     
     assert is_significant == True
 
-def test_monitor_captures_context(mock_memory):
-    monitor = MonitorAgent(mock_memory)
+def test_scribe_captures_context(mock_memory):
+    scribe = Scribe(mock_memory)
     
-    result = monitor.capture(
+    result = scribe.capture(
         text="We chose Postgres",
         source="slack",
         metadata={"channel": "#eng"}
@@ -263,7 +263,7 @@ def test_monitor_captures_context(mock_memory):
 ```python
 # tests/test_integration.py
 import pytest
-from hiveminded import ContextMemory, MonitorAgent, RetrieverAgent
+from rune import ContextMemory, Scribe, Retriever
 
 @pytest.mark.integration
 async def test_capture_and_retrieve():
@@ -274,14 +274,14 @@ async def test_capture_and_retrieve():
     )
     
     # Capture
-    monitor = MonitorAgent(memory)
-    await monitor.capture(
+    scribe = Scribe(memory)
+    await scribe.capture(
         text="Test decision: chose option A",
         source="test"
     )
     
     # Retrieve
-    retriever = RetrieverAgent(memory)
+    retriever = Retriever(memory)
     results = await retriever.search("test decision")
     
     assert len(results) > 0
@@ -331,7 +331,7 @@ print(results.debug_info)
 
 ## Next Steps
 
-- Read agent specifications: [monitor-agent.md](monitor-agent.md), [retriever-agent.md](retriever-agent.md)
+- Read agent specifications: [scribe.md](scribe.md), [retriever.md](retriever.md)
 - Try example workflows: [../examples/](../examples/)
 - Integrate with your agent: [../docs/AGENT-INTEGRATION.md](../docs/AGENT-INTEGRATION.md)
 - Join community discussions

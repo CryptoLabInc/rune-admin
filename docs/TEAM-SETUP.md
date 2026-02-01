@@ -2,13 +2,13 @@
 
 ## Overview
 
-This guide shows how to set up HiveMinded for **team collaboration** where multiple developers work on a confidential project and share AI agent context seamlessly.
+This guide shows how to set up Rune for **team collaboration** where multiple developers work on a confidential project and share AI agent context seamlessly.
 
 ## Use Case: Confidential Game Engine Port
 
 **Scenario:**
 - 3 developers forking [fhenomenon](https://github.com/zotanika/fhenomenon)
-- Porting to game engine (confidential project)
+- Creating Web3 game (confidential project)
 - Remote collaboration
 - Each developer uses different AI agent (Claude/Gemini/Codex)
 - Want seamless context sharing without manual sync
@@ -33,7 +33,7 @@ Before setting up team collaboration, ensure:
 │   Alice      │  │     Bob      │  │    Carol     │
 │   (Claude)   │  │   (Gemini)   │  │   (Codex)    │
 │              │  │              │  │              │
-│ Monitor Agent│  │ Monitor Agent│  │ Monitor Agent│
+│    Scribe    │  │    Scribe    │  │    Scribe    │
 │      ↓       │  │      ↓       │  │      ↓       │
 │  MCP Client  │  │  MCP Client  │  │  MCP Client  │
 └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
@@ -42,7 +42,7 @@ Before setting up team collaboration, ensure:
                          │
                          ▼
               ┌──────────────────────┐
-              │   Team Vault (Keys)  │
+              │      Rune Vault      │
               │  OCI/AWS/GCP or      │
               │  Self-hosted         │
               └──────────────────────┘
@@ -62,7 +62,7 @@ Before setting up team collaboration, ensure:
 
 ```bash
 # Choose your cloud provider
-cd HiveMinded
+cd rune
 
 # Deploy to OCI (Oracle Cloud)
 ./scripts/deploy-vault.sh \
@@ -132,13 +132,13 @@ VAULT_TOKEN="evt_fhen_game_abc123xyz"
 - Don't commit to Git
 - Rotate token if compromised
 
-### Step 3: Each Team Member Installs HiveMinded
+### Step 3: Each Team Member Installs Rune
 
 **Alice (uses Claude):**
 
 ```bash
-git clone https://github.com/zotanika/HiveMinded.git
-cd HiveMinded
+git clone https://github.com/CryptoLabInc/rune.git
+cd rune
 
 # Install for Claude
 ./install.sh --agent claude
@@ -154,8 +154,8 @@ export VAULT_TOKEN="evt_fhen_game_abc123xyz"
 **Bob (uses Gemini):**
 
 ```bash
-git clone https://github.com/zotanika/HiveMinded.git
-cd HiveMinded
+git clone https://github.com/CryptoLabInc/rune.git
+cd rune
 
 # Install for Gemini
 ./install.sh --agent gemini
@@ -171,8 +171,8 @@ export VAULT_TOKEN="evt_fhen_game_abc123xyz"
 **Carol (uses Codex):**
 
 ```bash
-git clone https://github.com/zotanika/HiveMinded.git
-cd HiveMinded
+git clone https://github.com/CryptoLabInc/rune.git
+cd rune
 
 # Install for Codex
 ./install.sh --agent codex
@@ -408,9 +408,9 @@ Should see: "envector" in the list
 
 ```bash
 # Admin shares credentials with new member
-New member installs HiveMinded:
-  git clone https://github.com/zotanika/HiveMinded.git
-  cd HiveMinded
+New member installs Rune:
+  git clone https://github.com/CryptoLabInc/rune.git
+  cd rune
   ./install.sh --agent <their-preferred-agent>
   
 New member configures:
