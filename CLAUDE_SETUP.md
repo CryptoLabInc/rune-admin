@@ -50,7 +50,7 @@ Create or edit: `.mcp/settings.json` in your workspace root
 
 ### How to Find Your Absolute Path
 ```bash
-cd /path/to/HiveMinded/mcp/vault
+cd /absolute/path/to/rune/mcp/vault
 pwd  # Copy this output
 ```
 
@@ -81,7 +81,7 @@ Edit: `~/Library/Application Support/Claude/config.json`
 ```json
 {
   "mcpServers": {
-    "hiveminded-vault": {
+    "rune-vault": {
       "command": "python3",
       "args": [
         "/Users/YOUR_USERNAME/repo/cryptolab/rune/mcp/vault/vault_mcp.py"
