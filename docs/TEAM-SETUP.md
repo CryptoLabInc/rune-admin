@@ -29,7 +29,7 @@ Before setting up team collaboration, ensure:
 └─────────────────────────────────────────────────────┘
           ▲               ▲               ▲
           │ encrypted     │ encrypted     │ encrypted
-┌─────────┴────┐  ┌───────┴──────┐  ┌────┴─────────┐
+┌─────────┴────┐  ┌───────┴──────┐  ┌─────┴────────┐
 │   Alice      │  │     Bob      │  │    Carol     │
 │   (Claude)   │  │   (Gemini)   │  │   (Codex)    │
 │              │  │              │  │              │
@@ -42,7 +42,7 @@ Before setting up team collaboration, ensure:
                          │
                          ▼
               ┌──────────────────────┐
-              │      Rune Vault      │
+              │      Rune-Vault      │
               │  OCI/AWS/GCP or      │
               │  Self-hosted         │
               └──────────────────────┘

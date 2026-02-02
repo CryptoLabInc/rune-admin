@@ -32,9 +32,9 @@ Create or edit: `.mcp/settings.json` in your workspace root
       "type": "stdio",
       "command": "python3",
       "args": [
-        "/Users/YOUR_USERNAME/repo/cryptolab/rune/mcp/vault/vault_mcp.py"
+        "/absolute/path/to/rune/mcp/vault/vault_mcp.py"
       ],
-      "cwd": "/Users/YOUR_USERNAME/repo/cryptolab/rune/mcp/vault",
+      "cwd": "/absolute/path/to/rune/mcp/vault",
       "env": {
         "VAULT_TOKEN": "envector-team-alpha"
       }
@@ -44,14 +44,88 @@ Create or edit: `.mcp/settings.json` in your workspace root
 ```
 
 **Important:**
-- Replace `/Users/YOUR_USERNAME/...` with your actual absolute path
+- Replace `/absolute/path/to/rune/...` with your actual Rune installation path
 - Use forward slashes even on Windows in JSON
 - The `cwd` ensures keys are found in the correct directory
 
+### Platform-Specific Paths
+
+**macOS / Linux:**
+```json
+{
+  "servers": {
+    "rune-vault": {
+      "command": "python3",
+      "args": [
+        "/absolute/path/to/rune/mcp/vault/vault_mcp.py"
+      ],
+      "cwd": "/absolute/path/to/rune/mcp/vault"
+    }
+  }
+}
+```
+
+**Windows (use forward slashes in JSON):**
+```json
+{
+  "servers": {
+    "rune-vault": {
+      "command": "python",
+      "args": [
+        "C:/absolute/path/to/rune/mcp/vault/vault_mcp.py"
+      ],
+      "cwd": "C:/absolute/path/to/rune/mcp/vault",
+      "env": {
+        "VAULT_TOKEN": "envector-team-alpha"
+      }
+    }
+  }
+}
+```
+
+**Windows (PowerShell - alternative):**
+```json
+{
+  "servers": {
+    "rune-vault": {
+      "command": "powershell.exe",
+      "args": [
+        "-Command",
+        "python",
+        "C:/absolute/path/to/rune/mcp/vault/vault_mcp.py"
+      ],
+      "cwd": "C:/absolute/path/to/rune/mcp/vault",
+      "env": {
+        "VAULT_TOKEN": "envector-team-alpha"
+      }
+    }
+  }
+}
+```
+
 ### How to Find Your Absolute Path
+
+**macOS / Linux:**
 ```bash
-cd /path/to/HiveMinded/mcp/vault
+cd /path/to/rune/mcp/vault
 pwd  # Copy this output
+```
+
+**Windows (Command Prompt):**
+```cmd
+cd C:\path\to\rune\mcp\vault
+cd  # Shows current directory
+```
+
+**Windows (PowerShell):**
+```powershell
+cd C:\path\to\rune\mcp\vault
+Get-Location  # Shows current directory
+```
+
+**Tip**: When copying Windows paths to JSON, replace backslashes `\` with forward slashes `/`
+```
+C:\Users\Alice\repo\rune  →  C:/Users/Alice/repo/rune
 ```
 
 ### Verify Installation
@@ -84,10 +158,10 @@ Edit: `~/Library/Application Support/Claude/config.json`
     "hiveminded-vault": {
       "command": "python3",
       "args": [
-        "/Users/YOUR_USERNAME/repo/cryptolab/rune/mcp/vault/vault_mcp.py"
+        "/absolute/path/to/rune/mcp/vault/vault_mcp.py"
       ],
       "env": {
-        "PYTHONPATH": "/Users/YOUR_USERNAME/repo/cryptolab/rune/.vault_venv/lib/python3.12/site-packages",
+        "PYTHONPATH": "/absolute/path/to/rune/.vault_venv/lib/python3.12/site-packages",
         "VAULT_TOKEN": "envector-team-alpha"
       }
     }

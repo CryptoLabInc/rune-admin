@@ -24,96 +24,241 @@ Before using Rune, you must:
    - Create an account and obtain your API credentials (`org-id`, `api-key`)
    - **Note:** enVector Cloud currently provides minimal setup (cluster creation and API key issuance). Multi-tenant support is not yet available.
 
-2. **Deploy a Rune Vault** (see Quick Start below)
+2. **Deploy a Rune-Vault** (see Quick Start below)
    - Vault manages FHE encryption keys for your team
    - One Vault per team (not per developer)
 
 ## Quick Start
 
-### 1. Choose Your Agent
+### 1. Sign up for enVector Cloud
 
-Rune works with:
-- ✅ **Claude Code / Claude Desktop** (Anthropic)
-- ✅ **Gemini** (Google)
-- ✅ **GitHub Codex** (OpenAI)
-- ✅ **Custom agents** (via MCP protocol)
+```bash
+# Visit https://envector.io and create an account
+# Obtain your credentials:
+# - Organization ID: your-org-id
+# - API Key: envector_xxx
 
+export ENVECTOR_ORG_ID="your-org-id"
+export ENVECTOR_API_KEY="envector_xxx"
+```
+
+### 2. Install Rune (For Administrators)
+
+**Note:** This step is for team administrators who deploy Rune-Vault. Regular team members will receive a setup package and don't need to run this.
+
+```bash
 # Clone Rune
 git clone https://github.com/CryptoLabInc/rune.git
 cd rune
 
-# Install for your agent
-./install.sh --agent claude    # For Claude
-./install.sh --agent gemini    # For Gemini
-./install.sh --agent codex     # For Codex
-./install.sh --agent custom    # For custom agents
+# Run setup script (checks dependencies, installs Python packages)
+# macOS/Linux:
+./install.sh
+
+# Windows:
+.\install.bat
 ```
 
-### 3. Deploy Rune Vault (Team-Shared)
+The installer will:
+- Check Python 3.10+, Docker, Terraform
+- Install Python dependencies for Vault
+- Prepare vault keys directory
+- Show next steps for deployment
+
+**Team Members:** Skip this step and wait for your admin to share the setup package with you.
+
+### 3. Deploy Rune-Vault (Administrators Only)
+
+**One Vault per team** - All team members connect to the same Vault instance.
 
 ```bash
-# Option 1: Use managed Vault (recommended for teams)
-./scripts/deploy-vault.sh --provider oci --team-name your-team
+# Option A: Deploy to Cloud (Recommended)
+cd deployment/oci    # or aws, gcp
 
-# Option 2: Self-hosted
-docker-compose -f deployment/vault/docker-compose.yml up -d
+# Edit terraform.tfvars with your settings
+terraform init
+terraform plan
+terraform apply
 
-# Option 3: Local dev (testing only)
-./scripts/vault-dev.sh
-```
-
-### 4. Configure Your Agent
-
-```bash
-# Share these with your team
+# Note the Vault URL from outputs
 export VAULT_URL="https://vault-your-team.oci.envector.io"
 export VAULT_TOKEN="evt_xxx"
 
-# Each team member runs this once
-./scripts/configure-agent.sh
+# Option B: Local Testing
+cd mcp/vault
+./run_vault.sh
+# Vault runs at http://localhost:8000
 ```
+
+**Team Members:** Your admin will share the Vault URL and token with you.
+
+### 4. Onboard Team Members (Administrators)
+
+Generate setup packages for team members:
+
+```bash
+# Add a team member
+./scripts/add-team-member.sh alice
+
+# This creates: team-setup-alice.zip with:
+# - team-specific config
+# - setup script
+# - Vault connection info
+# - enVector credentials
+
+# Share the zip file with Alice
+# Alice runs the setup script and is ready to use Rune
+```
+
+### 5. Configure Your Agent (Team Members)
+
+After receiving your setup package from admin:
+
+```bash
+# Extract package
+unzip team-setup-alice.zip
+cd team-setup-alice
+
+# Run setup script
+./setup.sh    # macOS/Linux
+# or
+setup.bat     # Windows
+
+# Configure your agent (Claude/Gemini/etc.)
+# The script will guide you through agent-specific configuration
+```
+
+**Supported Agents:**
+- ✅ **Claude Desktop / Claude Code** (Anthropic)
+- ✅ **Gemini** (Google)  
+- ✅ **GitHub Codex** (OpenAI)
+- ✅ **Custom agents** (via MCP protocol)
+
+That's it! Your agent now has access to organizational memory.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   enVector Cloud                    │
-│   https://envector.io - Sign up required            │
-│         Stores encrypted vectors only               │
-└─────────────────────────────────────────────────────┘
-          ▲               ▲               ▲
-          │ encrypted     │ encrypted     │ encrypted
-┌─────────┴────┐  ┌───────┴──────┐  ┌────┴─────────┐
-│   Claude     │  │    Gemini    │  │    Codex     │
-│              │  │              │  │              │
-│    Scribe    │  │    Scribe    │  │    Scribe    │
-│      ↓       │  │      ↓       │  │      ↓       │
-│  MCP Client  │  │  MCP Client  │  │  MCP Client  │
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │                 │                 │
-       └─────────────────┴─────────────────┘
-                         │
-                         ▼
-        ┌────────────────────────────────────┐
-        │     envector-mcp-server(s)         │  ← Scalable
-        │  - Encrypts vectors (EncKey)       │
-        │  - Handles insert/search           │
-        └────────────────┬───────────────────┘
-                         │ EncKey, EvalKey
-                         ▼
-              ┌──────────────────────┐
-              │      Rune Vault      │  ← Single instance
-              │   - SecKey (decrypt) │
-              │   - One per team     │
-              └──────────────────────┘
+                    ┌─────────────────────────────┐
+                    │     enVector Cloud          │
+                    │   (Sign up required)        │
+                    │  • Stores encrypted vectors │
+                    │  • FHE search               │
+                    └──────────┬──────────────────┘
+                               │ encrypted data only
+                               │
+          ┌────────────────────┼────────────────────┐
+          │                    │                    │
+    ┌─────▼─────┐       ┌──────▼──────┐     ┌──────▼──────┐
+    │ envector- │       │  envector-  │     │  envector-  │
+    │ mcp-server│       │ mcp-server  │ ... │ mcp-server  │
+    │           │       │             │     │             │
+    │ • Encrypt │       │ (Scalable)  │     │             │
+    │ • Search  │       │             │     │             │
+    │ • EncKey  │       └─────────────┘     └─────────────┘
+    └─────┬─────┘
+          │
+          │ decrypt results only
+          │
+    ┌─────▼──────────────┐
+    │   Rune-Vault       │
+    │ (Single instance)  │
+    │ • Holds SecKey     │
+    │ • Decrypt only     │
+    │ • One per team     │
+    └─────┬──────────────┘
+          │
+          │ MCP protocol
+          │
+    ┌─────┴──────┬──────────┬──────────┐
+    │            │          │          │
+┌───▼───┐  ┌────▼────┐ ┌───▼────┐ ┌───▼────┐
+│Claude │  │ Gemini  │ │ Codex  │ │ Custom │
+│       │  │         │ │        │ │  Agent │
+│Scribe │  │ Scribe  │ │ Scribe │ │        │
+└───────┘  └─────────┘ └────────┘ └────────┘
 ```
 
+**Data Flow:**
+1. **Capture**: Agent (Scribe) → envector-mcp-server → encrypt with EncKey
+2. **Store**: Encrypted vector → enVector Cloud
+3. **Search**: Agent query → envector-mcp-server → encrypted search → Cloud
+4. **Decrypt**: Encrypted results → Rune-Vault (SecKey) → plaintext → Agent
+
 **Key Insight:**
-- Each team member runs their preferred agent
-- **envector-mcp-server** handles encryption (scalable, uses public keys)
-- **Rune Vault** handles decryption only (single instance, holds SecKey)
-- Context captured by one agent is accessible to all team members
-- No manual synchronization required
+- ✅ **Encryption is scalable**: Multiple envector-mcp-servers use public EncKey
+- ✅ **Decryption is secure**: Single Rune-Vault holds secret SecKey
+- ✅ **Team collaboration**: Same Vault = same keys = shared context
+- ✅ **Agent agnostic**: Any agent can use MCP protocol
+
+## Security Architecture
+
+### Two-Tier Key Management
+
+**Why separate encryption and decryption?**
+
+Traditional approach (single Vault):
+```
+❌ Problem: Vault does everything
+   • Encrypt vectors (high volume)
+   • Decrypt results (high volume)
+   • Holds all keys (security critical)
+   • Single bottleneck
+```
+
+Rune approach (two-tier):
+```
+✅ Solution: Separation of concerns
+
+Tier 1: envector-mcp-server (Encryption)
+   • Keys: EncKey (public), EvalKey (FHE operations)
+   • Operations: Encrypt vectors, FHE search
+   • Scaling: Horizontal (spin up more instances)
+   • Security: Cannot decrypt (no SecKey)
+
+Tier 2: Rune-Vault (Decryption)
+   • Keys: SecKey (secret, never exposed)
+   • Operations: Decrypt results only
+   • Scaling: Vertical (single instance, high security)
+   • Security: Keys in TEE, encrypted at rest
+```
+
+**Security Benefits:**
+- 🔐 **SecKey isolation**: Only Vault has access, agents cannot extract
+- 📈 **Scalable encryption**: envector-mcp-servers scale with load
+- 🛡️ **Reduced attack surface**: SecKey in one hardened location
+- 🔍 **Audit-friendly**: All decryption in single audit point
+
+**EncKey Compromise?**
+- Attacker can encrypt new vectors (spam injection)
+- **Cannot read existing data** (no SecKey)
+- Mitigation: Authentication on envector-mcp-server (API keys)
+
+**SecKey Compromise?**
+- Catastrophic: All data readable
+- **Prevention**: TEE deployment, encrypted at rest, strict access control
+- **Detection**: Audit logging, anomaly detection
+
+### Key Backup and Recovery
+
+**SecKey backup strategy:**
+```bash
+# Master key encrypts SecKey
+openssl enc -aes-256-cbc -in SecKey.json -out SecKey.enc -pass file:master.key
+
+# Store in multiple locations
+# 1. Primary Vault: Active use
+# 2. Backup Vault: Hot standby
+# 3. Cold storage: Encrypted backup (S3, etc.)
+```
+
+**Recovery process:**
+1. Detect Vault failure (health check)
+2. Promote standby Vault (< 30s)
+3. Load SecKey from encrypted backup
+4. Resume decryption operations
+
+See [docs/SECURITY.md](docs/SECURITY.md) for threat model.
 
 ## Project Structure
 

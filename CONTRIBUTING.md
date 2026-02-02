@@ -172,7 +172,7 @@ export async function encryptVector(
 #!/bin/bash
 set -e
 
-# Deploy Rune Vault to cloud provider
+# Deploy Rune-Vault to cloud provider
 # Usage: ./deploy-vault.sh --provider oci --team-name myteam
 
 log_info() {

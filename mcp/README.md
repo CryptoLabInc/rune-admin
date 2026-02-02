@@ -45,7 +45,7 @@ This directory contains MCP (Model Context Protocol) server implementations for 
 
 **Deployment:**
 ```bash
-# With Rune Vault integration
+# With Rune-Vault integration
 python envector-mcp-server/srcs/server.py \
   --vault-endpoint "http://vault-mcp:50080/mcp" \
   --vault-token "your-token" \

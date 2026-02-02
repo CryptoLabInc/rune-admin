@@ -64,17 +64,17 @@ Rune is an **agent-agnostic organizational context memory system** built on thre
 **Purpose**: Standardized communication between agents and services
 
 ```
-┌──────────────────────────────────────────┐
-│            MCP Protocol                  │
-├──────────────────────────────────────────┤
-│  Servers:                                │
-│  - Rune Vault: Key management             │
-│  - enVector MCP: Cloud search            │
-│  - (custom MCP servers)                  │
-└──────────────────────────────────────────┘
+┌─────────────────────────────────────┐
+│            MCP Protocol             │
+├─────────────────────────────────────┤
+│  Servers:                           │
+│  - Rune-Vault: Key management       │
+│  - enVector MCP: Cloud search       │
+│  - (custom MCP servers)             │
+└─────────────────────────────────────┘
 ```
 
-**Rune Vault MCP Server:**
+**Rune-Vault MCP Server:**
 - Manages FHE keys (SecKey never exposed)
 - Distributes public keys (EncKey, EvalKey) to envector-mcp-server
 - Decrypts search results (only component with SecKey)
@@ -200,13 +200,13 @@ User ("In Q2 2022, team chose Postgres because...")
 
 ```
 ┌─────────────────────────────────────────┐
-│            Rune Vault                   │
-│  ┌────────────────────────────────┐    │
-│  │  FHE Keys (encrypted at rest)  │    │
-│  │  - Secret key: Decrypt results │ ← NEVER exposed    │
-│  │  - Public key: Distributed     │    │
-│  │  - Eval key: Distributed       │    │
-│  └────────────────────────────────┘    │
+│            Rune-Vault                   │
+│  ┌────────────────────────────────┐     │
+│  │  FHE Keys (encrypted at rest)  │     │
+│  │  - Secret key: Decrypt results │ ← NEVER exposed
+│  │  - Public key: Distributed     │     │
+│  │  - Eval key: Distributed       │     │
+│  └────────────────────────────────┘     │
 │                                         │
 │  Operations:                            │
 │  - get_public_key() → EncKey, EvalKey   │
@@ -216,11 +216,11 @@ User ("In Q2 2022, team chose Postgres because...")
 
 ┌─────────────────────────────────────────┐
 │       envector-mcp-server(s)            │
-│  ┌────────────────────────────────┐    │
-│  │  Public Keys (from Vault)      │    │
-│  │  - EncKey: Encrypt vectors     │    │
-│  │  - EvalKey: FHE operations     │    │
-│  └────────────────────────────────┘    │
+│  ┌────────────────────────────────┐     │
+│  │  Public Keys (from Vault)      │     │
+│  │  - EncKey: Encrypt vectors     │     │
+│  │  - EvalKey: FHE operations     │     │
+│  └────────────────────────────────┘     │
 │                                         │
 │  Operations:                            │
 │  - encrypt(vector) → enc_vector         │
@@ -260,22 +260,22 @@ Cloud (encrypted A)    Cloud (encrypted B)
 ### 1. Hybrid (Recommended)
 
 ```
-┌─────────────────────────────────────────┐
-│       Your Infrastructure               │
-│  ┌────────────────────────────────┐    │
-│  │  Rune Vault (your keys)        │    │
-│  │  - OCI Vault / AWS KMS / GCP   │    │
-│  │  - OR self-hosted              │    │
-│  └────────────────────────────────┘    │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────┐
+│       Your Infrastructure            │
+│  ┌────────────────────────────────┐  │
+│  │  Rune-Vault (your keys)        │  │
+│  │  - OCI Vault / AWS KMS / GCP   │  │
+│  │  - OR self-hosted              │  │
+│  └────────────────────────────────┘  │
+└──────────────────────────────────────┘
               │ HTTPS + JWT
               ▼
-┌─────────────────────────────────────────┐
-│       enVector Cloud (SaaS)             │
-│  - Encrypted vectors only               │
-│  - FHE search                           │
-│  - Scalability and reliability          │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────┐
+│       enVector Cloud (SaaS)          │
+│  - Encrypted vectors only            │
+│  - FHE search                        │
+│  - Scalability and reliability       │
+└──────────────────────────────────────┘
 ```
 
 **Benefits:**
@@ -287,15 +287,15 @@ Cloud (encrypted A)    Cloud (encrypted B)
 ### 2. Fully On-Premise
 
 ```
-┌─────────────────────────────────────────┐
-│       Your Datacenter                   │
-│  ┌────────────────────────────────┐    │
-│  │  Rune Vault (your keys)        │    │
-│  └────────────────────────────────┘    │
-│  ┌────────────────────────────────┐    │
-│  │  enVector Service (your infra) │    │
-│  └────────────────────────────────┘    │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────┐
+│       Your Datacenter                │
+│  ┌────────────────────────────────┐  │
+│  │  Rune-Vault (your keys)        │  │
+│  └────────────────────────────────┘  │
+│  ┌────────────────────────────────┐  │
+│  │  enVector Service (your infra) │  │
+│  └────────────────────────────────┘  │
+└──────────────────────────────────────┘
 ```
 
 **Benefits:**
@@ -324,10 +324,10 @@ Cloud (encrypted A)    Cloud (encrypted B)
 **Horizontal Scaling:**
 
 ```
-                    ┌──────────────────┐
-                    │      Rune Vault      │  ← Single instance per team
-                    │   (SecKey only)  │     (decryption is lightweight)
-                    └────────┬─────────┘
+                    ┌────────────────────┐
+                    │     Rune-Vault     │  ← Single instance per team
+                    │   (SecKey only)    │    (decryption is lightweight)
+                    └────────┬───────────┘
                              │ EncKey, EvalKey
                              ▼
 Load Balancer ──────────────────────────────────────
@@ -344,8 +344,8 @@ Load Balancer ──────────────────────
 ```
 Team Data (1M vectors)
     │
-    ├── Recent (100K) → FLAT search (fast)
-    ├── Archive (900K) → IVF-GAS (accurate)
+    ├── Recent (100K) → FLAT search (accurate)
+    ├── Archive (900K) → IVF-GAS    (fast)
     └── Cold (older) → Compressed storage
 ```
 
