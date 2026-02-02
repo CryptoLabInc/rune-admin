@@ -1,45 +1,30 @@
 <#
 .SYNOPSIS
-Rune-Vault Setup Script for Windows
+Rune Interactive Installer for Windows
 
 .DESCRIPTION
-Prepares environment for deploying Rune-Vault (admins only).
-Team members don't need to run this - use onboarding package instead.
-
-This script:
-1. Checks system requirements (Python, Docker, Terraform)
-2. Installs Python dependencies for Vault
-3. Prepares vault keys directory
-4. Shows next steps for deployment
+Non-developer friendly setup for Rune organizational memory system.
+Guides you through role-based installation (Admin or Team Member).
 
 .EXAMPLE
 .\install.ps1
 #>
 
 $ErrorActionPreference = "Stop"
-$VERSION = "0.2.0"
+$Version = "0.2.0"
 
-# Colors
+# -- Colors for Output --
 function Write-Info ($Message) { Write-Host "✓ $Message" -ForegroundColor Green }
 function Write-Warn ($Message) { Write-Host "⚠ $Message" -ForegroundColor Yellow }
 function Write-ErrorMsg ($Message) { Write-Host "✗ $Message" -ForegroundColor Red }
-function Write-Header ($Message) {
-    Write-Host ""
-    Write-Host "================================================" -ForegroundColor Blue
+function Write-Header ($Message) { 
+    Write-Host "`n================================================" -ForegroundColor Blue
     Write-Host $Message -ForegroundColor Blue
-    Write-Host "================================================" -ForegroundColor Blue
-    Write-Host ""
+    Write-Host "================================================`n" -ForegroundColor Blue
 }
 function Write-Step ($Message) {
-    Write-Host ""
-    Write-Host "▶ $Message" -ForegroundColor Blue
+    Write-Host "`n▸ $Message`n" -ForegroundColor Blue
 }
-
-# Welcome
-Write-Header "Rune-Vault Setup v$VERSION"
-
-Write-Host @"
-Note: This script is for team administrators who will deploy Rune-Vault.
 
 Team members don't need to run this - you'll receive an onboarding
 package from your admin with a ready-to-use setup script.
@@ -65,141 +50,132 @@ Write-Step "Step 1: Checking System Requirements"
 $pythonFound = $false
 $pythonVersion = $null
 
-try {
-    $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
-    if ($pythonCmd) {
-        $pythonVersionOutput = & python --version 2>&1 | Out-String
-        if ($pythonVersionOutput -match 'Python (\d+\.\d+)') {
-            $pythonVersion = [version]$matches[1]
-            if ($pythonVersion -ge [version]"3.10") {
-                Write-Info "Python $($pythonVersion) found"
-                $pythonFound = $true
-            } else {
-                Write-Warn "Python $($pythonVersion) found, but 3.10+ required"
-            }
-        }
-    }
-} catch {
-    # Try python3
+function Test-Python {
     try {
-        $python3Cmd = Get-Command python3 -ErrorAction SilentlyContinue
-        if ($python3Cmd) {
-            $pythonVersionOutput = & python3 --version 2>&1 | Out-String
-            if ($pythonVersionOutput -match 'Python (\d+\.\d+)') {
-                $pythonVersion = [version]$matches[1]
-                if ($pythonVersion -ge [version]"3.10") {
-                    Write-Info "Python3 $($pythonVersion) found"
-                    $pythonFound = $true
-                    # Use python3 command
-                    Set-Alias python python3 -Scope Script
-                } else {
-                    Write-Warn "Python3 $($pythonVersion) found, but 3.10+ required"
-                }
-            }
+        $pythonVersion = python --version 2>&1
+        if ($pythonVersion -match "Python (\d+\.\d+\.\d+)") {
+            Write-Info "Python $($matches[1]) detected"
+            return $true
         }
-    } catch {}
+    }
+    catch {
+        Write-ErrorMsg "Python is not installed"
+        Write-Host "Please install Python 3.8 or higher from:"
+        Write-Host "  https://www.python.org/downloads/"
+        return $false
+    }
 }
 
-if (-not $pythonFound) {
-    Write-ErrorMsg "Python 3.10+ not found. Please install Python from https://python.org"
+function Setup-VaultDependencies {
+    Write-Step "Setting up Rune-Vault dependencies..."
+    
+    Set-Location "mcp\vault"
+    
+    # Create virtual environment
+    if (-not (Test-Path ".venv")) {
+        Write-Info "Creating Python virtual environment..."
+        python -m venv .venv
+    }
+    else {
+        Write-Info "Virtual environment already exists"
+    }
+    
+    # Activate venv
+    & ".venv\Scripts\Activate.ps1"
+    
+    # Install dependencies
+    Write-Info "Installing Python packages (this may take a few minutes)..."
+    python -m pip install --quiet --upgrade pip
+    python -m pip install --quiet pyenvector fastmcp psutil prometheus-client
+    
+    Write-Info "Dependencies installed successfully!"
+    
+    Set-Location "..\..\"
+}
+
+function Show-AdminNextSteps {
+    Write-Header "Setup Complete! Next Steps for Admin"
+    
+    Write-Host "1️⃣  Deploy Rune-Vault to cloud:"
+    Write-Host "   cd deployment\oci    # or aws, gcp"
+    Write-Host "   terraform init"
+    Write-Host "   terraform apply"
     Write-Host ""
-    Write-Host "After installing Python, restart PowerShell and run this script again."
-    exit 1
+    Write-Host "2️⃣  Share with team members:"
+    Write-Host "   - Vault URL: https://vault-YOURTEAM.oci.envector.io"
+    Write-Host "   - Vault Token: evt_YOURTEAM_xxx"
+    Write-Host ""
+    Write-Host "3️⃣  Onboard team members:"
+    Write-Host "   .\scripts\add-team-member.sh"
+    Write-Host ""
+    Write-Host "📚 Deployment Guide: deployment\oci\README.md"
+    Write-Host "💬 Support: https://github.com/CryptoLabInc/rune/issues"
+    Write-Host ""
 }
 
-# Check Docker
-try {
-    $dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
-    if ($dockerCmd) {
-        $dockerVersion = & docker --version 2>&1 | Out-String
-        Write-Info "Docker found: $($dockerVersion.Trim())"
-    } else {
-        Write-Warn "Docker not found"
-        Write-Host ""
-        Write-Host "Docker is required for running Rune-Vault. Install from https://docker.com"
-        Write-Host "If you plan to deploy to cloud instead, you can skip Docker for now."
-        Write-Host ""
-    }
-} catch {
-    Write-Warn "Docker not found or not running"
-}
-
-# Check Terraform (optional)
-try {
-    $tfCmd = Get-Command terraform -ErrorAction SilentlyContinue
-    if ($tfCmd) {
-        $tfVersion = & terraform --version 2>&1 | Select-Object -First 1
-        Write-Info "Terraform found: $($tfVersion.Trim())"
-    } else {
-        Write-Warn "Terraform not found (optional for cloud deployment)"
-        Write-Host ""
-        Write-Host "If you plan to deploy to OCI/AWS/GCP, install Terraform from https://terraform.io"
-        Write-Host ""
-    }
-} catch {
-    Write-Warn "Terraform not found (optional)"
-}
-
-# Step 2: Install Python Dependencies
-Write-Step "Step 2: Installing Python Dependencies"
-
-$VAULT_DIR = Join-Path $PSScriptRoot "mcp\vault"
-$VENV_DIR = Join-Path $VAULT_DIR ".venv"
-$REQUIREMENTS_FILE = Join-Path $VAULT_DIR "requirements.txt"
-
-# Create virtual environment
-Write-Host "Creating Python virtual environment..."
-if (Test-Path $VENV_DIR) {
-    Write-Info "Virtual environment already exists at $VENV_DIR"
-} else {
-    & python -m venv $VENV_DIR
-    if ($LASTEXITCODE -ne 0) {
-        Write-ErrorMsg "Failed to create virtual environment"
-        exit 1
-    }
-    Write-Info "Virtual environment created at $VENV_DIR"
-}
-
-# Activate venv and install dependencies
-$ACTIVATE_SCRIPT = Join-Path $VENV_DIR "Scripts\Activate.ps1"
-
-if (Test-Path $ACTIVATE_SCRIPT) {
-    Write-Host "Installing dependencies..."
+function Show-MemberNextSteps {
+    Write-Header "Setup Complete! Next Steps for Team Member"
     
-    if (Test-Path $REQUIREMENTS_FILE) {
-        # Install from requirements.txt
-        & $VENV_DIR\Scripts\pip.exe install --quiet -r $REQUIREMENTS_FILE
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warn "Some packages failed to install from requirements.txt"
-            Write-Host "Attempting to install core packages..."
-            & $VENV_DIR\Scripts\pip.exe install --quiet pyenvector fastmcp psutil prometheus-client
+    Write-Host "Wait for your admin to send you:"
+    Write-Host "  1. Vault URL (https://vault-YOURTEAM.oci.envector.io)"
+    Write-Host "  2. Vault Token (evt_YOURTEAM_xxx)"
+    Write-Host "  3. Setup package (YOURNAME_rune_package.zip)"
+    Write-Host ""
+    Write-Host "Once received:"
+    Write-Host "  1. Extract the package"
+    Write-Host "  2. Run the setup script inside"
+    Write-Host "  3. Restart your AI agent"
+    Write-Host ""
+    Write-Host "📚 Configuration Guide: CLAUDE_SETUP.md"
+    Write-Host "💬 Support: https://github.com/CryptoLabInc/rune/issues"
+    Write-Host ""
+}
+
+# Main interactive installation
+try {
+    Write-Header "Rune Interactive Installer v$Version"
+    
+    Write-Host "Rune is an agent-agnostic organizational memory system."
+    Write-Host "It helps teams capture and retrieve context across any AI agent."
+    Write-Host ""
+    
+    Write-Step "What's your role?"
+    Write-Host "1) Team Admin (will deploy Rune-Vault)"
+    Write-Host "2) Team Member (will connect to existing Vault)"
+    Write-Host ""
+    
+    $role = Read-Host "Select (1 or 2)"
+    
+    switch ($role) {
+        "1" {
+            Write-Header "Admin Setup"
+            
+            if (-not (Test-Python)) {
+                exit 1
+            }
+            
+            Setup-VaultDependencies
+            
+            Write-Info "Admin setup complete!"
+            Show-AdminNextSteps
         }
-    } else {
-        # Install core packages directly
-        & $VENV_DIR\Scripts\pip.exe install --quiet pyenvector fastmcp psutil prometheus-client
+        "2" {
+            Write-Header "Team Member Setup"
+            
+            Write-Host "As a team member, you don't need to install anything locally."
+            Write-Host "Your admin will provide you with a setup package."
+            Write-Host ""
+            
+            Write-Info "No installation needed!"
+            Show-MemberNextSteps
+        }
+        default {
+            Write-ErrorMsg "Invalid selection. Please run the script again."
+            exit 1
+        }
     }
     
-    if ($LASTEXITCODE -eq 0) {
-        Write-Info "Python dependencies installed successfully"
-    } else {
-        Write-ErrorMsg "Failed to install dependencies"
-        exit 1
-    }
-} else {
-    Write-ErrorMsg "Could not find activation script at $ACTIVATE_SCRIPT"
-    exit 1
-}
-
-# Step 3: Prepare Vault Keys
-Write-Step "Step 3: Preparing Vault Keys Directory"
-
-$KEYS_DIR = Join-Path $PSScriptRoot "vault_keys"
-
-if (-not (Test-Path $KEYS_DIR)) {
-    New-Item -ItemType Directory -Force -Path $KEYS_DIR | Out-Null
-    Write-Info "Created vault_keys directory"
-} else {
-    Write-Info "vault_keys directory already exists"
+    Write-Info "Setup complete! 🎉"
 }
 
 Write-Host ""

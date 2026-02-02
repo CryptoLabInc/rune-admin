@@ -42,34 +42,35 @@ export ENVECTOR_ORG_ID="your-org-id"
 export ENVECTOR_API_KEY="envector_xxx"
 ```
 
-### 2. Install Rune (For Administrators)
+### 2. Install Rune
 
-**Note:** This step is for team administrators who deploy Rune-Vault. Regular team members will receive a setup package and don't need to run this.
+**Interactive Installation:**
 
 ```bash
 # Clone Rune
 git clone https://github.com/CryptoLabInc/rune.git
 cd rune
 
-# Run setup script (checks dependencies, installs Python packages)
-# macOS/Linux:
-./install.sh
-
-# Windows:
-.\install.bat
+# Run interactive installer
+./install.sh        # macOS/Linux
+install.bat         # Windows
 ```
 
-The installer will:
-- Check Python 3.10+, Docker, Terraform
-- Install Python dependencies for Vault
-- Prepare vault keys directory
-- Show next steps for deployment
+The installer will ask:
+- **Team Admin** (deploys infrastructure): Installs Python dependencies for Vault deployment
+- **Team Member** (joins existing team): No installation needed, waits for admin package
 
-**Team Members:** Skip this step and wait for your admin to share the setup package with you.
+**What gets installed (Admin only):**
+- Python virtual environment
+- Dependencies: `pyenvector`, `fastmcp`, `psutil`, `prometheus-client`
 
-### 3. Deploy Rune-Vault (Administrators Only)
+**Agent Support:**
+- ✅ **Claude Code / Claude Desktop** (Anthropic)
+- ✅ **Gemini** (Google)
+- ✅ **GitHub Codex** (OpenAI)
+- ✅ **Custom agents** (via MCP protocol)
 
-**One Vault per team** - All team members connect to the same Vault instance.
+### 3. Deploy Rune-Vault (Team-Shared)
 
 ```bash
 # Option A: Deploy to Cloud (Recommended)

@@ -1,9 +1,8 @@
 #!/bin/bash
 set -e
 
-# Rune-Vault Setup Script
-# Prepares environment for deploying Rune-Vault (admins only)
-# Team members don't need to run this - use onboarding package instead
+# Rune Interactive Installer
+# Non-developer friendly setup for organizational memory system
 
 VERSION="0.2.0"
 
@@ -15,219 +14,141 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 print_header() {
-    echo ""
-    echo -e "${BLUE}================================================${NC}"
+    echo -e "\n${BLUE}================================================${NC}"
     echo -e "${BLUE}$1${NC}"
-    echo -e "${BLUE}================================================${NC}"
-    echo ""
+    echo -e "${BLUE}================================================${NC}\n"
 }
 
-log_info() {
+print_info() {
     echo -e "${GREEN}✓${NC} $1"
 }
 
-log_warn() {
+print_warn() {
     echo -e "${YELLOW}⚠${NC} $1"
 }
 
-log_error() {
+print_error() {
     echo -e "${RED}✗${NC} $1"
 }
 
 print_step() {
-    echo -e "\n${BLUE}▶${NC} $1"
-}print_step() {
-    echo -e "\n${BLUE}▶${NC} $1"
+    echo -e "\n${BLUE}▸${NC} $1\n"
 }
 
-check_command() {
-    if command -v "$1" &> /dev/null; then
-        log_info "$1 is installed"
-        return 0
-    else
-        log_error "$1 is NOT installed"
-        return 1
+check_python() {
+    if ! command -v python3 &> /dev/null; then
+        print_error "Python 3 is not installed"
+        echo "Please install Python 3.8 or higher:"
+        echo "  - macOS: brew install python3"
+        echo "  - Linux: sudo apt install python3 python3-pip"
+        exit 1
     fi
-}
-
-# Welcome message
-print_header "Rune-Vault Setup v${VERSION}"
-
-cat << EOF
-${YELLOW}Note:${NC} This script is for ${GREEN}team administrators${NC} who will deploy Rune-Vault.
-
-${YELLOW}Team members${NC} don't need to run this - you'll receive an onboarding
-package from your admin with a ready-to-use setup script.
-
-This will:
-  1. Check system requirements (Python, Docker, Terraform)
-  2. Install Python dependencies for Vault
-  3. Prepare vault keys directory
-  4. Show next steps for deployment
-
-EOF
-
-read -p "Continue with Vault setup? (y/N) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Setup cancelled."
-    exit 0
-fi
-
-# Step 1: Check system requirements
-print_header "Step 1: Checking System Requirements"
-
-MISSING_DEPS=0
-
-print_step "Checking Python..."
-if check_command python3; then
-    PYTHON_VERSION=$(python3 --version | awk '{print $2}')
-    log_info "Python version: $PYTHON_VERSION"
     
-    # Check if Python >= 3.10
-    MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
-    MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
-    if [ "$MAJOR" -ge 3 ] && [ "$MINOR" -ge 10 ]; then
-        log_info "Python version is sufficient (>= 3.10)"
+    PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
+    print_info "Python $PYTHON_VERSION detected"
+}
+
+setup_vault_dependencies() {
+    print_step "Setting up Rune-Vault dependencies..."
+    
+    cd mcp/vault
+    
+    # Create virtual environment
+    if [ ! -d ".venv" ]; then
+        print_info "Creating Python virtual environment..."
+        python3 -m venv .venv
     else
-        log_warn "Python 3.10+ recommended (you have $PYTHON_VERSION)"
+        print_info "Virtual environment already exists"
     fi
-else
-    MISSING_DEPS=1
-    echo "Install Python: https://www.python.org/downloads/"
-fi
-
-print_step "Checking Docker..."
-if check_command docker; then
-    DOCKER_VERSION=$(docker --version | awk '{print $3}' | tr -d ',')
-    log_info "Docker version: $DOCKER_VERSION"
-else
-    MISSING_DEPS=1
-    echo "Install Docker: https://docs.docker.com/get-docker/"
-fi
-
-print_step "Checking Terraform..."
-if check_command terraform; then
-    TERRAFORM_VERSION=$(terraform version -json | grep -o '"terraform_version":"[^"]*"' | cut -d'"' -f4)
-    log_info "Terraform version: $TERRAFORM_VERSION"
-else
-    log_warn "Terraform not found (optional, needed for cloud deployment)"
-    echo "Install Terraform: https://www.terraform.io/downloads"
-fi
-
-if [ $MISSING_DEPS -eq 1 ]; then
-    echo ""
-    log_error "Missing required dependencies. Please install them and run this script again."
-    exit 1
-fi
-
-log_info "All required dependencies are installed!"
-
-# Step 2: Setup Python virtual environment
-print_header "Step 2: Setting Up Python Environment"
-
-VAULT_DIR="mcp/vault"
-VENV_DIR="$VAULT_DIR/.venv"
-
-print_step "Creating virtual environment..."
-if [ -d "$VENV_DIR" ]; then
-    log_warn "Virtual environment already exists at $VENV_DIR"
-    read -p "Recreate? (y/N) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        rm -rf "$VENV_DIR"
-        python3 -m venv "$VENV_DIR"
-        log_info "Virtual environment recreated"
-    fi
-else
-    python3 -m venv "$VENV_DIR"
-    log_info "Virtual environment created at $VENV_DIR"
-fi
-
-print_step "Installing Python dependencies..."
-source "$VENV_DIR/bin/activate"
-
-# Check if requirements.txt exists
-if [ -f "$VAULT_DIR/requirements.txt" ]; then
-    pip install --quiet --upgrade pip
-    pip install --quiet -r "$VAULT_DIR/requirements.txt"
-    log_info "Dependencies installed from requirements.txt"
-else
-    # Install core dependencies
-    log_warn "requirements.txt not found, installing core packages..."
+    
+    # Activate venv
+    source .venv/bin/activate
+    
+    # Install dependencies
+    print_info "Installing Python packages (this may take a few minutes)..."
     pip install --quiet --upgrade pip
     pip install --quiet pyenvector fastmcp psutil prometheus-client
-    log_info "Core dependencies installed"
-fi
+    
+    print_info "Dependencies installed successfully!"
+    
+    cd ../..
+}
 
-deactivate
+show_admin_next_steps() {
+    print_header "Setup Complete! Next Steps for Admin"
+    
+    echo "1️⃣  Deploy Rune-Vault to cloud:"
+    echo "   cd deployment/oci    # or aws, gcp"
+    echo "   terraform init"
+    echo "   terraform apply"
+    echo ""
+    echo "2️⃣  Share with team members:"
+    echo "   - Vault URL: https://vault-YOURTEAM.oci.envector.io"
+    echo "   - Vault Token: evt_YOURTEAM_xxx"
+    echo ""
+    echo "3️⃣  Onboard team members:"
+    echo "   ./scripts/add-team-member.sh"
+    echo ""
+    echo "📚 Deployment Guide: deployment/oci/README.md"
+    echo "💬 Support: https://github.com/CryptoLabInc/rune/issues"
+    echo ""
+}
 
-# Step 3: Prepare vault keys directory
-print_header "Step 3: Preparing Vault Keys"
+show_member_next_steps() {
+    print_header "Setup Complete! Next Steps for Team Member"
+    
+    echo "Wait for your admin to send you:"
+    echo "  1. Vault URL (https://vault-YOURTEAM.oci.envector.io)"
+    echo "  2. Vault Token (evt_YOURTEAM_xxx)"
+    echo "  3. Setup package (YOURNAME_rune_package.zip)"
+    echo ""
+    echo "Once received:"
+    echo "  1. Extract the package"
+    echo "  2. Run the setup script inside"
+    echo "  3. Restart your AI agent"
+    echo ""
+    echo "📚 Configuration Guide: CLAUDE_SETUP.md"
+    echo "💬 Support: https://github.com/CryptoLabInc/rune/issues"
+    echo ""
+}
 
-KEYS_DIR="vault_keys"
+# Main interactive installation
+print_header "Rune Interactive Installer v${VERSION}"
 
-if [ -d "$KEYS_DIR" ]; then
-    log_warn "Vault keys directory already exists"
-    echo "Existing keys will be used. To regenerate, delete $KEYS_DIR manually."
-else
-    mkdir -p "$KEYS_DIR"
-    log_info "Vault keys directory created: $KEYS_DIR"
-    log_warn "Keys will be generated on first Vault startup"
-fi
+echo "Rune is an agent-agnostic organizational memory system."
+echo "It helps teams capture and retrieve context across any AI agent."
+echo ""
 
-# Step 4: Next steps
-print_header "Setup Complete!"
+print_step "What's your role?"
+echo "1) Team Admin (will deploy Rune-Vault)"
+echo "2) Team Member (will connect to existing Vault)"
+echo ""
+read -p "Select (1 or 2): " ROLE
 
-cat << EOF
-${GREEN}✓ Rune-Vault setup completed successfully!${NC}
+case "$ROLE" in
+    1)
+        print_header "Admin Setup"
+        
+        check_python
+        setup_vault_dependencies
+        
+        print_info "Admin setup complete!"
+        show_admin_next_steps
+        ;;
+    2)
+        print_header "Team Member Setup"
+        
+        echo "As a team member, you don't need to install anything locally."
+        echo "Your admin will provide you with a setup package."
+        echo ""
+        
+        print_info "No installation needed!"
+        show_member_next_steps
+        ;;
+    *)
+        print_error "Invalid selection. Please run the script again."
+        exit 1
+        ;;
+esac
 
-${YELLOW}Next Steps:${NC}
-
-${BLUE}1. Deploy Vault to Cloud (Recommended)${NC}
-
-   Choose your cloud provider:
-
-   ${GREEN}OCI (Oracle Cloud):${NC}
-   cd deployment/oci
-   terraform init
-   terraform apply
-
-   ${GREEN}AWS:${NC}
-   cd deployment/aws
-   terraform init
-   terraform apply
-
-   ${GREEN}GCP:${NC}
-   cd deployment/gcp
-   terraform init
-   terraform apply
-
-   ${YELLOW}Note:${NC} You'll need to configure terraform.tfvars with:
-   - team_name
-   - vault_token (generate with: openssl rand -hex 16)
-   - cloud-specific credentials
-
-${BLUE}2. Or Test Locally${NC}
-
-   For development/testing only:
-   cd mcp/vault
-   ./run_vault.sh
-
-${BLUE}3. Onboard Team Members${NC}
-
-   Once Vault is deployed, add team members:
-   ./scripts/add-team-member.sh
-
-   This generates a setup package they can run on their machine.
-
-${YELLOW}Documentation:${NC}
-- Cloud Deployment: deployment/oci/README.md (or aws/gcp)
-- Team Setup: docs/TEAM-SETUP.md
-- Agent Configuration: CLAUDE_SETUP.md
-
-${YELLOW}Support:${NC}
-- Issues: https://github.com/CryptoLabInc/rune/issues
-- Docs: https://docs.envector.io
-
-EOF
+print_info "Setup complete! 🎉"

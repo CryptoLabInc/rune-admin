@@ -1,6 +1,6 @@
 # Team Collaboration Example
 
-This example shows how 3 developers collaborate on a confidential project using HiveMinded with different AI agents.
+This example shows how 3 developers collaborate on a confidential project using Rune with different AI agents.
 
 ## Scenario
 
@@ -12,7 +12,7 @@ This example shows how 3 developers collaborate on a confidential project using 
 
 ### Prerequisites
 
-1. HiveMinded installed for each team member
+1. Rune installed for each team member
 2. Team Vault deployed and credentials shared
 3. Each member using their preferred agent
 
@@ -32,8 +32,8 @@ VAULT_TOKEN="evt_fhen_game_abc123xyz"
 ### Alice's Setup (Claude)
 
 ```bash
-cd HiveMinded
-./install.sh --agent claude
+cd rune
+./install.sh
 
 export VAULT_URL="https://vault-fhenomenon-game.oci.envector.io"
 export VAULT_TOKEN="evt_fhen_game_abc123xyz"
@@ -44,8 +44,8 @@ export VAULT_TOKEN="evt_fhen_game_abc123xyz"
 ### Bob's Setup (Gemini)
 
 ```bash
-cd HiveMinded
-./install.sh --agent gemini
+cd rune
+./install.sh
 
 export VAULT_URL="https://vault-fhenomenon-game.oci.envector.io"
 export VAULT_TOKEN="evt_fhen_game_abc123xyz"
@@ -56,8 +56,8 @@ export VAULT_TOKEN="evt_fhen_game_abc123xyz"
 ### Carol's Setup (Codex)
 
 ```bash
-cd HiveMinded
-./install.sh --agent codex
+cd rune
+./install.sh
 
 export VAULT_URL="https://vault-fhenomenon-game.oci.envector.io"
 export VAULT_TOKEN="evt_fhen_game_abc123xyz"
@@ -296,7 +296,7 @@ Day 1: "Why 60% memory savings?"
 Day 2: "Oh, Alice already decided - ciphertext packing"
 Day 3: "Let me build on Bob's memory manager"
 
-vs. Without HiveMinded:
+vs. Without Rune:
 
 Day 1: Alice decides
 Day 2: Bob asks Alice (she's offline)
@@ -324,13 +324,13 @@ Time to productivity: 10 minutes vs. 2 days
 
 ## Metrics
 
-**Before HiveMinded:**
+**Before Rune:**
 - Context sharing: Manual (Slack, docs, meetings)
 - Repeated questions: 5-10 per day
 - Onboarding time: 2-3 days per person
 - Context loss: When people leave
 
-**With HiveMinded:**
+**With Rune:**
 - Context sharing: Automatic (via FHE encryption)
 - Repeated questions: 0 (agents search team memory)
 - Onboarding time: 10-30 minutes

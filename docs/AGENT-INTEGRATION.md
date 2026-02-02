@@ -519,7 +519,7 @@ curl https://vault-your-team.oci.envector.io/health
 ### 2. Encrypt/Decrypt Test
 
 ```python
-from hiveminded import MCPClient
+from rune import MCPClient
 
 client = MCPClient(
     vault_url="https://vault-your-team.oci.envector.io",
@@ -539,7 +539,7 @@ print(f"Decrypted: {results}")
 ### 3. End-to-End Test
 
 ```python
-from hiveminded import ContextMemory
+from rune import ContextMemory
 
 memory = ContextMemory(
     vault_url="https://vault-your-team.oci.envector.io",

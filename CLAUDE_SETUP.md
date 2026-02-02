@@ -107,7 +107,7 @@ Create or edit: `.mcp/settings.json` in your workspace root
 
 **macOS / Linux:**
 ```bash
-cd /path/to/rune/mcp/vault
+cd /absolute/path/to/rune/mcp/vault
 pwd  # Copy this output
 ```
 
@@ -155,7 +155,7 @@ Edit: `~/Library/Application Support/Claude/config.json`
 ```json
 {
   "mcpServers": {
-    "hiveminded-vault": {
+    "rune-vault": {
       "command": "python3",
       "args": [
         "/absolute/path/to/rune/mcp/vault/vault_mcp.py"

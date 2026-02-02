@@ -106,16 +106,14 @@ If your skill provides tools via MCP:
 
 ## Installation
 
-Skills are installed using the HiveMinded installer:
+Skills are installed using the Rune installer:
 
 ```bash
-# Install all skills for your agent
-./install.sh --agent claude    # Or gemini, codex, custom
+# Run interactive installer
+./install.sh        # macOS/Linux
+install.bat         # Windows
 
-# Skills are copied to agent-specific location
-# Claude: ~/.claude/skills/
-# Gemini: ~/.gemini/skills/
-# Codex: ~/.codex/skills/
+# Skills are configured based on your agent setup
 ```
 
 ## Testing Skills
@@ -134,7 +132,7 @@ Skills are installed using the HiveMinded installer:
 ```python
 # tests/test_your_skill.py
 import pytest
-from hiveminded.testing import SkillTester
+from rune.testing import SkillTester
 
 def test_skill_loads():
     tester = SkillTester("your-skill")
