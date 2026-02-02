@@ -17,7 +17,7 @@ Before integrating any agent, you must:
    - enVector Cloud is the FHE-encrypted vector database (required)
    - Obtain your `org-id` and `api-key` from the dashboard
 
-2. **Deploy a Rune Vault** (see [Team Setup Guide](TEAM-SETUP.md))
+2. **Deploy a Rune-Vault** (see [Team Setup Guide](TEAM-SETUP.md))
    - One Vault per team handles FHE encryption keys
 
 ## Supported Agents

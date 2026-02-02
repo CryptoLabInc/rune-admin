@@ -73,26 +73,69 @@ The installer will ask:
 ### 3. Deploy Rune-Vault (Team-Shared)
 
 ```bash
-# Option 1: Use managed Vault (recommended for teams)
-./scripts/deploy-vault.sh --provider oci --team-name your-team
+# Option A: Deploy to Cloud (Recommended)
+cd deployment/oci    # or aws, gcp
 
-# Option 2: Self-hosted
-docker-compose -f deployment/vault/docker-compose.yml up -d
+# Edit terraform.tfvars with your settings
+terraform init
+terraform plan
+terraform apply
 
-# Option 3: Local dev (testing only)
-./scripts/vault-dev.sh
-```
-
-### 4. Configure Your Agent
-
-```bash
-# Share these with your team
+# Note the Vault URL from outputs
 export VAULT_URL="https://vault-your-team.oci.envector.io"
 export VAULT_TOKEN="evt_xxx"
 
-# Each team member runs this once
-./scripts/configure-agent.sh
+# Option B: Local Testing
+cd mcp/vault
+./run_vault.sh
+# Vault runs at http://localhost:8000
 ```
+
+**Team Members:** Your admin will share the Vault URL and token with you.
+
+### 4. Onboard Team Members (Administrators)
+
+Generate setup packages for team members:
+
+```bash
+# Add a team member
+./scripts/add-team-member.sh alice
+
+# This creates: team-setup-alice.zip with:
+# - team-specific config
+# - setup script
+# - Vault connection info
+# - enVector credentials
+
+# Share the zip file with Alice
+# Alice runs the setup script and is ready to use Rune
+```
+
+### 5. Configure Your Agent (Team Members)
+
+After receiving your setup package from admin:
+
+```bash
+# Extract package
+unzip team-setup-alice.zip
+cd team-setup-alice
+
+# Run setup script
+./setup.sh    # macOS/Linux
+# or
+setup.bat     # Windows
+
+# Configure your agent (Claude/Gemini/etc.)
+# The script will guide you through agent-specific configuration
+```
+
+**Supported Agents:**
+- ✅ **Claude Desktop / Claude Code** (Anthropic)
+- ✅ **Gemini** (Google)  
+- ✅ **GitHub Codex** (OpenAI)
+- ✅ **Custom agents** (via MCP protocol)
+
+That's it! Your agent now has access to organizational memory.
 
 ## Architecture
 

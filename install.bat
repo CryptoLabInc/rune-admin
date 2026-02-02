@@ -17,4 +17,6 @@ if %ERRORLEVEL% EQU 0 (
     echo.
     echo Installation failed. Press any key to close.
 )
-pause >nul
+
+echo.
+pause

@@ -1,0 +1,190 @@
+groups:
+  - name: rune_vault_alerts
+    interval: 30s
+    rules:
+      # Service Health Alerts
+      - alert: VaultDown
+        expr: vault_health_status == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: vault
+        annotations:
+          summary: "Rune-Vault is unhealthy"
+          description: "Vault health check has failed for more than 1 minute. Service may be down or degraded."
+
+      - alert: VaultHighMemoryUsage
+        expr: vault_memory_usage_bytes / (node_memory_MemTotal_bytes{job="node"}) > 0.90
+        for: 5m
+        labels:
+          severity: warning
+          component: vault
+        annotations:
+          summary: "Vault memory usage is above 90%"
+          description: "Vault is using {{ humanize $value }}% of available memory. Consider scaling up or investigating memory leaks."
+
+      - alert: VaultCriticalMemoryUsage
+        expr: vault_memory_usage_bytes / (node_memory_MemTotal_bytes{job="node"}) > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          component: vault
+        annotations:
+          summary: "Vault memory usage is critically high (>95%)"
+          description: "Vault is using {{ humanize $value }}% of available memory. Service may crash soon!"
+
+      - alert: VaultHighCPUUsage
+        expr: vault_cpu_usage_percent > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: vault
+        annotations:
+          summary: "Vault CPU usage is above 80%"
+          description: "Vault CPU usage has been above 80% for 10 minutes. Current: {{ humanize $value }}%"
+
+      - alert: VaultCriticalCPUUsage
+        expr: vault_cpu_usage_percent > 95
+        for: 5m
+        labels:
+          severity: critical
+          component: vault
+        annotations:
+          summary: "Vault CPU usage is critically high (>95%)"
+          description: "Vault CPU usage has been above 95% for 5 minutes. Current: {{ humanize $value }}%"
+
+      # Performance Alerts
+      - alert: VaultSlowDecryption
+        expr: histogram_quantile(0.95, rate(vault_decryption_duration_seconds_bucket[5m])) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          component: vault
+        annotations:
+          summary: "Vault decryption is slow"
+          description: "P95 decryption latency is {{ humanize $value }}s (threshold: 1s). Performance degradation detected."
+
+      - alert: VaultHighDecryptionLatency
+        expr: histogram_quantile(0.99, rate(vault_decryption_duration_seconds_bucket[5m])) > 5.0
+        for: 3m
+        labels:
+          severity: critical
+          component: vault
+        annotations:
+          summary: "Vault decryption latency is critically high"
+          description: "P99 decryption latency is {{ humanize $value }}s (threshold: 5s). Immediate action required."
+
+      - alert: VaultHighRequestRate
+        expr: rate(vault_requests_total[5m]) > 100
+        for: 10m
+        labels:
+          severity: info
+          component: vault
+        annotations:
+          summary: "Vault is experiencing high request rate"
+          description: "Request rate is {{ humanize $value }} req/s. Monitor for potential capacity issues."
+
+      - alert: VaultHighErrorRate
+        expr: rate(vault_requests_total{status=~"5.."}[5m]) / rate(vault_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: vault
+        annotations:
+          summary: "Vault error rate is above 5%"
+          description: "{{ humanize $value }}% of requests are failing. Investigate service issues."
+
+      - alert: VaultCriticalErrorRate
+        expr: rate(vault_requests_total{status=~"5.."}[5m]) / rate(vault_requests_total[5m]) > 0.20
+        for: 2m
+        labels:
+          severity: critical
+          component: vault
+        annotations:
+          summary: "Vault error rate is critically high (>20%)"
+          description: "{{ humanize $value }}% of requests are failing. Service is severely degraded!"
+
+      # Decryption Operation Alerts
+      - alert: VaultDecryptionFailures
+        expr: rate(vault_decryption_operations_total{status="error"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: vault
+        annotations:
+          summary: "Vault decryption operations are failing"
+          description: "{{ humanize $value }} decryption operations per second are failing. Check SecKey availability."
+
+      - alert: VaultNoDecryptionOperations
+        expr: rate(vault_decryption_operations_total[10m]) == 0
+        for: 15m
+        labels:
+          severity: info
+          component: vault
+        annotations:
+          summary: "Vault has not performed any decryption operations recently"
+          description: "No decryption operations in the last 15 minutes. Service may be idle or unreachable."
+
+      # Key Access Alerts
+      - alert: VaultKeyAccessFailure
+        expr: rate(vault_key_access_total{status="error"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: vault
+        annotations:
+          summary: "Vault key access is failing"
+          description: "{{ humanize $value }} key access operations per second are failing. SecKey may be missing or corrupted!"
+
+      - alert: VaultUnauthorizedKeyAccess
+        expr: rate(vault_key_access_total{status="unauthorized"}[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+          component: vault
+        annotations:
+          summary: "Multiple unauthorized key access attempts"
+          description: "{{ humanize $value }} unauthorized key access attempts per second. Potential security issue."
+
+      # Disk Space Alerts
+      - alert: VaultLowDiskSpace
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.20
+        for: 5m
+        labels:
+          severity: warning
+          component: vault
+        annotations:
+          summary: "Vault disk space is low (<20%)"
+          description: "Only {{ humanize $value }}% disk space remaining. Clean up logs or expand storage."
+
+      - alert: VaultCriticalDiskSpace
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.10
+        for: 2m
+        labels:
+          severity: critical
+          component: vault
+        annotations:
+          summary: "Vault disk space is critically low (<10%)"
+          description: "Only {{ humanize $value }}% disk space remaining. Immediate action required!"
+
+      # Uptime Alerts
+      - alert: VaultRestarted
+        expr: vault_uptime_seconds < 300
+        for: 1m
+        labels:
+          severity: info
+          component: vault
+        annotations:
+          summary: "Vault has been restarted"
+          description: "Vault uptime is only {{ humanize $value }}s. Service was recently restarted."
+
+      # Security Alerts
+      - alert: VaultSuspiciousActivity
+        expr: rate(vault_requests_total{endpoint=~".*(admin|config|keys).*"}[5m]) > 10
+        for: 3m
+        labels:
+          severity: warning
+          component: vault
+        annotations:
+          summary: "Suspicious activity detected on sensitive endpoints"
+          description: "{{ humanize $value }} requests per second to sensitive endpoints. Review access logs."

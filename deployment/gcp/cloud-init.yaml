@@ -1,0 +1,141 @@
+#cloud-config
+
+# Rune-Vault Installation Script for GCP Compute Engine
+# This script installs Docker, Rune-Vault, and configures nginx with SSL
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - docker.io
+  - docker-compose
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - curl
+  - git
+  - jq
+
+write_files:
+  - path: /opt/rune/docker-compose.yml
+    content: |
+      version: '3.8'
+      services:
+        vault:
+          image: cryptolab/rune-vault:latest
+          container_name: rune-vault
+          restart: unless-stopped
+          ports:
+            - "50080:50080"
+          environment:
+            - VAULT_TOKEN=${vault_token}
+            - TEAM_NAME=${team_name}
+          volumes:
+            - ./keys:/app/keys
+            - ./logs:/app/logs
+          healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:50080/health"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 40s
+    owner: root:root
+    permissions: '0644'
+
+  - path: /opt/rune/vault_token
+    content: ${vault_token}
+    owner: root:root
+    permissions: '0600'
+
+  - path: /etc/nginx/sites-available/rune-vault
+    content: |
+      upstream vault_backend {
+          server 127.0.0.1:50080;
+      }
+
+      server {
+          listen 80;
+          server_name vault-${team_name}.*.gcp.envector.io;
+
+          location /.well-known/acme-challenge/ {
+              root /var/www/html;
+          }
+
+          location / {
+              return 301 https://$host$request_uri;
+          }
+      }
+
+      server {
+          listen 443 ssl http2;
+          server_name vault-${team_name}.*.gcp.envector.io;
+
+          # SSL certificates (will be configured by certbot)
+          ssl_certificate /etc/letsencrypt/live/vault-${team_name}.*.gcp.envector.io/fullchain.pem;
+          ssl_certificate_key /etc/letsencrypt/live/vault-${team_name}.*.gcp.envector.io/privkey.pem;
+
+          # SSL configuration
+          ssl_protocols TLSv1.2 TLSv1.3;
+          ssl_ciphers HIGH:!aNULL:!MD5;
+          ssl_prefer_server_ciphers on;
+
+          # Proxy to Vault
+          location / {
+              proxy_pass http://vault_backend;
+              proxy_http_version 1.1;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+              
+              # WebSocket support (if needed)
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection "upgrade";
+          }
+
+          # Health check endpoint
+          location /health {
+              proxy_pass http://vault_backend/health;
+              access_log off;
+          }
+      }
+    owner: root:root
+    permissions: '0644'
+
+runcmd:
+  # Create Rune directory structure
+  - mkdir -p /opt/rune/keys
+  - mkdir -p /opt/rune/logs
+  - chmod 700 /opt/rune/keys
+
+  # Start Docker
+  - systemctl enable docker
+  - systemctl start docker
+
+  # Pull and start Rune-Vault
+  - cd /opt/rune && docker-compose pull
+  - cd /opt/rune && docker-compose up -d
+
+  # Configure nginx
+  - ln -sf /etc/nginx/sites-available/rune-vault /etc/nginx/sites-enabled/
+  - rm -f /etc/nginx/sites-enabled/default
+  - nginx -t && systemctl restart nginx
+
+  # Wait for Vault to be ready
+  - sleep 10
+  - timeout 60 bash -c 'until curl -f http://localhost:50080/health; do sleep 2; done'
+
+  # Note: SSL certificate must be obtained manually after DNS configuration
+  # Run: sudo certbot --nginx -d vault-${team_name}.us-central1.gcp.envector.io
+
+final_message: |
+  Rune-Vault installation completed!
+  
+  Next steps:
+  1. Configure DNS: Point vault-${team_name}.*.gcp.envector.io to this instance
+  2. Obtain SSL certificate: sudo certbot --nginx -d vault-${team_name}.*.gcp.envector.io
+  3. Test health: curl https://vault-${team_name}.*.gcp.envector.io/health
+  
+  Vault token location: /opt/rune/vault_token (mode 0600)
+  Docker logs: docker logs rune-vault
+  Nginx logs: /var/log/nginx/

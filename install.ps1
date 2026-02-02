@@ -26,7 +26,29 @@ function Write-Step ($Message) {
     Write-Host "`n▸ $Message`n" -ForegroundColor Blue
 }
 
-# -- Main Logic --
+Team members don't need to run this - you'll receive an onboarding
+package from your admin with a ready-to-use setup script.
+
+This will:
+  1. Check system requirements (Python, Docker, Terraform)
+  2. Install Python dependencies for Vault
+  3. Prepare vault keys directory
+  4. Show next steps for deployment
+
+"@ -ForegroundColor Yellow
+
+$response = Read-Host "Continue with Vault setup? (y/N)"
+if ($response -notmatch '^[Yy]$') {
+    Write-Host "Setup cancelled."
+    exit 0
+}
+
+# Step 1: Check System Requirements
+Write-Step "Step 1: Checking System Requirements"
+
+# Check Python
+$pythonFound = $false
+$pythonVersion = $null
 
 function Test-Python {
     try {
@@ -155,7 +177,67 @@ try {
     
     Write-Info "Setup complete! 🎉"
 }
-catch {
-    Write-ErrorMsg "An error occurred: $_"
-    exit 1
-}
+
+Write-Host ""
+Write-Host "Keys will be generated automatically on first Vault startup." -ForegroundColor Cyan
+Write-Host "Keep the vault_keys/ directory SECURE and BACKED UP." -ForegroundColor Cyan
+
+# Step 4: Next Steps
+Write-Step "Setup Complete!"
+
+Write-Host @"
+
+✓ Python environment configured
+✓ Dependencies installed
+✓ Vault keys directory prepared
+
+Next Steps:
+============
+
+Option A: Deploy to Cloud
+--------------------------
+1. Choose your provider:
+   cd deployment/oci     # or aws, gcp
+   
+2. Configure Terraform variables:
+   Edit terraform.tfvars with your settings
+   
+3. Deploy:
+   terraform init
+   terraform plan
+   terraform apply
+   
+4. Note the Vault URL from outputs
+
+Option B: Test Locally
+----------------------
+1. Generate keys and start Vault:
+   cd mcp\vault
+   .\run_vault.sh    # or use Docker directly
+   
+2. Vault will run at http://localhost:8000
+
+Option C: Onboard Team Members
+-------------------------------
+After deploying Vault:
+
+1. Add team member:
+   .\scripts\add-team-member.sh alice
+
+2. Share the generated setup package
+   (team-setup-alice.zip)
+
+3. Member runs setup script from package
+   (no manual configuration needed)
+
+Documentation:
+--------------
+- Quick Start: README.md
+- Architecture: docs/ARCHITECTURE.md
+- Team Setup: docs/TEAM-SETUP.md
+
+"@ -ForegroundColor Green
+
+Write-Host ""
+Write-Host "Questions? See README.md or open an issue." -ForegroundColor Blue
+Write-Host ""
