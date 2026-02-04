@@ -12,8 +12,8 @@ def verify_flow():
         shutil.rmtree(KEY_DIR)
         
     print("1. Generating Keys...")
-    # Explicitly set dim to 32 (min allowed)
-    dim = 32
+    # Using dimension 1024 for production
+    dim = 1024
     keygen = KeyGenerator(key_path=KEY_DIR, key_id=KEY_ID, dim_list=[dim])
     keygen.generate_keys()
     
@@ -31,7 +31,7 @@ def verify_flow():
     cipher = Cipher(enc_key_path=enc_path, dim=dim)
     
     # 3. Simulate Server: "Encrypting Scores"
-    # Create scores for dim=32. Most can be 0.
+    # Create scores for dim=1024. Most can be 0.
     mock_scores = np.zeros(dim, dtype=np.float32)
     mock_scores[:4] = [0.9, 0.1, 0.8, 0.2]
     print(f"Original Mock Scores (first 4): {mock_scores[:4]}")

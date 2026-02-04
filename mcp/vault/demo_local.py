@@ -49,7 +49,7 @@ def run_demo():
     
     # 3. Cloud: Search & Score (Simulated)
     print("\n[Cloud] Processing Search... (SIMULATED)")
-    dim = 32
+    dim = 1024
     cloud_cipher = Cipher(enc_key_path=enc_key_path, dim=dim)
     
     # Cloud computes scores. Suppose we have 5 items.

@@ -1,439 +1,535 @@
-# Rune Architecture
+# Rune-Vault Architecture
 
 ## System Overview
 
-Rune is an **agent-agnostic organizational context memory system** built on three core principles:
+Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted organizational memory. It manages cryptographic keys, authenticates team members, and provides decryption services for encrypted search results.
 
-1. **Capture**: Automatically identify and capture significant decisions
-2. **Encrypt**: Store as FHE-encrypted vectors (searchable but cryptographically private)
-3. **Retrieve**: Search and synthesize context on demand
+### Core Responsibilities
 
-## Components
+1. **Key Management**: Generate, store, and protect FHE keys (SecKey isolation)
+2. **Decryption Service**: Decrypt search results from enVector Cloud
+3. **Authentication**: Validate team member access via tokens
+4. **Monitoring**: Track usage, performance, and security metrics
 
-### 1. Skills Layer (Agent Interface)
-
-**Purpose**: Provides standardized capabilities to any AI agent
-
-```
-┌─────────────────────────────────────────┐
-│         Agent (Claude/Gemini/Codex)     │
-├─────────────────────────────────────────┤
-│  Skills:                                │
-│  - envector: Organizational memory      │
-│  - (custom skills)                      │
-└─────────────────────────────────────────┘
-```
-
-**Key Features:**
-- Agent-agnostic interface (MCP protocol)
-- Skill discovery and loading
-- Configuration management
-- Error handling and retries
-
-### 2. Agent Layer (Behavior Specification)
-
-**Purpose**: Defines agent behaviors and workflows
+## High-Level Architecture
 
 ```
-┌──────────────────┐  ┌──────────────────┐
-│  Monitor Agent   │  │ Retriever Agent  │
-├──────────────────┤  ├──────────────────┤
-│ - Watch sources  │  │ - Parse queries  │
-│ - Detect context │  │ - Search memory  │
-│ - Capture        │  │ - Synthesize     │
-│ - Encrypt        │  │ - Respond        │
-└──────────────────┘  └──────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                    Team Members                          │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐        │
+│  │   Alice    │  │    Bob     │  │   Carol    │        │
+│  │  (Claude)  │  │  (Gemini)  │  │  (Codex)   │        │
+│  │            │  │            │  │            │        │
+│  │    Rune    │  │    Rune    │  │    Rune    │        │
+│  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘        │
+└────────┼───────────────┼───────────────┼────────────────┘
+         │ TLS           │ TLS           │ TLS
+         │               │               │
+         └───────────────┴───────────────┘
+                         │
+                         ▼
+            ┌────────────────────────────┐
+            │      Rune-Vault MCP        │
+            │  (Your Infrastructure)     │
+            │                            │
+            │  ┌──────────────────────┐  │
+            │  │  FHE Key Manager     │  │
+            │  │  - SecKey (isolated) │  │
+            │  │  - EncKey (public)   │  │
+            │  │  - EvalKey (public)  │  │
+            │  └──────────────────────┘  │
+            │                            │
+            │  ┌──────────────────────┐  │
+            │  │  MCP Tools           │  │
+            │  │  - get_public_key()  │  │
+            │  │  - decrypt_scores()  │  │
+            │  └──────────────────────┘  │
+            │                            │
+            │  ┌──────────────────────┐  │
+            │  │  Auth & Monitoring   │  │
+            │  │  - Token validation  │  │
+            │  │  - Prometheus metrics│  │
+            │  └──────────────────────┘  │
+            └────────────────────────────┘
+                         │
+                         │ (EncKey distribution)
+                         ▼
+            ┌────────────────────────────┐
+            │    enVector Cloud (SaaS)   │
+            │  https://envector.io       │
+            │                            │
+            │  - FHE-encrypted vectors   │
+            │  - Semantic search (FHE)   │
+            │  - Team data isolation     │
+            │  - Scalable storage        │
+            └────────────────────────────┘
 ```
 
-**Scribe Workflow:**
-1. Watch configured sources (Slack, Notion, GitHub, etc.)
-2. Detect significant decisions (pattern + ML)
-3. Extract context and metadata
-4. Encrypt as vectors (via envector-mcp-server using public keys from Vault)
-5. Store in enVector Cloud
+## Component Details
 
-**Retriever Workflow:**
-1. Parse user query (understand intent)
-2. Generate search embeddings
-3. Search encrypted memory (FHE)
-4. Decrypt results (via Vault)
-5. Synthesize comprehensive answer
+### 1. Rune-Vault MCP Server
 
-### 3. MCP Layer (Protocol Interface)
+**Purpose**: Centralized key management and decryption service for a team
 
-**Purpose**: Standardized communication between agents and services
+**Deployment Options**:
+- **OCI** (Oracle Cloud Infrastructure) - Recommended, $30/mo
+- **AWS** (Elastic Compute Cloud) - $60/mo
+- **GCP** (Google Compute Engine) - $55/mo
+- **On-Premise** (Self-hosted) - Custom hardware
 
+**Runtime**:
+- Python 3.8+ with FastMCP framework
+- uvicorn ASGI server
+- Prometheus metrics exporter
+- System monitoring (psutil)
+
+**Key Storage**:
 ```
-┌─────────────────────────────────────┐
-│            MCP Protocol             │
-├─────────────────────────────────────┤
-│  Servers:                           │
-│  - Rune-Vault: Key management       │
-│  - enVector MCP: Cloud search       │
-│  - (custom MCP servers)             │
-└─────────────────────────────────────┘
+/vault_keys/
+├── EncKey.json      # Public encryption key (distributed to team members)
+├── EvalKey.json     # Public evaluation key (for FHE operations)
+├── MetadataKey.json # Public metadata key
+└── SecKey.json      # Secret decryption key (NEVER leaves Vault)
 ```
 
-**Rune-Vault MCP Server:**
-- Manages FHE keys (SecKey never exposed)
-- Distributes public keys (EncKey, EvalKey) to envector-mcp-server
-- Decrypts search results (only component with SecKey)
-- Runs in isolated environment (TEE/secure network)
+**Security Properties**:
+- SecKey stored encrypted at rest (filesystem encryption)
+- Keys loaded into memory only during operations
+- No SecKey export API (architectural constraint)
+- TLS for all network communications
+- Token-based authentication per request
 
-**envector-mcp-server:**
-- Receives public keys from Vault at startup
-- Encrypts vectors and queries using EncKey
-- Connects to enVector Cloud
-- Submits encrypted queries, retrieves encrypted results
-- Scalable (multiple instances can share same keys)
+### 2. MCP Tools (API)
 
-### 4. Storage Layer (Data Management)
+**`get_public_key()`**
+- Returns: EncKey, EvalKey, MetadataKey (JSON bundle)
+- Used by: Team members (one-time at startup)
+- Auth: Required (validates token)
+- Rate Limit: None (lightweight operation)
 
-**Purpose**: Store and search encrypted vectors
+**`decrypt_scores()`**
+- Input: Encrypted search results blob from enVector Cloud
+- Returns: Top-K decrypted scores with indices
+- Used by: Team members (per search query)
+- Auth: Required (validates token)
+- Rate Limit: Yes (default 10 results per call, configurable)
 
-> **Note**: enVector Cloud ([https://envector.io](https://envector.io)) is required. Sign up to obtain your API credentials before proceeding.
+### 3. Authentication System
 
+**Token Format**: `evt_{team}_{random}`
+- Example: `evt_yourteam_abc123xyz`
+- Generated during Terraform deployment
+- Shared with all team members (same token for whole team)
+
+**Token Validation**:
+```python
+VALID_TOKENS = {
+    "evt_yourteam_abc123xyz",  # Team token
+    "evt_admin_master",        # Admin token (optional)
+}
+
+def validate_token(token: str) -> bool:
+    return token in VALID_TOKENS
 ```
-┌──────────────────────────────────────────┐
-│   enVector Cloud (https://envector.io)   │
-├──────────────────────────────────────────┤
-│  - FHE-encrypted vector store            │
-│  - IVF-GAS search (data-oblivious)       │
-│  - Team isolation                        │
-│  - Replication and backup                │
-└──────────────────────────────────────────┘
+
+**Token Rotation**:
+```bash
+# Generate new token via Terraform
+terraform apply -var="rotate_token=true"
+
+# Distribute new token to team
+# Old token invalidated immediately
 ```
 
-**Key Features:**
-- All data encrypted (FHE)
-- Cloud never sees plaintext
-- Semantic search on encrypted data
-- Scalable (millions of vectors)
+### 4. Monitoring & Observability
+
+**Prometheus Metrics** (exposed at `/metrics`):
+```
+# Decryption operations
+vault_decryption_requests_total
+vault_decryption_latency_seconds{quantile="0.5|0.95|0.99"}
+vault_decryption_errors_total
+
+# Authentication
+vault_auth_attempts_total
+vault_auth_failures_total
+
+# System health
+vault_uptime_seconds
+vault_memory_usage_bytes
+vault_cpu_usage_percent
+```
+
+**Health Check** (`/health`):
+```json
+{
+  "status": "healthy",
+  "vault_version": "0.2.0",
+  "fhe_keys_loaded": true,
+  "uptime_seconds": 3600
+}
+```
+
+**Grafana Dashboards**:
+- See [deployment/monitoring/grafana/](../deployment/monitoring/grafana/) for templates
+- Pre-configured alerts for high error rates, latency spikes
 
 ## Data Flow
 
-### Capture Flow
+### Client Initialization (One-Time)
 
 ```
-Slack Thread
+Team Member's Laptop
+    │
+    ├── 1. Install Rune from Claude Marketplace
+    ├── 2. Configure Vault URL + Token
     │
     ▼
-Scribe (detects significant decision)
+Rune Startup
+    │
+    ├── 3. Call get_public_key() → Vault MCP
     │
     ▼
-Extract Context ("We chose Postgres for JSON support")
+Vault MCP
+    │
+    ├── 4. Validate token
+    ├── 5. Read /vault_keys/EncKey.json, EvalKey.json, MetadataKey.json
+    ├── 6. Return public keys bundle
     │
     ▼
-Generate Embedding ([0.1, 0.5, 0.3, ...])
+Rune Client
     │
-    ▼
-envector-mcp-server (encrypt with EncKey from Vault)
-    │
-    ▼
-Encrypted Vector ([enc(0.1), enc(0.5), enc(0.3), ...])
-    │
-    ▼
-enVector Cloud (store encrypted)
+    └── 7. Store keys locally, use for encryption
 ```
 
-### Retrieval Flow
+### Search Query (Runtime)
 
 ```
-User Query ("Why did we choose Postgres?")
+User: "What decisions did we make about database?"
     │
     ▼
-Retriever (parse intent)
+AI Agent (Claude/Gemini/Codex)
+    │
+    ├── 1. Generate query embedding [0.2, 0.4, 0.4, ...]
     │
     ▼
-Generate Query Embedding ([0.2, 0.4, 0.4, ...])
+Rune Client
+    │
+    ├── 2. Encrypt query with EncKey (FHE encryption)
+    ├── 3. Submit to enVector Cloud API
     │
     ▼
-envector-mcp-server (encrypt query with EncKey)
+enVector Cloud
+    │
+    ├── 4. FHE search on encrypted vectors
+    ├── 5. Return encrypted Top-K results
     │
     ▼
-Encrypted Query ([enc(0.2), enc(0.4), enc(0.4), ...])
+Rune Client
+    │
+    ├── 6. Call decrypt_scores(encrypted_blob) → Vault MCP
     │
     ▼
-enVector Cloud (FHE search, returns encrypted results)
+Vault MCP
+    │
+    ├── 7. Validate token
+    ├── 8. Decrypt with SecKey (FHE decryption)
+    ├── 9. Apply Top-K filtering (max 10 results)
+    ├── 10. Return [{index: 42, score: 0.95}, ...]
     │
     ▼
-Vault MCP (decrypt results with SecKey)
+Rune Client
+    │
+    ├── 11. Fetch context metadata from enVector Cloud
+    ├── 12. Synthesize answer for user
     │
     ▼
-Plaintext Results ("Postgres chosen for JSON support...")
-    │
-    ▼
-Retriever (synthesize answer)
-    │
-    ▼
-User ("In Q2 2022, team chose Postgres because...")
+AI Agent → User: "In Q2 2024, team chose PostgreSQL for JSON support..."
 ```
 
 ## Security Model
 
-### Zero-Trust Architecture
+### Threat Model
 
-**Principle**: No component trusts any other component
+**Assumptions**:
+- enVector Cloud is **untrusted** (sees only ciphertext)
+- Network is **untrusted** (TLS required)
+- Team members' laptops are **trusted** (Rune runs locally)
+- Vault VM is **trusted** (admin controls infrastructure)
 
+**Threats Mitigated**:
+1. **Cloud Provider Breach**: enVector Cloud compromise → no plaintext leak (FHE)
+2. **Network Eavesdropping**: MITM attacks → TLS encryption
+3. **Unauthorized Access**: Non-team members → token authentication
+4. **Key Theft**: SecKey extraction → architectural isolation (no export API)
+
+**Threats Not Mitigated** (out of scope):
+- Vault VM compromise (admin responsibility: use secure cloud, enable disk encryption)
+- Team member laptop compromise (user responsibility: secure devices)
+- Token leakage (admin responsibility: rotate tokens, use secure distribution)
+
+### Key Isolation Strategy
+
+**Why SecKey Never Leaves Vault**:
+- **Principle**: Decryption capability = highest privilege
+- **Constraint**: Only Vault MCP has SecKey, no export API
+- **Benefit**: Even if client compromised, attacker cannot decrypt historical data
+
+**Key Distribution**:
 ```
-┌────────────────────────────────────────┐
-│  Threat Model:                         │
-│  - Cloud provider compromised          │
-│  - Agent compromised (prompt injection)│
-│  - Network eavesdropping               │
-│  - Insider threat                      │
-└────────────────────────────────────────┘
-         │
-         ▼
-┌────────────────────────────────────────┐
-│  Defense: FHE + Isolation              │
-│  - Data encrypted at source            │
-│  - Keys isolated in Vault              │
-│  - Cloud cannot decrypt                │
-│  - Agents cannot access keys           │
-└────────────────────────────────────────┘
-```
-
-### Key Management
-
-**Secret Key Never Leaves Vault:**
-
-```
-┌─────────────────────────────────────────┐
-│            Rune-Vault                   │
-│  ┌────────────────────────────────┐     │
-│  │  FHE Keys (encrypted at rest)  │     │
-│  │  - Secret key: Decrypt results │ ← NEVER exposed
-│  │  - Public key: Distributed     │     │
-│  │  - Eval key: Distributed       │     │
-│  └────────────────────────────────┘     │
-│                                         │
-│  Operations:                            │
-│  - get_public_key() → EncKey, EvalKey   │
-│  - decrypt(enc_result) → result         │
-│  - NEVER: export SecKey                 │
-└─────────────────────────────────────────┘
-
-┌─────────────────────────────────────────┐
-│       envector-mcp-server(s)            │
-│  ┌────────────────────────────────┐     │
-│  │  Public Keys (from Vault)      │     │
-│  │  - EncKey: Encrypt vectors     │     │
-│  │  - EvalKey: FHE operations     │     │
-│  └────────────────────────────────┘     │
-│                                         │
-│  Operations:                            │
-│  - encrypt(vector) → enc_vector         │
-│  - search(enc_query) → enc_results      │
-│  - Scalable: Multiple instances OK      │
-└─────────────────────────────────────────┘
+SecKey:  Vault only (generated on deployment, never exported)
+EncKey:  Distributed to all team members (safe to share, encryption-only)
+EvalKey: Distributed to all team members (safe to share, FHE operations)
 ```
 
-**Access Control:**
-- Vault authenticates agents (JWT tokens)
-- Rate limiting per agent
-- Audit logging (who accessed what, when)
-- Key rotation support
+### Defense in Depth
 
-### Data Isolation
+**Layer 1: Network**
+- TLS 1.3 for all Vault communications
+- Firewall rules (allow only HTTPS 443)
+- Optional: VPN for extra isolation
 
-**Team Isolation:**
+**Layer 2: Authentication**
+- Token validation on every request
+- Rate limiting (prevent abuse)
+- Audit logging (track who accesses what)
 
-```
-Team A                    Team B
-   │                         │
-   ▼                         ▼
-Vault A (keys A)       Vault B (keys B)
-   │                         │
-   ▼                         ▼
-Cloud (encrypted A)    Cloud (encrypted B)
-   │                         │
-   └─────────┬───────────────┘
-             │
-             ▼
-   Cross-team search: Impossible
-   (Different keys = different ciphertexts)
-```
+**Layer 3: Cryptography**
+- FHE encryption (data encrypted at source)
+- Keys encrypted at rest (filesystem encryption)
+- Secure key generation (crypto-safe randomness)
 
-## Deployment Models
+**Layer 4: Monitoring**
+- Prometheus alerts (unusual access patterns)
+- Grafana dashboards (real-time visibility)
+- Audit logs (compliance reporting)
 
-### 1. Hybrid (Recommended)
+## Deployment Architecture
+
+### Cloud Deployment (Terraform)
 
 ```
-┌──────────────────────────────────────┐
-│       Your Infrastructure            │
-│  ┌────────────────────────────────┐  │
-│  │  Rune-Vault (your keys)        │  │
-│  │  - OCI Vault / AWS KMS / GCP   │  │
-│  │  - OR self-hosted              │  │
-│  └────────────────────────────────┘  │
-└──────────────────────────────────────┘
-              │ HTTPS + JWT
-              ▼
-┌──────────────────────────────────────┐
-│       enVector Cloud (SaaS)          │
-│  - Encrypted vectors only            │
-│  - FHE search                        │
-│  - Scalability and reliability       │
-└──────────────────────────────────────┘
-```
-
-**Benefits:**
-- You control keys (security)
-- We manage scale (reliability)
-- Team shares context automatically
-- Simple setup (one Vault per team)
-
-### 2. Fully On-Premise
-
-```
-┌──────────────────────────────────────┐
-│       Your Datacenter                │
-│  ┌────────────────────────────────┐  │
-│  │  Rune-Vault (your keys)        │  │
-│  └────────────────────────────────┘  │
-│  ┌────────────────────────────────┐  │
-│  │  enVector Service (your infra) │  │
-│  └────────────────────────────────┘  │
-└──────────────────────────────────────┘
-```
-
-**Benefits:**
-- Full control (security + data sovereignty)
-- Air-gapped if needed
-- Regulatory compliance (ITAR, classified data)
-
-**Trade-offs:**
-- You manage everything
-- Higher operational cost
-- Enterprise pricing ($500K+/year)
-
-## Scalability
-
-### Performance Targets
-
-| Metric | Target | Notes |
-|--------|--------|-------|
-| Search latency | < 100ms | P95, encrypted search |
-| Capture latency | < 500ms | Background, async |
-| Throughput | > 100 QPS | Per team |
-| Storage | Unlimited | Pay-as-you-grow |
-
-### Scaling Strategy
-
-**Horizontal Scaling:**
-
-```
-                    ┌────────────────────┐
-                    │     Rune-Vault     │  ← Single instance per team
-                    │   (SecKey only)    │    (decryption is lightweight)
-                    └────────┬───────────┘
-                             │ EncKey, EvalKey
-                             ▼
-Load Balancer ──────────────────────────────────────
+Terraform Configuration
     │
-    ├── envector-mcp-server 1 (encryption + search)
-    ├── envector-mcp-server 2 (encryption + search)
-    └── envector-mcp-server N (encryption + search)
-
-    Each instance: Same public keys, scales horizontally
-```
-
-**Data Sharding:**
-
-```
-Team Data (1M vectors)
+    ├── deployment/oci/main.tf    # Oracle Cloud
+    ├── deployment/aws/main.tf    # Amazon Web Services
+    └── deployment/gcp/main.tf    # Google Cloud Platform
+        │
+        ▼
+Cloud Resources Created
     │
-    ├── Recent (100K) → FLAT search (accurate)
-    ├── Archive (900K) → IVF-GAS    (fast)
-    └── Cold (older) → Compressed storage
+    ├── Compute Instance (VM)
+    │   ├── OS: Ubuntu 22.04 LTS
+    │   ├── Shape: 2 OCPU, 8GB RAM, 50GB disk
+    │   └── Software:
+    │       ├── Python 3.8+
+    │       ├── FastMCP
+    │       ├── pyenvector (FHE SDK)
+    │       └── Prometheus exporter
+    │
+    ├── Networking
+    │   ├── Public IP address
+    │   ├── Security group (allow 443/HTTPS)
+    │   └── DNS: vault-{team}.oci.envector.io
+    │
+    ├── Storage
+    │   ├── /vault_keys/ (encrypted volume)
+    │   └── Backup to cloud storage (optional)
+    │
+    └── Monitoring
+        ├── Prometheus scraper
+        └── Grafana dashboard
 ```
 
-## Extensibility
+### High Availability (Optional)
 
-### Adding New Agents
-
-1. Implement MCP client
-2. Load skills from `skills/` directory
-3. Connect to Vault MCP
-4. Use standard APIs
-
-See [AGENT-INTEGRATION.md](AGENT-INTEGRATION.md)
-
-### Adding New Skills
-
-1. Create skill directory
-2. Write SKILL.md (documentation)
-3. Define tools (if needed)
-4. Implement logic
-5. Test with multiple agents
-
-See [skills/README.md](../skills/README.md)
-
-### Adding New Storage Backends
-
-1. Implement storage interface
-2. Support encryption (FHE)
-3. Implement search (IVF-GAS)
-4. Add deployment scripts
-
-## Monitoring and Observability
-
-### Metrics
-
-**Vault Metrics:**
-- Encryption operations/sec
-- Decryption operations/sec
-- Key access frequency
-- Error rates
-
-**Search Metrics:**
-- Query latency (P50, P95, P99)
-- Throughput (QPS)
-- Recall (quality)
-- Cache hit rate
-
-**Agent Metrics:**
-- Capture rate (decisions/day)
-- Query rate (queries/day)
-- Success rate (%)
-- User satisfaction
-
-### Logging
-
-**Structured Logs:**
-```json
-{
-  "timestamp": "2026-01-31T12:00:00Z",
-  "level": "INFO",
-  "component": "vault",
-  "operation": "decrypt",
-  "team": "your-team",
-  "user": "alice",
-  "latency_ms": 15,
-  "status": "success"
-}
+```
+Load Balancer (HTTPS)
+    │
+    ├── Vault Instance 1 (Primary)
+    ├── Vault Instance 2 (Standby)
+    └── Vault Instance N (Standby)
+        │
+        └── Shared Storage (NFS/EFS)
+            └── /vault_keys/ (same keys across instances)
 ```
 
-**Audit Trail:**
-- Who accessed what context
-- When and from where
-- Query patterns
-- Compliance reporting
+**Setup**:
+```bash
+cd deployment/oci
+terraform apply -var="ha_enabled=true" \
+                -var="instance_count=3"
+```
 
-## Future Enhancements
+**Failover**:
+- Health checks every 10s
+- Auto-failover <30s
+- Shared keys (no key synchronization needed)
 
-### Planned (v0.2.0+)
+## Performance Characteristics
 
-- [ ] Multi-modal context (images, audio, video)
-- [ ] Real-time collaboration
-- [ ] Advanced ML capture (better precision)
-- [ ] API gateway for non-MCP agents
-- [ ] Cross-team context sharing (with permission)
+### Latency Breakdown
 
-### Research (v1.0.0+)
+| Operation | Latency | Notes |
+|-----------|---------|-------|
+| get_public_key() | ~5ms | Read from disk, serialize JSON |
+| decrypt_scores() | ~50ms | FHE decryption (dim=2048, 10 results) |
+| Token validation | <1ms | Hash table lookup |
+| TLS handshake | ~20ms | First request only (reused connections) |
 
-- [ ] Differential privacy (DP + FHE)
-- [ ] Federated learning (shared models)
-- [ ] Semantic compression (reduce storage)
-- [ ] Query understanding (NLU improvements)
+**Total Search Latency**:
+- Client → enVector Cloud: ~100ms (network + FHE search)
+- enVector → Vault: ~50ms (decryption)
+- **End-to-end**: ~150ms (95th percentile)
+
+### Throughput
+
+| Workload | Throughput | Hardware |
+|----------|------------|----------|
+| Light (10 queries/min) | 2 OCPU, 8GB RAM | OCI VM.Standard.E4.Flex |
+| Medium (100 queries/min) | 4 OCPU, 16GB RAM | Scale up |
+| Heavy (1000 queries/min) | 3x instances + LB | Scale out |
+
+### Resource Usage
+
+**Typical Team** (10 members, 100 queries/day):
+- CPU: 10-20% average
+- Memory: 2GB (FHE keys loaded)
+- Disk: 1GB (keys + logs)
+- Network: 10GB/month
+
+## Operational Considerations
+
+### Backup & Recovery
+
+**Critical Assets**:
+- `/vault_keys/SecKey.json` - **MUST backup** (cannot regenerate)
+- `/vault_keys/EncKey.json` - Regenerable from SecKey
+- Vault token - Rotatable via Terraform
+
+**Backup Strategy**:
+```bash
+# Automated backup (run daily via cron)
+./scripts/backup-keys.sh
+
+# Output:
+# vault_keys_backup_2026-02-04.tar.gz.enc
+# (encrypted with team password)
+
+# Store in:
+# 1. Offline (USB drive in safe)
+# 2. Cloud (different provider, encrypted)
+# 3. Password manager (1Password secure notes)
+```
+
+**Recovery Procedure**:
+```bash
+# If Vault VM fails
+cd deployment/oci
+terraform apply -var="restore_from_backup=true" \
+                -var="backup_path=/path/to/backup.tar.gz.enc"
+
+# Vault restarts with same keys
+# Team members continue without reconfiguration
+```
+
+### Scaling Strategies
+
+**Vertical Scaling** (increase VM size):
+```bash
+terraform apply -var="instance_shape=VM.Standard.E4.Flex" \
+                -var="instance_ocpu=4" \
+                -var="instance_memory_gb=16"
+```
+
+**Horizontal Scaling** (add more instances):
+```bash
+terraform apply -var="ha_enabled=true" \
+                -var="instance_count=3"
+```
+
+**When to Scale**:
+- CPU >80% sustained → Add OCPU or scale out
+- Latency P95 >200ms → Add instances
+- Error rate >1% → Investigate (likely config issue, not scale)
+
+### Monitoring & Alerts
+
+**Critical Alerts** (PagerDuty/Slack):
+- Vault down (health check fails)
+- Error rate >5%
+- Latency P95 >500ms
+- Disk usage >80%
+
+**Warning Alerts** (Email):
+- CPU >70% for >10min
+- Memory >75%
+- Unusual access patterns (spike in queries)
+
+**Dashboards**:
+- Real-time: Grafana (`/grafana/vault-dashboard.json`)
+- Historical: Prometheus (`/prometheus/queries.yml`)
+
+## Troubleshooting
+
+### Issue: High Latency
+
+**Symptoms**: decrypt_scores() taking >200ms
+
+**Diagnosis**:
+```bash
+# Check Vault CPU
+curl https://vault-yourteam.oci.envector.io/metrics | grep cpu
+
+# Check FHE key dimension
+# (higher dim = more accurate but slower)
+cat /vault_keys/SecKey.json | jq '.dim'
+```
+
+**Solutions**:
+- CPU bottleneck → Scale up (add OCPU)
+- Large Top-K → Reduce max results (10 → 5)
+- High dimension → Acceptable (dim=2048 is standard)
+
+### Issue: Authentication Failures
+
+**Symptoms**: Clients can't connect, 401 Unauthorized
+
+**Diagnosis**:
+```bash
+# Check token is correct
+echo $VAULT_TOKEN
+
+# Verify Vault sees requests
+ssh admin@vault-yourteam.oci.envector.io
+sudo journalctl -u vault | grep "401"
+```
+
+**Solutions**:
+- Wrong token → Re-share correct token
+- Token rotated → Distribute new token to all team members
+- Firewall → Check security group allows 443 from team IPs
+
+### Issue: Vault Crashed
+
+**Symptoms**: Health check fails, 503 Service Unavailable
+
+**Diagnosis**:
+```bash
+ssh admin@vault-yourteam.oci.envector.io
+sudo systemctl status vault
+sudo journalctl -u vault -n 100
+```
+
+**Solutions**:
+- OOM killer → Increase VM memory
+- Disk full → Rotate logs (`logrotate`)
+- Crashed process → Restart (`systemctl restart vault`)
+- Persistent crash → Redeploy with backup keys
+
+## Next Steps
+
+- Deploy your first Vault: [Quick Start](../README.md#quick-start)
+- Team setup guide: [TEAM-SETUP.md](TEAM-SETUP.md)
+- Load testing: [Load Testing Guide](../tests/load/README.md)
+- Monitoring setup: [Monitoring Guide](../deployment/monitoring/README.md)

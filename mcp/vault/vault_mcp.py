@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import base64
 import pickle
 import numpy as np
@@ -10,7 +10,7 @@ from pyenvector.crypto.block import CipherBlock, Query
 # Configuration
 KEY_DIR = "vault_keys"
 KEY_ID = "vault-key"
-DIM = 32 # Using small dim for demo
+DIM = 1024  # FHE cipher supports up to 2^12, using 1024 for production
 
 # Initialize Keys on Startup
 def ensure_keys():
@@ -39,6 +39,31 @@ def validate_token(token: str):
     if token not in VALID_TOKENS:
         raise ValueError(f"Access Denied: Invalid Authentication Token '{token}'")
 
+# Core Business Logic (testable without MCP framework)
+def _get_public_key_impl(token: str) -> str:
+    """
+    Core implementation: Returns the public key bundle.
+    
+    Args:
+        token: Authentication token issued by Vault Admin.
+        
+    Returns:
+        JSON string containing EncKey, EvalKey, MetadataKey.
+    """
+    validate_token(token)
+    
+    bundle = {}
+    for filename in ["EncKey.json", "EvalKey.json", "MetadataKey.json"]:
+        path = os.path.join(KEY_DIR, filename)
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                bundle[filename] = f.read()
+        else:
+            # Should not happen if ensure_keys ran
+            pass
+            
+    return json.dumps(bundle)
+
 # MCP Server
 mcp = FastMCP("enVector-Vault")
 
@@ -59,33 +84,19 @@ def get_public_key(token: str) -> str:
             "MetadataKey.json": "..."
         }
     """
-    validate_token(token)
-    
-    bundle = {}
-    for filename in ["EncKey.json", "EvalKey.json", "MetadataKey.json"]:
-        path = os.path.join(KEY_DIR, filename)
-        if os.path.exists(path):
-            with open(path, "r") as f:
-                bundle[filename] = f.read()
-        else:
-            # Should not happen if ensure_keys ran
-            pass
-            
-    return json.dumps(bundle)
+    return _get_public_key_impl(token)
 
-@mcp.tool()
-def decrypt_scores(token: str, encrypted_blob_b64: str, top_k: int = 5) -> str:
+def _decrypt_scores_impl(token: str, encrypted_blob_b64: str, top_k: int = 5) -> str:
     """
-    Decrypts a blob of encrypted scores using the Vault's Secret Key.
-    Applies Top-K filtering and returns the result.
+    Core implementation: Decrypts scores and applies Top-K filtering.
     
     Args:
         token: Authentication token issued by Vault Admin.
-        encrypted_blob_b64: Base64 string of the serialized CipherBlock (Query) from the Cloud.
+        encrypted_blob_b64: Base64 string of the serialized CipherBlock.
         top_k: Number of top results to return (max 10 allowed).
     
     Returns:
-        JSON string containing the list of scores (and implicitly indices).
+        JSON string containing the list of scores.
     """
     validate_token(token)
     
@@ -137,6 +148,22 @@ def decrypt_scores(token: str, encrypted_blob_b64: str, top_k: int = 5) -> str:
 
     except Exception as e:
         return json.dumps({"error": str(e)})
+
+@mcp.tool()
+def decrypt_scores(token: str, encrypted_blob_b64: str, top_k: int = 5) -> str:
+    """
+    Decrypts a blob of encrypted scores using the Vault's Secret Key.
+    Applies Top-K filtering and returns the result.
+    
+    Args:
+        token: Authentication token issued by Vault Admin.
+        encrypted_blob_b64: Base64 string of the serialized CipherBlock (Query) from the Cloud.
+        top_k: Number of top results to return (max 10 allowed).
+    
+    Returns:
+        JSON string containing the list of scores (and implicitly indices).
+    """
+    return _decrypt_scores_impl(token, encrypted_blob_b64, top_k)
 
 if __name__ == "__main__":
     import sys

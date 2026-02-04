@@ -138,8 +138,34 @@ export VAULT_TOKEN=$(terraform output -raw vault_token)
 3. **Rune-Vault**:
    - Docker container running on port 50080
    - Reverse proxy through Nginx (443)
+   - **TLS encryption** for all API communications
    - Health checks enabled
    - Auto-restart on failure
+
+## Security Features
+
+### TLS/HTTPS
+
+⚠️ **All Vault communications are TLS-encrypted by default.**
+
+Our deployment includes:
+- **Nginx reverse proxy** with TLS termination
+- **Let's Encrypt** automatic certificate provisioning
+- **HTTP → HTTPS redirect** (no plaintext traffic)
+- **Strong cipher suites** (TLS 1.2+)
+
+**Why this matters:**
+- Vault tokens are sent in API requests
+- Without TLS, tokens can be intercepted over the network
+- FHE-encrypted data is also transmitted (defense in depth)
+
+**Certificate renewal:**
+```bash
+# Automatic via certbot cron job
+# Manual renewal if needed:
+sudo certbot renew
+sudo systemctl reload nginx
+```
 
 ## Cost Estimation
 

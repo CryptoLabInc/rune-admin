@@ -1,10 +1,10 @@
 #!/bin/bash
 set -e
 
-# Rune Interactive Installer
-# Non-developer friendly setup for organizational memory system
+# Rune-Admin Interactive Installer
+# Administrator setup for Vault infrastructure deployment
 
-VERSION="0.2.0"
+VERSION="0.3.0"
 
 # Colors
 RED='\033[0;31m'
@@ -82,12 +82,11 @@ show_admin_next_steps() {
     echo "   terraform init"
     echo "   terraform apply"
     echo ""
-    echo "2️⃣  Share with team members:"
+    echo "2️⃣  Share credentials with team members (securely):"
     echo "   - Vault URL: https://vault-YOURTEAM.oci.envector.io"
     echo "   - Vault Token: evt_YOURTEAM_xxx"
     echo ""
-    echo "3️⃣  Onboard team members:"
-    echo "   ./scripts/add-team-member.sh"
+    echo "3﹏⃣  Team members install Rune from Claude Marketplace"
     echo ""
     echo "📚 Deployment Guide: deployment/oci/README.md"
     echo "💬 Support: https://github.com/CryptoLabInc/rune/issues"
@@ -100,12 +99,11 @@ show_member_next_steps() {
     echo "Wait for your admin to send you:"
     echo "  1. Vault URL (https://vault-YOURTEAM.oci.envector.io)"
     echo "  2. Vault Token (evt_YOURTEAM_xxx)"
-    echo "  3. Setup package (YOURNAME_rune_package.zip)"
     echo ""
     echo "Once received:"
-    echo "  1. Extract the package"
-    echo "  2. Run the setup script inside"
-    echo "  3. Restart your AI agent"
+    echo "  1. Install Rune from Claude Marketplace"
+    echo "  2. Configure plugin with Vault URL and token"
+    echo "  3. Start using organizational memory"
     echo ""
     echo "📚 Configuration Guide: CLAUDE_SETUP.md"
     echo "💬 Support: https://github.com/CryptoLabInc/rune/issues"
