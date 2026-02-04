@@ -4,6 +4,9 @@ import pickle
 import numpy as np
 import os
 import json
+import time
+from collections import defaultdict
+from threading import Lock
 from pyenvector.crypto import KeyGenerator, Cipher
 from pyenvector.crypto.block import CipherBlock, Query
 
@@ -29,15 +32,76 @@ sec_key_path = os.path.join(KEY_DIR, "SecKey.json")
 # Usually safe for read-ops.
 cipher = Cipher(enc_key_path=enc_key_path, dim=DIM)
 
+# =============================================================================
 # Authorization
-VALID_TOKENS = {
-    "envector-team-alpha", 
-    "envector-admin-001"
-}
+# =============================================================================
+# DEMO TOKENS - DO NOT USE IN PRODUCTION
+# Replace with your own tokens after signing up at https://envector.io
+#
+# Production setup:
+#   export VAULT_TOKENS="your-token-1,your-token-2"
+# =============================================================================
+_ENV_TOKENS = os.getenv("VAULT_TOKENS", "").strip()
+if _ENV_TOKENS:
+    VALID_TOKENS = set(filter(None, _ENV_TOKENS.split(",")))
+else:
+    # Demo tokens for local testing only
+    VALID_TOKENS = {
+        "DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO",
+        "DEMO-ADMIN-SIGNUP-AT-ENVECTOR-IO"
+    }
+    print("WARNING: Using demo tokens. Set VAULT_TOKENS env var for production.")
+
+
+# =============================================================================
+# Rate Limiting
+# =============================================================================
+class RateLimiter:
+    """Simple sliding window rate limiter."""
+
+    def __init__(self, max_requests: int = 30, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._requests: dict[str, list[float]] = defaultdict(list)
+        self._lock = Lock()
+
+    def is_allowed(self, client_id: str) -> bool:
+        """Check if request is allowed and record it."""
+        now = time.time()
+        with self._lock:
+            # Clean old entries
+            self._requests[client_id] = [
+                t for t in self._requests[client_id]
+                if now - t < self.window_seconds
+            ]
+            # Check limit
+            if len(self._requests[client_id]) >= self.max_requests:
+                return False
+            # Record request
+            self._requests[client_id].append(now)
+            return True
+
+    def get_retry_after(self, client_id: str) -> int:
+        """Returns seconds until next request is allowed."""
+        with self._lock:
+            if not self._requests[client_id]:
+                return 0
+            oldest = min(self._requests[client_id])
+            return max(0, int(self.window_seconds - (time.time() - oldest)))
+
+
+rate_limiter = RateLimiter(max_requests=30, window_seconds=60)
+
 
 def validate_token(token: str):
+    """Validate authentication token with rate limiting."""
+    # Rate limit by token (prevents brute-force)
+    if not rate_limiter.is_allowed(token):
+        retry_after = rate_limiter.get_retry_after(token)
+        raise ValueError(f"Rate limit exceeded. Retry after {retry_after} seconds.")
+
     if token not in VALID_TOKENS:
-        raise ValueError(f"Access Denied: Invalid Authentication Token '{token}'")
+        raise ValueError("Access Denied: Invalid authentication token")
 
 # Core Business Logic (testable without MCP framework)
 def _get_public_key_impl(token: str) -> str:
