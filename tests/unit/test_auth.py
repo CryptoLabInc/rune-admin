@@ -92,11 +92,8 @@ class TestTokenValidation:
         # While old tokens are rejected, new demo tokens should be accepted
         # when running in demo mode (VAULT_TOKENS not set)
         rate_limiter._requests.clear()
-        try:
-            validate_token(DEMO_TOKEN)
-            validate_token(DEMO_ADMIN_TOKEN)
-        except ValueError as e:
-            pytest.fail(f"Demo tokens should be valid when VAULT_TOKENS not set: {e}")
+        validate_token(DEMO_TOKEN)
+        validate_token(DEMO_ADMIN_TOKEN)
 
 
 class TestRateLimiter:
