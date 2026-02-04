@@ -82,6 +82,19 @@ class TestTokenValidation:
         with pytest.raises(ValueError, match="Access Denied"):
             validate_token("envector-admin-001")
 
+    @pytest.mark.skipif(
+        os.getenv("VAULT_TOKENS") is not None,
+        reason="Test only applies when VAULT_TOKENS env var is not set (demo mode)"
+    )
+    def test_demo_tokens_work_when_env_var_not_set(self):
+        """Demo tokens should pass validation when VAULT_TOKENS env var is not set."""
+        # This test verifies the inverse case of test_old_tokens_not_valid:
+        # While old tokens are rejected, new demo tokens should be accepted
+        # when running in demo mode (VAULT_TOKENS not set)
+        rate_limiter._requests.clear()
+        validate_token(DEMO_TOKEN)
+        validate_token(DEMO_ADMIN_TOKEN)
+
 
 class TestRateLimiter:
     """Test rate limiting functionality."""
