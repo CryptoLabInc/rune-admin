@@ -14,11 +14,17 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../mcp/vault'))
 
 # Import the implementation function (not the MCP-decorated version)
-from vault_mcp import _decrypt_scores_impl as decrypt_scores
+from vault_mcp import _decrypt_scores_impl as decrypt_scores, rate_limiter
 from pyenvector.crypto import KeyGenerator, Cipher
 from pyenvector.crypto.block import CipherBlock, Query
 
+
 class TestDecryptScores:
+
+    @pytest.fixture(autouse=True)
+    def reset_rate_limiter(self):
+        """Reset rate limiter before each test."""
+        rate_limiter._requests.clear()
     """Test decrypt_scores MCP tool."""
     
     @pytest.fixture(scope="class")
@@ -57,8 +63,8 @@ class TestDecryptScores:
                 else:
                     scores = scores[:dim]
         
-        # Encrypt scores
-        encrypted = cipher.encrypt([scores], encode_type="item")
+        # Encrypt scores (note: no wrapping in list for pyenvector API)
+        encrypted = cipher.encrypt(scores, encode_type="item")
         
         # Serialize to bytes (matching vault_mcp logic)
         serialized = encrypted.serialize()
@@ -73,11 +79,11 @@ class TestDecryptScores:
         monkeypatch.setattr('vault_mcp.sec_key_path', crypto_setup["sec_key"])
         
         # Create test scores
-        scores = np.random.rand(32).tolist()
+        scores = np.random.rand(1024).tolist()
         encrypted_blob = self.create_encrypted_scores(crypto_setup, scores)
         
         # Decrypt
-        result = decrypt_scores("envector-team-alpha", encrypted_blob, top_k=5)
+        result = decrypt_scores("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO", encrypted_blob, top_k=5)
         
         # Should be valid JSON
         data = json.loads(result)
@@ -91,11 +97,11 @@ class TestDecryptScores:
         monkeypatch.setattr('vault_mcp.cipher', crypto_setup["cipher"])
         monkeypatch.setattr('vault_mcp.sec_key_path', crypto_setup["sec_key"])
         
-        scores = np.random.rand(4).tolist()
+        scores = np.random.rand(1024).tolist()
         encrypted_blob = self.create_encrypted_scores(crypto_setup, scores)
         
         for k in [1, 2, 3]:
-            result = decrypt_scores("envector-team-alpha", encrypted_blob, top_k=k)
+            result = decrypt_scores("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO", encrypted_blob, top_k=k)
             data = json.loads(result)
             
             if isinstance(data, list):
@@ -107,11 +113,11 @@ class TestDecryptScores:
         monkeypatch.setattr('vault_mcp.cipher', crypto_setup["cipher"])
         monkeypatch.setattr('vault_mcp.sec_key_path', crypto_setup["sec_key"])
         
-        # Create known scores
-        scores = [0.1, 0.9, 0.3, 0.8]
+        # Create known scores (padded to 1024)
+        scores = [0.1, 0.9, 0.3, 0.8] + [0.0] * 1020
         encrypted_blob = self.create_encrypted_scores(crypto_setup, scores)
         
-        result = decrypt_scores("envector-team-alpha", encrypted_blob, top_k=2)
+        result = decrypt_scores("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO", encrypted_blob, top_k=2)
         data = json.loads(result)
         
         if isinstance(data, list):
@@ -123,10 +129,10 @@ class TestDecryptScores:
         """Top-K > 10 should be rejected (policy)."""
         monkeypatch.setattr('vault_mcp.KEY_DIR', crypto_setup["key_dir"])
         
-        scores = np.random.rand(4).tolist()
+        scores = np.random.rand(1024).tolist()
         encrypted_blob = self.create_encrypted_scores(crypto_setup, scores)
         
-        result = decrypt_scores("envector-team-alpha", encrypted_blob, top_k=15)
+        result = decrypt_scores("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO", encrypted_blob, top_k=15)
         data = json.loads(result)
         
         # Should have error about rate limit
@@ -137,7 +143,7 @@ class TestDecryptScores:
         """Invalid token should raise ValueError."""
         monkeypatch.setattr('vault_mcp.KEY_DIR', crypto_setup["key_dir"])
         
-        scores = np.random.rand(4).tolist()
+        scores = np.random.rand(1024).tolist()
         encrypted_blob = self.create_encrypted_scores(crypto_setup, scores)
         
         with pytest.raises(ValueError, match="Access Denied"):
@@ -150,7 +156,7 @@ class TestDecryptScores:
         monkeypatch.setattr('vault_mcp.sec_key_path', crypto_setup["sec_key"])
         
         # Invalid base64
-        result = decrypt_scores("envector-team-alpha", "not-valid-base64", top_k=5)
+        result = decrypt_scores("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO", "not-valid-base64", top_k=5)
         data = json.loads(result)
         
         assert "error" in data
@@ -159,7 +165,7 @@ class TestDecryptScores:
         """Empty blob should return error."""
         monkeypatch.setattr('vault_mcp.KEY_DIR', crypto_setup["key_dir"])
         
-        result = decrypt_scores("envector-team-alpha", "", top_k=5)
+        result = decrypt_scores("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO", "", top_k=5)
         data = json.loads(result)
         
         assert "error" in data
@@ -170,10 +176,10 @@ class TestDecryptScores:
         monkeypatch.setattr('vault_mcp.cipher', crypto_setup["cipher"])
         monkeypatch.setattr('vault_mcp.sec_key_path', crypto_setup["sec_key"])
         
-        scores = np.random.rand(32).tolist()
+        scores = np.random.rand(1024).tolist()
         encrypted_blob = self.create_encrypted_scores(crypto_setup, scores)
         
-        result = decrypt_scores("envector-team-alpha", encrypted_blob, top_k=5)
+        result = decrypt_scores("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO", encrypted_blob, top_k=5)
         data = json.loads(result)
         
         if isinstance(data, list) and len(data) > 0:
@@ -190,10 +196,10 @@ class TestDecryptScores:
         monkeypatch.setattr('vault_mcp.cipher', crypto_setup["cipher"])
         monkeypatch.setattr('vault_mcp.sec_key_path', crypto_setup["sec_key"])
         
-        scores = np.random.rand(32).tolist()
+        scores = np.random.rand(1024).tolist()
         encrypted_blob = self.create_encrypted_scores(crypto_setup, scores)
         
-        result = decrypt_scores("envector-team-alpha", encrypted_blob, top_k=5)
+        result = decrypt_scores("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO", encrypted_blob, top_k=5)
         data = json.loads(result)
         
         if isinstance(data, list) and len(data) > 1:
@@ -209,11 +215,11 @@ class TestDecryptScores:
         monkeypatch.setattr('vault_mcp.cipher', crypto_setup["cipher"])
         monkeypatch.setattr('vault_mcp.sec_key_path', crypto_setup["sec_key"])
         
-        scores = np.random.rand(32).tolist()
+        scores = np.random.rand(1024).tolist()
         encrypted_blob = self.create_encrypted_scores(crypto_setup, scores)
         
         # Don't specify top_k (should default to 5)
-        result = decrypt_scores("envector-team-alpha", encrypted_blob)
+        result = decrypt_scores("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO", encrypted_blob)
         data = json.loads(result)
         
         if isinstance(data, list):

@@ -18,7 +18,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../mcp/vault'))
 
 class TestVaultMCPAPI:
     """Integration tests for Vault MCP API."""
-    
+
+    @pytest.fixture(autouse=True)
+    def reset_rate_limiter(self):
+        """Reset rate limiter before each test."""
+        import vault_mcp
+        vault_mcp.rate_limiter._requests.clear()
+
     @pytest.fixture(scope="class")
     def vault_setup(self):
         """Setup test vault with keys."""
@@ -65,7 +71,7 @@ class TestVaultMCPAPI:
         
         # Direct function call test
         from vault_mcp import get_public_key
-        result = get_public_key("envector-team-alpha")
+        result = get_public_key("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO")
         
         bundle = json.loads(result)
         assert "EncKey.json" in bundle
@@ -79,13 +85,13 @@ class TestVaultMCPAPI:
         from pyenvector.crypto.block import CipherBlock
         
         # Create encrypted scores
-        scores = np.random.rand(32).tolist()
-        encrypted = cipher.encrypt([scores], encode_type="item")
+        scores = np.random.rand(1024).tolist()
+        encrypted = cipher.encrypt(scores, encode_type="item")
         serialized = encrypted.serialize()
         blob = base64.b64encode(serialized).decode('utf-8')
         
         # Call decrypt_scores
-        result = decrypt_scores("envector-team-alpha", blob, top_k=5)
+        result = decrypt_scores("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO", blob, top_k=5)
         
         data = json.loads(result)
         assert isinstance(data, list)
@@ -101,16 +107,16 @@ class TestVaultMCPAPI:
         from vault_mcp import get_public_key, decrypt_scores, cipher
         
         # 1. Get public keys
-        key_bundle = get_public_key("envector-team-alpha")
+        key_bundle = get_public_key("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO")
         assert key_bundle is not None
         
-        # 2. Encrypt data (simulating agent)
-        original_scores = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05] + [0.01] * 22
-        encrypted = cipher.encrypt([original_scores], encode_type="item")
+        # 2. Encrypt data (simulating agent) - padded to 1024
+        original_scores = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05] + [0.01] * 1014
+        encrypted = cipher.encrypt(original_scores, encode_type="item")
         blob = base64.b64encode(encrypted.serialize()).decode('utf-8')
         
         # 3. Decrypt and get top-K
-        result = decrypt_scores("envector-team-alpha", blob, top_k=3)
+        result = decrypt_scores("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO", blob, top_k=3)
         data = json.loads(result)
         
         # 4. Verify top-3 are highest scores
@@ -129,14 +135,14 @@ class TestVaultMCPAPI:
         # Create multiple encrypted blobs
         blobs = []
         for _ in range(5):
-            scores = np.random.rand(32).tolist()
-            encrypted = cipher.encrypt([scores], encode_type="item")
+            scores = np.random.rand(1024).tolist()
+            encrypted = cipher.encrypt(scores, encode_type="item")
             blob = base64.b64encode(encrypted.serialize()).decode('utf-8')
             blobs.append(blob)
         
         # Decrypt concurrently
         def decrypt_one(blob):
-            return decrypt_scores("envector-team-alpha", blob, top_k=5)
+            return decrypt_scores("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO", blob, top_k=5)
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(decrypt_one, blob) for blob in blobs]
@@ -166,17 +172,17 @@ class TestVaultMCPAPI:
         """Rate limiting (top_k <= 10) should be enforced."""
         from vault_mcp import decrypt_scores, cipher
         
-        scores = np.random.rand(32).tolist()
-        encrypted = cipher.encrypt([scores], encode_type="item")
+        scores = np.random.rand(1024).tolist()
+        encrypted = cipher.encrypt(scores, encode_type="item")
         blob = base64.b64encode(encrypted.serialize()).decode('utf-8')
         
         # top_k=10 should work
-        result_10 = decrypt_scores("envector-team-alpha", blob, top_k=10)
+        result_10 = decrypt_scores("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO", blob, top_k=10)
         data_10 = json.loads(result_10)
         assert "error" not in data_10 or data_10.get("error") is None
         
         # top_k=11 should fail
-        result_11 = decrypt_scores("envector-team-alpha", blob, top_k=11)
+        result_11 = decrypt_scores("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO", blob, top_k=11)
         data_11 = json.loads(result_11)
         assert "error" in data_11
         assert "Rate Limit" in data_11["error"]

@@ -13,12 +13,17 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../mcp/vault'))
 
 # Import the implementation function (not the MCP-decorated version)
-from vault_mcp import _get_public_key_impl as get_public_key
+from vault_mcp import _get_public_key_impl as get_public_key, rate_limiter
 import vault_mcp
 from pyenvector.crypto import KeyGenerator
 
 
 class TestGetPublicKey:
+
+    @pytest.fixture(autouse=True)
+    def reset_rate_limiter(self):
+        """Reset rate limiter before each test."""
+        rate_limiter._requests.clear()
     """Test get_public_key MCP tool."""
     
     @pytest.fixture(scope="class")
@@ -35,7 +40,7 @@ class TestGetPublicKey:
         """Valid token should return public key bundle."""
         monkeypatch.setattr('vault_mcp.KEY_DIR', test_keys)
         
-        result = get_public_key("envector-team-alpha")
+        result = get_public_key("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO")
         
         # Should be valid JSON
         bundle = json.loads(result)
@@ -59,7 +64,7 @@ class TestGetPublicKey:
         """Each key in bundle should be valid JSON."""
         monkeypatch.setattr('vault_mcp.KEY_DIR', test_keys)
         
-        result = get_public_key("envector-team-alpha")
+        result = get_public_key("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO")
         bundle = json.loads(result)
         
         for key_name, key_content in bundle.items():
@@ -78,7 +83,7 @@ class TestGetPublicKey:
         with open(os.path.join(temp_dir, "EncKey.json"), "w") as f:
             f.write('{"test": "key"}')
         
-        result = get_public_key("envector-team-alpha")
+        result = get_public_key("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO")
         bundle = json.loads(result)
         
         # Should have EncKey but not others
@@ -91,7 +96,7 @@ class TestGetPublicKey:
         """Bundle size should be reasonable (not empty, not too large)."""
         monkeypatch.setattr('vault_mcp.KEY_DIR', test_keys)
         
-        result = get_public_key("envector-team-alpha")
+        result = get_public_key("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO")
         
         # Should have some content
         assert len(result) > 100
@@ -103,8 +108,8 @@ class TestGetPublicKey:
         """Multiple calls should return consistent keys."""
         monkeypatch.setattr('vault_mcp.KEY_DIR', test_keys)
         
-        result1 = get_public_key("envector-team-alpha")
-        result2 = get_public_key("envector-team-alpha")
+        result1 = get_public_key("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO")
+        result2 = get_public_key("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO")
         
         # Should be identical
         assert result1 == result2
@@ -113,8 +118,8 @@ class TestGetPublicKey:
         """Different valid tokens should return same keys (shared vault)."""
         monkeypatch.setattr('vault_mcp.KEY_DIR', test_keys)
         
-        result1 = get_public_key("envector-team-alpha")
-        result2 = get_public_key("envector-admin-001")
+        result1 = get_public_key("DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO")
+        result2 = get_public_key("DEMO-ADMIN-SIGNUP-AT-ENVECTOR-IO")
         
         # Keys should be identical (same vault)
         assert result1 == result2
