@@ -101,15 +101,14 @@ function Show-AdminNextSteps {
     Write-Host "   terraform init"
     Write-Host "   terraform apply"
     Write-Host ""
-    Write-Host "2️⃣  Share with team members:"
+    Write-Host "2️⃣  Share credentials with team members (securely):"
     Write-Host "   - Vault URL: https://vault-YOURTEAM.oci.envector.io"
     Write-Host "   - Vault Token: evt_YOURTEAM_xxx"
     Write-Host ""
-    Write-Host "3️⃣  Onboard team members:"
-    Write-Host "   .\scripts\add-team-member.sh"
+    Write-Host "3️⃣  Team members install Rune from Claude Marketplace and configure"
     Write-Host ""
     Write-Host "📚 Deployment Guide: deployment\oci\README.md"
-    Write-Host "💬 Support: https://github.com/CryptoLabInc/rune/issues"
+    Write-Host "💬 Support: https://github.com/CryptoLabInc/rune-admin/issues"
     Write-Host ""
 }
 
@@ -221,14 +220,13 @@ Option C: Onboard Team Members
 -------------------------------
 After deploying Vault:
 
-1. Add team member:
-   .\scripts\add-team-member.sh alice
+1. Share Vault credentials with team members (securely):
+   - Vault URL: https://vault-YOURTEAM.oci.envector.io
+   - Vault Token: evt_YOURTEAM_xxx
 
-2. Share the generated setup package
-   (team-setup-alice.zip)
+2. Team members install Rune from Claude Marketplace
 
-3. Member runs setup script from package
-   (no manual configuration needed)
+3. Members configure with received credentials
 
 Documentation:
 --------------

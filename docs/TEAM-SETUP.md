@@ -1,31 +1,31 @@
-# Team Collaboration Setup Guide
+# Team Setup Guide for Administrators
 
 ## Overview
 
-This guide shows how to set up Rune for **team collaboration** where multiple developers work on a confidential project and share AI agent context seamlessly.
-
-## Use Case: Confidential Game Engine Port
-
-**Scenario:**
-- 3 developers forking [fhenomenon](https://github.com/zotanika/fhenomenon)
-- Creating Web3 game (confidential project)
-- Remote collaboration
-- Each developer uses different AI agent (Claude/Gemini/Codex)
-- Want seamless context sharing without manual sync
+This guide shows administrators how to deploy and manage Rune-Vault infrastructure for team collaboration with organizational memory.
 
 ## Prerequisites
 
-Before setting up team collaboration, ensure:
+### For Administrators
 
-1. **All team members have signed up for enVector Cloud** at [https://envector.io](https://envector.io)
-2. **Obtain organization API credentials** (`org-id`, `api-key`) from the enVector Cloud dashboard
+1. **Cloud Account**: OCI, AWS, or GCP account with billing enabled
+2. **Terraform**: Version 1.0+ installed
+3. **enVector Cloud**: Sign up at [https://envector.io](https://envector.io)
+   - Obtain Organization ID and API Key
+4. **Security**: Secure channel for distributing credentials (1Password, Signal, etc.)
+
+### For Team Members
+
+Team members will need:
+- Rune installed from Claude Marketplace (or their AI agent's marketplace)
+- Vault URL and token (provided by admin)
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│   enVector Cloud (https://envector.io - Required)   │
-│         Stores encrypted vectors only               │
+│   enVector Cloud (https://envector.io)              │
+│   Stores encrypted vectors (ciphertext only)        │
 └─────────────────────────────────────────────────────┘
           ▲               ▲               ▲
           │ encrypted     │ encrypted     │ encrypted
@@ -33,18 +33,20 @@ Before setting up team collaboration, ensure:
 │   Alice      │  │     Bob      │  │    Carol     │
 │   (Claude)   │  │   (Gemini)   │  │   (Codex)    │
 │              │  │              │  │              │
-│    Scribe    │  │    Scribe    │  │    Scribe    │
-│      ↓       │  │      ↓       │  │      ↓       │
-│  MCP Client  │  │  MCP Client  │  │  MCP Client  │
+│     Rune      │  │     Rune      │  │     Rune      │
+│   (local)    │  │   (local)    │  │   (local)    │
 └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
        │                 │                 │
+       │ TLS             │ TLS             │ TLS
        └─────────────────┴─────────────────┘
                          │
                          ▼
               ┌──────────────────────┐
               │      Rune-Vault      │
-              │  OCI/AWS/GCP or      │
-              │  Self-hosted         │
+              │  (Team Infrastructure)│
+              │  - Holds SecKey      │
+              │  - Decrypts results  │
+              │  - Distributes EncKey│
               └──────────────────────┘
 ```
 
@@ -52,52 +54,311 @@ Before setting up team collaboration, ensure:
 - **ONE Vault per team** (not per developer)
 - All team members connect to same Vault
 - Same encryption keys = automatic context sharing
-- No manual synchronization needed
+- SecKey never leaves Vault VM
 
-## Step-by-Step Setup
+## Step-by-Step Deployment
 
-### Step 1: Team Admin Deploys Vault
+### Step 1: Deploy Rune-Vault
 
-**Option A: Managed Cloud (Recommended)**
-
-```bash
-# Choose your cloud provider
-cd rune
-
-# Deploy to OCI (Oracle Cloud)
-./scripts/deploy-vault.sh \
-  --provider oci \
-  --team-name fhenomenon-game \
-  --region us-ashburn-1
-
-# OR deploy to AWS
-./scripts/deploy-vault.sh \
-  --provider aws \
-  --team-name fhenomenon-game \
-  --region us-east-1
-
-# OR deploy to GCP
-./scripts/deploy-vault.sh \
-  --provider gcp \
-  --team-name fhenomenon-game \
-  --region us-central1
-```
-
-**Output:**
-```
-✓ Vault deployed successfully!
-
-Vault Endpoint: https://vault-fhenomenon-game.oci.envector.io
-Team Token: evt_fhen_game_abc123xyz
-
-Share these credentials with your team:
-  export VAULT_URL="https://vault-fhenomenon-game.oci.envector.io"
-  export VAULT_TOKEN="evt_fhen_game_abc123xyz"
-```
-
-**Option B: Self-Hosted (On-Premise)**
+**Option A: OCI (Oracle Cloud) - Recommended**
 
 ```bash
+cd deployment/oci
+
+# Initialize Terraform
+terraform init
+
+# Review and customize variables
+cp terraform.tfvars.example terraform.tfvars
+# Edit: team_name, region, envector_org_id, envector_api_key
+
+# Deploy
+terraform apply
+
+# Output:
+# vault_url = "https://vault-yourteam.oci.envector.io"
+# vault_token = "evt_yourteam_abc123xyz"
+```
+
+**Option B: AWS**
+
+```bash
+cd deployment/aws
+
+terraform init
+cp terraform.tfvars.example terraform.tfvars
+# Edit variables
+
+terraform apply
+```
+
+**Option C: GCP**
+
+```bash
+cd deployment/gcp
+
+terraform init
+cp terraform.tfvars.example terraform.tfvars
+# Edit variables
+
+terraform apply
+```
+
+**Option D: Local Development (Testing Only)**
+
+```bash
+./scripts/vault-dev.sh
+
+# Output:
+# Vault URL: http://localhost:50080
+# Token: demo_token_123 (INSECURE - development only!)
+```
+
+### Step 2: Verify Deployment
+
+```bash
+# Test Vault health
+curl https://vault-yourteam.oci.envector.io/health
+
+# Expected response:
+# {"status": "healthy", "vault_version": "0.2.0"}
+
+# Check Prometheus metrics (optional)
+curl https://vault-yourteam.oci.envector.io/metrics
+```
+
+### Step 3: Securely Distribute Credentials
+
+**What to share with team members:**
+
+```
+Vault URL: https://vault-yourteam.oci.envector.io
+Vault Token: evt_yourteam_abc123xyz
+```
+
+**How to share (choose one):**
+- **1Password** or **Bitwarden**: Create shared vault item
+- **Signal**: Encrypted messaging with disappearing messages
+- **Encrypted email**: PGP-encrypted email
+- **In-person**: Write on paper, shred after use
+
+**Security checklist:**
+- ✅ Use encrypted channel
+- ✅ Never commit to Git
+- ✅ Never send via plain Slack/Discord
+- ✅ Document who has access
+- ✅ Plan token rotation schedule
+
+### Step 4: Team Member Onboarding
+
+**Instructions for team members:**
+
+1. Install Rune from Claude Marketplace (or your AI agent's marketplace)
+2. Open plugin settings
+3. Configure:
+   - Vault URL: `<received from admin>`
+   - Vault Token: `<received from admin>`
+4. Restart AI agent
+5. Test: Ask agent "What organizational context do we have?"
+
+**Verification:**
+Each team member should see the same organizational memory instantly.
+
+## Management Tasks
+
+### Adding New Team Members
+
+```bash
+# 1. Share same Vault URL and token
+# 2. Team member installs plugin and configures
+# 3. No Vault changes needed - same keys work for everyone
+```
+
+### Monitoring Vault Health
+
+```bash
+# Check uptime and metrics
+curl https://vault-yourteam.oci.envector.io/metrics
+
+# Key metrics:
+# - vault_decryption_requests_total
+# - vault_decryption_latency_seconds
+# - vault_error_rate
+```
+
+Set up Grafana dashboard (see [Monitoring Guide](../deployment/monitoring/README.md))
+
+### Token Rotation
+
+```bash
+# Generate new token
+cd deployment/oci
+terraform apply -var="rotate_token=true"
+
+# Output: new_vault_token = "evt_yourteam_xyz789new"
+
+# Distribute new token to all team members
+# They update plugin settings
+```
+
+### Scaling (High Traffic)
+
+```bash
+# Increase Vault instance size
+cd deployment/oci
+terraform apply -var="instance_shape=VM.Standard.E4.Flex" \
+                -var="instance_memory_gb=32"
+
+# Or add load balancer for multiple Vault instances
+```
+
+### Backup and Recovery
+
+```bash
+# Backup FHE keys (CRITICAL - store securely!)
+cd deployment/oci
+terraform output vault_keys_backup
+
+# Download encrypted keys
+# Store in:
+# - Offline storage (USB drive in safe)
+# - Encrypted cloud backup (different provider)
+# - Team password manager secure notes
+
+# Recovery:
+# If Vault VM fails, redeploy with backup keys
+terraform apply -var="restore_from_backup=true" \
+                -var="backup_keys_path=/path/to/keys"
+```
+
+### Troubleshooting
+
+**Issue: Team member can't connect to Vault**
+
+```bash
+# Check Vault is reachable
+curl https://vault-yourteam.oci.envector.io/health
+
+# Check firewall rules
+cd deployment/oci
+terraform state show oci_core_security_list.vault
+
+# Verify token is correct
+# (Have team member re-enter token carefully)
+```
+
+**Issue: Slow decryption**
+
+```bash
+# Check Vault CPU usage
+# Increase instance resources if >80% CPU
+
+# Check metrics
+curl https://vault-yourteam.oci.envector.io/metrics | grep latency
+```
+
+**Issue: Vault crashed**
+
+```bash
+# Check logs
+ssh admin@vault-yourteam.oci.envector.io
+sudo journalctl -u vault -n 100
+
+# Restart Vault service
+sudo systemctl restart vault
+
+# If persistent, redeploy
+cd deployment/oci
+terraform destroy
+terraform apply
+```
+
+## Advanced Configuration
+
+### Multiple Teams/Projects
+
+Deploy separate Vaults for each project:
+
+```bash
+# Project 1: Internal Tools
+cd deployment/oci
+terraform workspace new internal-tools
+terraform apply -var="team_name=internal-tools"
+
+# Project 2: Customer Project
+terraform workspace new customer-alpha
+terraform apply -var="team_name=customer-alpha"
+
+# Team members switch by changing Vault URL in plugin settings
+```
+
+### Custom Domain
+
+```bash
+# Instead of vault-yourteam.oci.envector.io
+# Use vault.yourcompany.com
+
+# Add CNAME record:
+vault.yourcompany.com → vault-yourteam.oci.envector.io
+
+# Update SSL certificate (see deployment/oci/dns/README.md)
+```
+
+### VPN/Private Network
+
+```bash
+# Deploy Vault in private subnet
+cd deployment/oci
+terraform apply -var="public_access=false" \
+                -var="vpn_cidr=10.0.0.0/16"
+
+# Team members connect via VPN
+# (More secure for sensitive data)
+```
+
+## Cost Estimation
+
+**Monthly costs (approximate):**
+
+| Provider | Instance Type | Storage | Bandwidth | Total |
+|----------|---------------|---------|-----------|-------|
+| OCI | VM.Standard.E4.Flex (2 OCPU, 8GB) | 50GB | 1TB | ~$30/mo |
+| AWS | t3.medium | 50GB EBS | 1TB | ~$60/mo |
+| GCP | e2-medium | 50GB PD | 1TB | ~$55/mo |
+
+**Factors:**
+- Team size (more members = more traffic)
+- Context volume (storage)
+- Query frequency (compute)
+
+## Security Best Practices
+
+1. **Key Management**
+   - Backup FHE keys to offline storage immediately after deployment
+   - Never commit keys to Git
+   - Rotate tokens every 90 days
+
+2. **Access Control**
+   - Document who has Vault token access
+   - Revoke access for departing team members (rotate token)
+   - Use separate Vaults for different security levels
+
+3. **Network Security**
+   - Always use TLS (HTTPS)
+   - Consider VPN for high-security projects
+   - Monitor access logs regularly
+
+4. **Monitoring**
+   - Set up alerts for high error rates
+   - Monitor unusual access patterns
+   - Regular health checks (automated)
+
+## Next Steps
+
+- Set up Grafana monitoring: [Monitoring Guide](../deployment/monitoring/README.md)
+- Load testing: [Load Testing Guide](../tests/load/README.md)
+- Review architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
+- Join community: https://github.com/CryptoLabInc/rune-admin/discussions
 # Deploy to your server
 ./scripts/deploy-vault.sh \
   --provider on-premise \

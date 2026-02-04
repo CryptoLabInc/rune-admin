@@ -1,421 +1,287 @@
-# Contributing to Rune
+# Contributing to Rune-Admin
 
-Thank you for your interest in contributing to Rune! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Rune-Admin! This document provides guidelines for contributing to the infrastructure and deployment tooling.
 
-## Ways to Contribute
+## Code of Conduct
 
-### 1. Code Contributions
+Be respectful, collaborative, and constructive in all interactions.
 
-- **New Skills**: Create agent-agnostic skills
-- **Agent Integrations**: Add support for new agents
-- **MCP Servers**: Implement new MCP servers
-- **Deployment Scripts**: Add support for new cloud providers
-- **Bug Fixes**: Fix issues and improve reliability
-- **Performance**: Optimize performance and scalability
+## How to Contribute
 
-### 2. Documentation
+### Reporting Issues
 
-- **Guides**: Write tutorials and how-to guides
-- **Examples**: Add real-world usage examples
-- **API Docs**: Improve API documentation
-- **Translations**: Translate docs to other languages
+Before creating an issue:
+1. Check if the issue already exists
+2. Collect relevant information:
+   - Rune-Admin version
+   - Deployment platform (OCI/AWS/GCP)
+   - Python version
+   - Error messages and logs
+   - Steps to reproduce
 
-### 3. Community
+Create issue at: https://github.com/CryptoLabInc/rune-admin/issues
 
-- **Answer Questions**: Help others in discussions
-- **Report Bugs**: Submit detailed bug reports
-- **Feature Requests**: Suggest new features
-- **Testing**: Test new releases and provide feedback
+### Suggesting Features
 
-## Getting Started
-
-### 1. Fork and Clone
-
-```bash
-# Fork on GitHub
-# Then clone your fork
-git clone https://github.com/YOUR-USERNAME/rune.git
-cd rune
-
-# Add upstream remote
-git remote add upstream https://github.com/CryptoLabInc/rune.git
-```
-
-### 2. Create Branch
-
-```bash
-# Create feature branch
-git checkout -b feature/your-feature-name
-
-# Or bug fix branch
-git checkout -b fix/issue-number-description
-```
-
-### 3. Make Changes
-
-Follow our coding standards (see below) and make your changes.
-
-### 4. Test
-
-```bash
-# Run tests
-pytest tests/
-
-# Run linter
-flake8 .
-
-# Check types
-mypy .
-```
-
-### 5. Commit
-
-```bash
-# Stage changes
-git add .
-
-# Commit with descriptive message
-git commit -m "Add feature: description of feature"
-
-# Follow conventional commits format:
-# feat: new feature
-# fix: bug fix
-# docs: documentation changes
-# test: test changes
-# refactor: code refactoring
-# chore: maintenance tasks
-```
-
-### 6. Push and PR
-
-```bash
-# Push to your fork
-git push origin feature/your-feature-name
-
-# Create Pull Request on GitHub
-```
-
-## Coding Standards
-
-### Python
-
-- **Style**: Follow PEP 8
-- **Docstrings**: Use Google style docstrings
-- **Type Hints**: Add type hints for all functions
-- **Testing**: Write tests for new code
-
-```python
-from typing import List, Dict, Optional
-
-def encrypt_vector(
-    vector: List[float],
-    metadata: Optional[Dict[str, str]] = None
-) -> Dict[str, any]:
-    """Encrypt vector using FHE keys.
-    
-    Args:
-        vector: Vector to encrypt
-        metadata: Optional metadata to attach
-        
-    Returns:
-        Dictionary with encrypted_vector and vector_id
-        
-    Raises:
-        ValueError: If vector is empty
-        EncryptionError: If encryption fails
-    """
-    if not vector:
-        raise ValueError("Vector cannot be empty")
-    
-    # Implementation
-    return {"encrypted_vector": [...], "vector_id": "vec_123"}
-```
-
-### JavaScript/TypeScript
-
-- **Style**: Use Prettier and ESLint
-- **Types**: Use TypeScript for all new code
-- **JSDoc**: Add JSDoc comments
-- **Testing**: Use Jest for testing
-
-```typescript
-/**
- * Encrypt vector using FHE keys
- * 
- * @param vector - Vector to encrypt
- * @param metadata - Optional metadata to attach
- * @returns Encrypted vector and ID
- * @throws {ValueError} If vector is empty
- * @throws {EncryptionError} If encryption fails
- */
-export async function encryptVector(
-  vector: number[],
-  metadata?: Record<string, string>
-): Promise<{ encryptedVector: any; vectorId: string }> {
-  if (vector.length === 0) {
-    throw new ValueError('Vector cannot be empty');
-  }
-  
-  // Implementation
-  return { encryptedVector: [...], vectorId: 'vec_123' };
-}
-```
-
-### Shell Scripts
-
-- **Shebang**: Use `#!/bin/bash`
-- **Set options**: `set -e` (exit on error)
-- **Comments**: Document complex logic
-- **Error handling**: Check command success
-
-```bash
-#!/bin/bash
-set -e
-
-# Deploy Rune-Vault to cloud provider
-# Usage: ./deploy-vault.sh --provider oci --team-name myteam
-
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-    exit 1
-}
-
-# Validate arguments
-if [ -z "$PROVIDER" ]; then
-    log_error "Missing required argument: --provider"
-fi
-
-# Main logic
-log_info "Deploying Vault..."
-```
-
-### Documentation
-
-- **Markdown**: Use standard Markdown
-- **Code blocks**: Specify language for syntax highlighting
-- **Examples**: Provide working examples
-- **Links**: Use relative links for internal docs
-
-````markdown
-# Feature Name
-
-Brief description of the feature.
-
-## Installation
-
-```bash
-./install.sh --feature your-feature
-```
-
-## Usage
-
-```python
-from rune import YourFeature
-
-feature = YourFeature()
-result = feature.do_something()
-```
-
-## Configuration
-
-See [configuration guide](docs/CONFIG.md) for details.
-````
-
-## Pull Request Process
-
-### 1. PR Title
-
-Use conventional commit format:
-
-```
-feat: add support for Gemini agent
-fix: resolve vault connection timeout
-docs: update team setup guide
-test: add integration tests for monitor agent
-```
-
-### 2. PR Description
-
-Include:
-- **What**: Brief description of changes
-- **Why**: Reason for changes
-- **How**: Implementation approach
-- **Testing**: How you tested
-- **Screenshots**: If UI changes
-
-Template:
-```markdown
-## What
-Added support for Gemini agent integration.
-
-## Why
-Users requested Gemini support for team collaboration.
-
-## How
-- Implemented MCP client for Gemini
-- Added configuration templates
-- Updated installation script
-
-## Testing
-- [x] Unit tests pass
-- [x] Integration tests pass
-- [x] Manual testing with Gemini agent
-- [x] Documentation updated
-
-## Screenshots
-N/A
-```
-
-### 3. Review Process
-
-- Maintainers will review your PR
-- Address feedback promptly
-- Keep PR focused (one feature/fix per PR)
-- Update based on review comments
-
-### 4. Merge
-
-Once approved:
-- Maintainer will merge your PR
-- Your contribution will be in the next release
-- Thank you! 🎉
+Feature requests should include:
+- **Use case**: What problem does this solve?
+- **Proposed solution**: How should it work?
+- **Alternatives considered**: What other approaches did you consider?
+- **Impact**: Who benefits from this feature (administrators, deployment automation)?
 
 ## Development Setup
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 18+ (for JavaScript contributions)
-- Docker (for local testing)
-- Git
+- Python 3.10+
+- Docker (for testing deployments)
+- Access to cloud provider (OCI/AWS/GCP) for integration testing
 
-### Local Development
+### Local Setup
 
-```bash
-# Clone repository
-git clone https://github.com/CryptoLabInc/rune.git
-cd rune
+1. **Clone repository**
+   ```bash
+   git clone https://github.com/CryptoLabInc/rune-admin.git
+   cd rune-admin
+   ```
 
-# Install Python dependencies
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
+2. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   cd tests && pip install -r requirements.txt
+   ```
 
-# Install Node dependencies (if working on JS)
-npm install
+3. **Run tests**
+   ```bash
+   cd tests
+   pytest unit/ -v
+   pytest integration/ -v
+   ```
 
-# Start local Vault for testing
-./scripts/vault-dev.sh
+## Testing
 
-# Run tests
-pytest tests/
+### Test Structure
 
-# Run linter
-flake8 .
-black --check .
-
-# Type checking
-mypy .
+```
+tests/
+├── unit/               # Unit tests for core functionality
+│   ├── test_auth.py    # Token validation
+│   ├── test_crypto.py  # FHE key generation and encryption
+│   ├── test_public_key.py  # Public key bundle
+│   └── test_decrypt_scores.py  # Decryption and Top-K
+├── integration/        # Integration tests
+│   └── test_vault_api.py  # End-to-end Vault API
+└── load/              # Load testing
+    └── load_test.py
 ```
 
 ### Running Tests
 
 ```bash
-# Unit tests only
-pytest tests/unit/
-
-# Integration tests (requires Vault)
-pytest tests/integration/
+# All unit tests
+pytest tests/unit/ -v
 
 # Specific test file
-pytest tests/test_vault.py
+pytest tests/unit/test_crypto.py -v
 
 # With coverage
-pytest --cov=rune tests/
+pytest tests/unit/ --cov=mcp/vault --cov-report=html
 
-# Verbose output
-pytest -v tests/
+# Integration tests (requires Vault setup)
+pytest tests/integration/ -v
 ```
 
-## Reporting Issues
+### Test Requirements
 
-### Bug Reports
+- Unit tests should be fast (< 2s per test)
+- Use fixtures for crypto setup to avoid repeated key generation
+- Mock external dependencies
+- Test both success and error paths
 
-Use the bug report template:
+## Code Style
 
-```markdown
-**Description**
-Clear description of the bug.
+### Python
 
-**To Reproduce**
-Steps to reproduce:
-1. Do this
-2. Then that
-3. See error
+- Follow PEP 8
+- Use type hints where appropriate
+- Document functions with docstrings
+- Keep functions focused and testable
 
-**Expected Behavior**
-What should happen.
-
-**Actual Behavior**
-What actually happened.
-
-**Environment**
-- OS: macOS 14.0
-- Python: 3.11.5
-- Rune: 0.1.0
-- Agent: Claude Desktop 1.0
-
-**Logs**
-```
-Error logs here
-```
-
-**Additional Context**
-Any other relevant information.
+Example:
+```python
+def validate_token(token: str) -> None:
+    """
+    Validates authentication token.
+    
+    Args:
+        token: Authentication token from admin
+        
+    Raises:
+        ValueError: If token is invalid or empty
+    """
+    if not token or token.strip() != token:
+        raise ValueError(f"Access Denied: Invalid Token")
 ```
 
-### Feature Requests
+### Shell Scripts
 
-Use the feature request template:
+- Use `#!/usr/bin/env bash` for portability
+- Include error handling (`set -e`)
+- Add comments for complex logic
+- Test on multiple platforms (macOS, Linux)
 
-```markdown
-**Problem**
-What problem does this solve?
+## Documentation
 
-**Proposed Solution**
-How should it work?
+### Files to Update
 
-**Alternatives Considered**
-What other approaches did you consider?
+- **README.md**: Quick start guide for administrators
+- **docs/ARCHITECTURE.md**: Infrastructure architecture details
+- **docs/TEAM-SETUP.md**: Team onboarding procedures
+- **CHANGELOG.md**: Version changes
 
-**Additional Context**
-Any other relevant information.
+### Documentation Standards
+
+- Use clear, concise language
+- Include code examples where helpful
+- Keep diagrams up to date (ASCII art for architecture)
+- Test all commands before documenting
+
+## Deployment Testing
+
+### Local Testing
+
+```bash
+# Test MCP server locally
+cd mcp/vault
+python vault_mcp.py
+
+# In another terminal, test endpoints
+curl http://localhost:50080/health
 ```
 
-## Community Guidelines
+### Platform Testing
 
-### Code of Conduct
+Test deployment on each supported platform:
 
-- Be respectful and inclusive
-- Welcome newcomers
-- Give constructive feedback
-- Focus on what's best for the community
+- **OCI**: `deployment/oci/deploy.sh`
+- **AWS**: `deployment/aws/deploy.sh`
+- **GCP**: `deployment/gcp/deploy.sh`
 
-### Communication
+## Submitting Changes
 
-- **GitHub Issues**: Bug reports, feature requests
-- **GitHub Discussions**: Questions, ideas, general discussion
-- **Pull Requests**: Code contributions
-- **Discord** (coming soon): Real-time chat
+### Pull Request Process
 
-## Recognition
+1. **Create feature branch**
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
 
-Contributors are recognized in:
-- CONTRIBUTORS.md file
-- Release notes
-- Project README
+2. **Make changes**
+   - Write code
+   - Add/update tests
+   - Update documentation
 
-Thank you for contributing to Rune! 🙏
+3. **Test thoroughly**
+   ```bash
+   pytest tests/ -v
+   ./scripts/check-infrastructure.sh
+   ```
+
+4. **Commit with clear message**
+   ```bash
+   git commit -m "feat: Add monitoring dashboard support
+   
+   - Add Prometheus metrics endpoint
+   - Update deployment scripts
+   - Add monitoring documentation"
+   ```
+
+5. **Push and create PR**
+   ```bash
+   git push origin feature/your-feature-name
+   # Create PR on GitHub
+   ```
+
+### Commit Message Format
+
+```
+<type>: <subject>
+
+<body>
+
+<footer>
+```
+
+**Types:**
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation only
+- `test`: Adding or updating tests
+- `refactor`: Code change that neither fixes a bug nor adds a feature
+- `chore`: Changes to build process or auxiliary tools
+
+**Example:**
+```
+feat: Add Kubernetes deployment support
+
+- Add k8s manifests for Vault deployment
+- Update install scripts to detect k8s
+- Add documentation for k8s deployment
+
+Closes #123
+```
+
+## Release Process
+
+1. Update version in relevant files
+2. Update CHANGELOG.md with all changes
+3. Test deployment on all supported platforms
+4. Create git tag: `git tag -a v0.3.0 -m "Release v0.3.0"`
+5. Push tag: `git push origin v0.3.0`
+
+## Repository Structure
+
+```
+rune-admin/
+├── mcp/
+│   └── vault/              # Vault MCP server
+│       ├── vault_mcp.py    # Main server code
+│       ├── demo_local.py   # Local testing demo
+│       └── verify_crypto_flow.py  # Crypto verification
+├── deployment/
+│   ├── oci/               # Oracle Cloud deployment
+│   ├── aws/               # AWS deployment
+│   └── gcp/               # GCP deployment
+├── tests/                 # Test suite
+├── scripts/               # Deployment and management scripts
+├── docs/                  # Documentation
+├── vault_keys/           # Generated FHE keys (gitignored)
+└── config/               # Configuration templates
+```
+
+## Key Components
+
+- **vault_mcp.py**: MCP server exposing Vault operations
+- **Deployment scripts**: Platform-specific deployment automation
+- **Test suite**: Comprehensive testing of all functionality
+- **Documentation**: Admin guides and architecture details
+
+## Security Considerations
+
+- Never commit private keys (SecKey.json)
+- Store tokens securely
+- Use environment variables for sensitive config
+- Review security implications of changes
+- Test authentication and authorization
+
+## Getting Help
+
+- **Issues**: GitHub Issues for bugs and features
+- **Discussions**: GitHub Discussions for questions
+- **Documentation**: Check docs/ folder first
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the same license as the project.
+
+Thank you for contributing to Rune-Admin!

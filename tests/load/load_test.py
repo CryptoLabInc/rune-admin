@@ -31,7 +31,7 @@ import numpy as np
 
 # Configuration
 VAULT_TOKEN = os.getenv("VAULT_TOKEN", "evt_test_token")
-TEST_DIMENSION = 32
+TEST_DIMENSION = 1024
 
 # Sample encrypted data (mocked for testing)
 def generate_mock_encrypted_vector():
