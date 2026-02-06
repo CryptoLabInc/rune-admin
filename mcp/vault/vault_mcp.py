@@ -9,6 +9,17 @@ from collections import defaultdict
 from threading import Lock
 from pyenvector.crypto import KeyGenerator, Cipher
 from pyenvector.crypto.block import CipherBlock, Query
+import asyncio
+
+try:
+    import monitoring
+    MONITORING_AVAILABLE = True
+except ImportError:
+    MONITORING_AVAILABLE = False
+    # Dummy interface to prevent NameErrors if used without checking flag
+    class DummyMonitoring:
+        pass
+    monitoring = DummyMonitoring()
 
 # Configuration
 KEY_DIR = "vault_keys"
@@ -148,7 +159,26 @@ def get_public_key(token: str) -> str:
             "MetadataKey.json": "..."
         }
     """
-    return _get_public_key_impl(token)
+    start_time = time.time()
+    status = "success"
+    try:
+        result = _get_public_key_impl(token)
+        # Check for soft errors in JSON response
+        try:
+             data = json.loads(result)
+             if "error" in data:
+                 status = "error"
+        except Exception:
+             pass
+        return result
+    except Exception:
+        status = "error"
+        raise
+    finally:
+        if MONITORING_AVAILABLE:
+            duration = time.time() - start_time
+            monitoring.vault_requests_total.labels(method="get_public_key", endpoint="tool", status=status).inc()
+            monitoring.vault_request_duration.labels(method="get_public_key", endpoint="tool").observe(duration)
 
 def _decrypt_scores_impl(token: str, encrypted_blob_b64: str, top_k: int = 5) -> str:
     """
@@ -227,7 +257,26 @@ def decrypt_scores(token: str, encrypted_blob_b64: str, top_k: int = 5) -> str:
     Returns:
         JSON string containing the list of scores (and implicitly indices).
     """
-    return _decrypt_scores_impl(token, encrypted_blob_b64, top_k)
+    start_time = time.time()
+    status = "success"
+    try:
+        result = _decrypt_scores_impl(token, encrypted_blob_b64, top_k)
+        # Check for soft errors
+        try:
+             data = json.loads(result)
+             if "error" in data:
+                 status = "error"
+        except Exception:
+             pass
+        return result
+    except Exception:
+        status = "error"
+        raise
+    finally:
+        if MONITORING_AVAILABLE:
+            duration = time.time() - start_time
+            monitoring.vault_requests_total.labels(method="decrypt_scores", endpoint="tool", status=status).inc()
+            monitoring.vault_request_duration.labels(method="decrypt_scores", endpoint="tool").observe(duration)
 
 if __name__ == "__main__":
     import sys
@@ -248,6 +297,18 @@ if __name__ == "__main__":
         import uvicorn
         # Note: sse_app() returns a Starlette/FastAPI app
         app = mcp.sse_app()
+        
+        if MONITORING_AVAILABLE:
+            # Add monitoring endpoints (health, metrics)
+            monitoring.add_monitoring_endpoints(app)
+            
+            # Start health check background task
+            @app.on_event("startup")
+            async def startup_event():
+                asyncio.create_task(monitoring.periodic_health_check())
+        else:
+            print("WARNING: Monitoring module not available. skipping /health and /metrics.")
+            
         uvicorn.run(app, host=args.host, port=args.port)
             
     else:

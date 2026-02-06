@@ -10,7 +10,9 @@ import psutil
 import logging
 from typing import Dict, Any
 from datetime import datetime
-from fastapi import FastAPI, Response
+from starlette.applications import Starlette
+from starlette.responses import JSONResponse, Response
+from starlette.routing import Route
 from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
 import asyncio
 
@@ -242,28 +244,22 @@ class HealthChecker:
 health_checker = HealthChecker()
 
 # FastAPI endpoints for health and metrics
-def add_monitoring_endpoints(app: FastAPI):
+def add_monitoring_endpoints(app):
     """
-    Add monitoring endpoints to the FastAPI app.
+    Add monitoring endpoints to the FastAPI/Starlette app.
     Call this from your main vault_mcp.py.
     """
     
-    @app.get("/health")
-    async def health():
+    async def health(request):
         """
         Health check endpoint.
         Returns 200 if healthy, 503 if unhealthy.
         """
         result = await health_checker.run_checks()
         status_code = 200 if result["status"] in ["healthy", "degraded"] else 503
-        return Response(
-            content=str(result),
-            status_code=status_code,
-            media_type="application/json"
-        )
+        return JSONResponse(content=result, status_code=status_code)
     
-    @app.get("/health/ready")
-    async def readiness():
+    async def readiness(request):
         """
         Readiness check (for Kubernetes).
         Returns 200 if service is ready to accept traffic.
@@ -272,32 +268,21 @@ def add_monitoring_endpoints(app: FastAPI):
         
         # Check if keys are accessible
         if result["checks"].get("keys", {}).get("status") != "healthy":
-            return Response(
-                content='{"status": "not ready", "reason": "keys not accessible"}',
-                status_code=503,
-                media_type="application/json"
+            return JSONResponse(
+                content={"status": "not ready", "reason": "keys not accessible"},
+                status_code=503
             )
         
-        return Response(
-            content='{"status": "ready"}',
-            status_code=200,
-            media_type="application/json"
-        )
+        return JSONResponse(content={"status": "ready"}, status_code=200)
     
-    @app.get("/health/live")
-    async def liveness():
+    async def liveness(request):
         """
         Liveness check (for Kubernetes).
         Returns 200 if service is alive (not deadlocked).
         """
-        return Response(
-            content='{"status": "alive"}',
-            status_code=200,
-            media_type="application/json"
-        )
+        return JSONResponse(content={"status": "alive"}, status_code=200)
     
-    @app.get("/metrics")
-    async def metrics():
+    async def metrics_endpoint(request):
         """
         Prometheus metrics endpoint.
         """
@@ -306,12 +291,11 @@ def add_monitoring_endpoints(app: FastAPI):
             media_type=CONTENT_TYPE_LATEST
         )
     
-    @app.get("/status")
-    async def status():
+    async def status(request):
         """
         Detailed status information.
         """
-        return {
+        return JSONResponse(content={
             "service": "Rune-Vault",
             "version": "0.1.0",
             "status": health_status,
@@ -322,7 +306,14 @@ def add_monitoring_endpoints(app: FastAPI):
                 "memory_percent": psutil.virtual_memory().percent,
                 "disk_percent": psutil.disk_usage('/').percent,
             }
-        }
+        })
+
+    # Use add_route for compatibility with both FastAPI and Starlette
+    app.add_route("/health", health, methods=["GET"])
+    app.add_route("/health/ready", readiness, methods=["GET"])
+    app.add_route("/health/live", liveness, methods=["GET"])
+    app.add_route("/metrics", metrics_endpoint, methods=["GET"])
+    app.add_route("/status", status, methods=["GET"])
 
 # Background task for periodic health checks
 async def periodic_health_check(interval: int = 60):
