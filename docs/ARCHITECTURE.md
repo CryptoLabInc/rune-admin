@@ -14,56 +14,60 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 ## High-Level Architecture
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                    Team Members                          │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐        │
-│  │   Alice    │  │    Bob     │  │   Carol    │        │
-│  │  (Claude)  │  │  (Gemini)  │  │  (Codex)   │        │
-│  │            │  │            │  │            │        │
-│  │    Rune    │  │    Rune    │  │    Rune    │        │
-│  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘        │
-└────────┼───────────────┼───────────────┼────────────────┘
-         │ TLS           │ TLS           │ TLS
+┌──────────────────────────────────────────────────┐
+│                    Team Members                  │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐  │
+│  │   Alice    │  │    Bob     │  │   Carol    │  │
+│  │  (Claude)  │  │  (Gemini)  │  │  (Codex)   │  │
+│  │            │  │            │  │            │  │
+│  │    Rune    │  │    Rune    │  │    Rune    │  │
+│  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘  │
+└────────┼───────────────┼───────────────┼─────────┘
          │               │               │
          └───────────────┴───────────────┘
-                         │
+                         │ MCP tool calls
                          ▼
             ┌────────────────────────────┐
-            │      Rune-Vault MCP        │
-            │  (Your Infrastructure)     │
+            │   envector-mcp-server(s)   │  ← Scalable
+            │   (Public Keys only)       │
             │                            │
-            │  ┌──────────────────────┐  │
-            │  │  FHE Key Manager     │  │
-            │  │  - SecKey (isolated) │  │
-            │  │  - EncKey (public)   │  │
-            │  │  - EvalKey (public)  │  │
-            │  └──────────────────────┘  │
-            │                            │
-            │  ┌──────────────────────┐  │
-            │  │  MCP Tools           │  │
-            │  │  - get_public_key()  │  │
-            │  │  - decrypt_scores()  │  │
-            │  └──────────────────────┘  │
-            │                            │
-            │  ┌──────────────────────┐  │
-            │  │  Auth & Monitoring   │  │
-            │  │  - Token validation  │  │
-            │  │  - Prometheus metrics│  │
-            │  └──────────────────────┘  │
-            └────────────────────────────┘
-                         │
-                         │ (EncKey distribution)
-                         ▼
-            ┌────────────────────────────┐
-            │    enVector Cloud (SaaS)   │
-            │  https://envector.io       │
-            │                            │
-            │  - FHE-encrypted vectors   │
-            │  - Semantic search (FHE)   │
-            │  - Team data isolation     │
-            │  - Scalable storage        │
-            └────────────────────────────┘
+            │  Tools:                    │
+            │  - insert, search (direct) │
+            │  - remember (Vault pipeline│
+            │    search → decrypt → meta)│
+            └──────┬──────────────┬──────┘
+                   │              │
+    search/insert  │              │ decrypt_scores()
+                   │              │ (called by remember)
+                   ▼              ▼
+  ┌──────────────────────┐  ┌────────────────────────────┐
+  │ enVector Cloud(SaaS) │  │      Rune-Vault MCP        │
+  │  https://envector.io │  │  (Your Infrastructure)     │
+  │                      │  │                            │
+  │  - Encrypted vectors │  │  ┌──────────────────────┐  │
+  │  - Encrypted         │  │  │  FHE Key Manager     │  │
+  │    similarity search │  │  │                      │  │
+  │  - Team isolation    │  │  │  - SecKey (isolated) │  │
+  │  - Scalable storage  │  │  │  - EncKey (public)   │  │
+  └──────────────────────┘  │  └──────────────────────┘  │
+                            │                            │
+                            │  ┌──────────────────────┐  │
+                            │  │  MCP Tools           │  │
+                            │  │  - get_public_key()  │  │
+                            │  │  - decrypt_scores()  │  │
+                            │  └──────────────────────┘  │
+                            │                            │
+                            │  ┌──────────────────────┐  │
+                            │  │  Auth & Monitoring   │  │
+                            │  │  - Token validation  │  │
+                            │  │  - Prometheus metrics│  │
+                            │  └──────────────────────┘  │
+                            └────────────────────────────┘
 ```
+
+**Key**: Agents never contact Vault directly. The envector-mcp-server's
+`remember` tool orchestrates the Vault decryption call as part of its
+3-step pipeline. SecKey never leaves Vault.
 
 ## Component Details
 
@@ -108,8 +112,8 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 - Rate Limit: None (lightweight operation)
 
 **`decrypt_scores()`**
-- Input: Encrypted search results blob from enVector Cloud
-- Returns: Top-K decrypted scores with indices
+- Input: Result ciphertext from encrypted similarity search (base64-serialized)
+- Returns: Top-K similarity values with indices (decrypted from ciphertext)
 - Used by: Team members (per search query)
 - Auth: Required (validates token)
 - Rate Limit: Yes (default 10 results per call, configurable)
@@ -202,7 +206,7 @@ Rune Client
     └── 7. Store keys locally, use for encryption
 ```
 
-### Search Query (Runtime)
+### Recall Query via `remember` (Runtime)
 
 ```
 User: "What decisions did we make about database?"
@@ -210,42 +214,40 @@ User: "What decisions did we make about database?"
     ▼
 AI Agent (Claude/Gemini/Codex)
     │
-    ├── 1. Generate query embedding [0.2, 0.4, 0.4, ...]
+    ├── 1. Call envector-mcp-server `remember` tool
     │
     ▼
-Rune Client
+envector-mcp-server (`remember` orchestration)
     │
-    ├── 2. Encrypt query with EncKey (FHE encryption)
-    ├── 3. Submit to enVector Cloud API
+    ├── 2. Embed query → encrypted query vector
+    ├── 3. index.search(query, decrypt=False)
+    │      → Encrypted similarity search on enVector Cloud
+    │      → Returns result ciphertext (LWE→CKKS packed, base64)
     │
-    ▼
-enVector Cloud
-    │
-    ├── 4. FHE search on encrypted vectors
-    ├── 5. Return encrypted Top-K results
+    ├── 4. Call Vault: decrypt_scores(token, ciphertext, top_k)
     │
     ▼
-Rune Client
+Vault MCP (SecKey holder)
     │
-    ├── 6. Call decrypt_scores(encrypted_blob) → Vault MCP
-    │
-    ▼
-Vault MCP
-    │
-    ├── 7. Validate token
-    ├── 8. Decrypt with SecKey (FHE decryption)
-    ├── 9. Apply Top-K filtering (max 10 results)
-    ├── 10. Return [{index: 42, score: 0.95}, ...]
+    ├── 5. Validate token
+    ├── 6. Decrypt result ciphertext with SecKey → similarity values
+    ├── 7. Apply Top-K filtering (max 10 results)
+    ├── 8. Return [{index: 42, score: 0.95}, ...]
     │
     ▼
-Rune Client
+envector-mcp-server (continued)
     │
-    ├── 11. Fetch context metadata from enVector Cloud
-    ├── 12. Synthesize answer for user
+    ├── 9. index.get_metadata_by_indices(indices)
+    │      → Fetch context metadata from enVector Cloud
+    ├── 10. Return results to Agent
     │
     ▼
 AI Agent → User: "In Q2 2024, team chose PostgreSQL for JSON support..."
 ```
+
+**Key**: The Agent never contacts Vault directly. The `remember` tool
+in envector-mcp-server orchestrates the entire 3-step pipeline.
+SecKey never leaves Vault.
 
 ## Security Model
 

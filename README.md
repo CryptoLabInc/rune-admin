@@ -107,49 +107,47 @@ cd deployment/monitoring
 ## Architecture
 
 ```
-┌────────────────────────────────────────────────────────┐
-│                  Team Members                          │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐            │
-│  │  Alice   │  │   Bob    │  │  Carol   │            │
-│  │ (Claude) │  │ (Gemini) │  │ (Codex)  │            │
-│  │          │  │          │  │          │            │
-│  │  Rune    │  │  Rune    │  │  Rune    │            │
-│  │  Client  │  │  Client  │  │  Client  │            │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘            │
-└───────┼─────────────┼─────────────┼────────────────────┘
-        │ TLS         │ TLS         │ TLS
+┌────────────────────────────────────────────┐
+│                  Team Members              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
+│  │  Alice   │  │   Bob    │  │  Carol   │  │
+│  │ (Claude) │  │ (Gemini) │  │ (Codex)  │  │
+│  │  Agent   │  │  Agent   │  │  Agent   │  │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  │
+└───────┼─────────────┼─────────────┼────────┘
         │             │             │
         └─────────────┴─────────────┘
-                      │
+                      │ MCP tool calls
+                      ▼
+          ┌─────────────────────────┐
+          │  envector-mcp-server(s) │  ← Scalable Workers
+          │  (Public Keys only)     │
+          │                         │
+          │  insert / search        │──→  enVector Cloud
+          │  remember (3-step):     │     (Encrypted Storage)
+          │    1. search            │──→  enVector Cloud
+          │    2. decrypt           │──→  Rune-Vault MCP
+          │    3. metadata          │──→  enVector Cloud
+          └─────────────────────────┘
+                                          │
+                      ┌───────────────────┘
                       ▼
           ┌───────────────────────┐
           │    Rune-Vault MCP     │
           │ (Your Infrastructure) │
           │                       │
-          │  - FHE Key Manager    │
-          │  - Decryption Service │
-          │  - Authentication     │
-          │  - Monitoring         │
-          └───────────┬───────────┘
-                      │
-                      │ (EncKey distribution)
-                      ▼
-          ┌───────────────────────┐
-          │  enVector Cloud (SaaS)│
-          │  https://envector.io  │
-          │                       │
-          │  - FHE-encrypted      │
-          │    vectors            │
-          │  - Semantic search    │
-          │  - Team isolation     │
+          │  - SecKey (isolated)  │
+          │  - get_public_key()   │
+          │  - decrypt_scores()   │
+          │  - Auth & Monitoring  │
           └───────────────────────┘
 ```
 
 **Key Points:**
 - **ONE Vault per team** (centralized key management)
-- All team members share same Vault URL and token
-- Vault holds SecKey (never exposed)
-- Clients get EncKey for encryption only
+- Agents call envector-mcp-server tools; they never contact Vault directly
+- The `remember` tool orchestrates: encrypted similarity search → Vault decrypt → metadata
+- Vault holds SecKey (never exposed); MCP servers only have EncKey/EvalKey
 
 ## Repository Structure
 
