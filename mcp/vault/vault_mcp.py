@@ -9,6 +9,7 @@ from collections import defaultdict
 from threading import Lock
 from pyenvector.crypto import KeyGenerator, Cipher
 from pyenvector.crypto.block import CipherBlock, Query
+from pyenvector.proto_gen.v2.common.type_pb2 import CiphertextScore
 import asyncio
 
 try:
@@ -182,62 +183,58 @@ def get_public_key(token: str) -> str:
 
 def _decrypt_scores_impl(token: str, encrypted_blob_b64: str, top_k: int = 5) -> str:
     """
-    Core implementation: Decrypts scores and applies Top-K filtering.
-    
+    Core implementation: Decrypts CiphertextScore and applies Top-K filtering.
+
+    The blob is a protobuf-serialized CiphertextScore produced by Index.scoring().
+    cipher.decrypt_score() returns {"score": [[s0, s1, ...], ...], "shard_idx": [...]},
+    where each inner list corresponds to a shard (IVF) or a single chunk (FLAT).
+
     Args:
         token: Authentication token issued by Vault Admin.
-        encrypted_blob_b64: Base64 string of the serialized CipherBlock.
+        encrypted_blob_b64: Base64 string of the serialized CiphertextScore protobuf.
         top_k: Number of top results to return (max 10 allowed).
-    
+
     Returns:
-        JSON string containing the list of scores.
+        JSON string containing the list of {shard_idx, row_idx, score}.
     """
     validate_token(token)
-    
+
     # Policy Enforcement
     if top_k > 10:
         return json.dumps({"error": "Rate Limit Exceeded: Max top_k is 10"})
 
     try:
-        # 1. Deserialize
+        # 1. Deserialize CiphertextScore protobuf
         blob_bytes = base64.b64decode(encrypted_blob_b64)
-        
-        # Native deserialization
-        # `CipherBlock.serialize` returns the raw bytes compatible with Query/Score serialization.
-        # Since we encrypted a vector ("item" or "query"), it's likely a Query object internally (or CiphertextScore if score).
-        # We assume it's a Query object for now as observed in verify_crypto.
-        
+
         try:
-             query_obj = Query.deserializeFrom(blob_bytes)
-             encrypted_result = CipherBlock(data=query_obj)
+            score_proto = CiphertextScore()
+            score_proto.ParseFromString(blob_bytes)
+            encrypted_result = CipherBlock(data=score_proto)
         except Exception as e:
-             # Fallback: maybe it was pickling? No, we moved to native.
-             return json.dumps({"error": f"Deserialization failed: {str(e)}"})
-        
-        # 2. Decrypt
-        decrypted_vector = cipher.decrypt(encrypted_result, sec_key_path=sec_key_path)
-        
-        # unwrapping list logic (from verification script)
-        if isinstance(decrypted_vector, list) and len(decrypted_vector) > 0 and (isinstance(decrypted_vector[0], list) or isinstance(decrypted_vector[0], np.ndarray)):
-            decrypted_vector = decrypted_vector[0]
-            
-        # 3. Top-K
-        scores = np.array(decrypted_vector)
-        # Get indices of top_k scores (descending)
-        # Note: argpartition is faster but argsort is easier for full sort
-        if len(scores) <= top_k:
-            top_indices = np.argsort(scores)[::-1]
-        else:
-            top_indices = np.argpartition(scores, -top_k)[-top_k:]
-            top_indices = top_indices[np.argsort(scores[top_indices])[::-1]]
-            
-        params = []
-        for idx in top_indices:
-            params.append({
-                "index": int(idx),
-                "score": float(scores[idx])
-            })
-            
+            return json.dumps({"error": f"Deserialization failed: {str(e)}"})
+
+        # 2. Decrypt with cipher.decrypt_score (NOT cipher.decrypt)
+        decrypted = cipher.decrypt_score(encrypted_result, sec_key_path=sec_key_path)
+        # decrypted: {"score": [[chunk0_scores], [chunk1_scores], ...], "shard_idx": [s0, s1, ...]}
+        score_2d = decrypted["score"]
+        shard_indices = decrypted.get("shard_idx", list(range(len(score_2d))))
+
+        # 3. Top-K across all shards (handles both FLAT and IVF_FLAT)
+        # Flatten 2D scores into (shard_idx, row_idx, score) tuples
+        import heapq
+        all_scores = (
+            (shard_indices[i], j, float(v))
+            for i, row in enumerate(score_2d)
+            for j, v in enumerate(row)
+        )
+        topk_results = heapq.nlargest(top_k, all_scores, key=lambda x: x[2])
+
+        params = [
+            {"shard_idx": s, "row_idx": r, "score": sc}
+            for s, r, sc in topk_results
+        ]
+
         return json.dumps(params)
 
     except Exception as e:
