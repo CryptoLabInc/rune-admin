@@ -6,7 +6,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 
 ### Core Responsibilities
 
-1. **Key Management**: Generate, store, and protect FHE keys (SecKey isolation)
+1. **Key Management**: Generate, store, and protect FHE keys (secret key isolation)
 2. **Decryption Service**: Decrypt search results from enVector Cloud
 3. **Authentication**: Validate team member access via tokens
 4. **Monitoring**: Track usage, performance, and security metrics
@@ -47,7 +47,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
   │  - Encrypted vectors │  │  ┌──────────────────────┐  │
   │  - Encrypted         │  │  │  FHE Key Manager     │  │
   │    similarity search │  │  │                      │  │
-  │  - Team isolation    │  │  │  - SecKey (isolated) │  │
+  │  - Team isolation    │  │  │  - secret key (isolated)│  │
   │  - Scalable storage  │  │  │  - EncKey (public)   │  │
   └──────────────────────┘  │  └──────────────────────┘  │
                             │                            │
@@ -67,7 +67,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 
 **Key**: Agents never contact Vault directly. The envector-mcp-server's
 `remember` tool orchestrates the Vault decryption call as part of its
-3-step pipeline. SecKey never leaves Vault.
+3-step pipeline. Secret key never leaves Vault.
 
 ## Component Details
 
@@ -76,10 +76,10 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 **Purpose**: Centralized key management and decryption service for a team
 
 **Deployment Options**:
-- **OCI** (Oracle Cloud Infrastructure) - Recommended, $30/mo
-- **AWS** (Elastic Compute Cloud) - $60/mo
-- **GCP** (Google Compute Engine) - $55/mo
-- **On-Premise** (Self-hosted) - Custom hardware
+- **OCI** (Oracle Cloud Infrastructure)
+- **AWS** (Elastic Compute Cloud)
+- **GCP** (Google Compute Engine)
+- **On-Premise** (Self-hosted)
 
 **Runtime**:
 - Python 3.8+ with FastMCP framework
@@ -97,9 +97,9 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 ```
 
 **Security Properties**:
-- SecKey stored encrypted at rest (filesystem encryption)
+- Secret key stored encrypted at rest (filesystem encryption)
 - Keys loaded into memory only during operations
-- No SecKey export API (architectural constraint)
+- No secret key export API (architectural constraint)
 - TLS for all network communications
 - Token-based authentication per request
 
@@ -219,26 +219,24 @@ AI Agent (Claude/Gemini/Codex)
     ▼
 envector-mcp-server (`remember` orchestration)
     │
-    ├── 2. Embed query → encrypted query vector
-    ├── 3. index.search(query, decrypt=False)
-    │      → Encrypted similarity search on enVector Cloud
-    │      → Returns result ciphertext (LWE→CKKS packed, base64)
+    ├── 2. Embed query (auto-embedded if text, or accepts vector/JSON)
+    ├── 3. Encrypted similarity scoring on enVector Cloud
+    │      → Returns result ciphertext (base64)
     │
     ├── 4. Call Vault: decrypt_scores(token, ciphertext, top_k)
     │
     ▼
-Vault MCP (SecKey holder)
+Vault MCP (secret key holder)
     │
     ├── 5. Validate token
-    ├── 6. Decrypt result ciphertext with SecKey → similarity values
-    ├── 7. Apply Top-K filtering (max 10 results)
+    ├── 6. Decrypt result ciphertext with secret key → similarity values
+    ├── 7. Select top-k (max 10, enforced by Vault policy)
     ├── 8. Return [{index: 42, score: 0.95}, ...]
     │
     ▼
 envector-mcp-server (continued)
     │
-    ├── 9. index.get_metadata_by_indices(indices)
-    │      → Fetch context metadata from enVector Cloud
+    ├── 9. Retrieve metadata for top-k indices from enVector Cloud
     ├── 10. Return results to Agent
     │
     ▼
@@ -247,7 +245,13 @@ AI Agent → User: "In Q2 2024, team chose PostgreSQL for JSON support..."
 
 **Key**: The Agent never contacts Vault directly. The `remember` tool
 in envector-mcp-server orchestrates the entire 3-step pipeline.
-SecKey never leaves Vault.
+Secret key never leaves Vault.
+
+**`search` vs `remember`**: The `search` tool is for the operator's own
+encrypted data where secret key is held locally by the MCP server runtime.
+The `remember` tool accesses shared team memory where secret key is held
+exclusively by Rune-Vault, preventing agent tampering attacks from
+indiscriminately decrypting shared vectors.
 
 ## Security Model
 
@@ -263,7 +267,7 @@ SecKey never leaves Vault.
 1. **Cloud Provider Breach**: enVector Cloud compromise → no plaintext leak (FHE)
 2. **Network Eavesdropping**: MITM attacks → TLS encryption
 3. **Unauthorized Access**: Non-team members → token authentication
-4. **Key Theft**: SecKey extraction → architectural isolation (no export API)
+4. **Key Theft**: secret key extraction → architectural isolation (no export API)
 
 **Threats Not Mitigated** (out of scope):
 - Vault VM compromise (admin responsibility: use secure cloud, enable disk encryption)
@@ -272,14 +276,14 @@ SecKey never leaves Vault.
 
 ### Key Isolation Strategy
 
-**Why SecKey Never Leaves Vault**:
+**Why Secret Key Never Leaves Vault**:
 - **Principle**: Decryption capability = highest privilege
-- **Constraint**: Only Vault MCP has SecKey, no export API
+- **Constraint**: Only Vault MCP has secret key, no export API
 - **Benefit**: Even if client compromised, attacker cannot decrypt historical data
 
 **Key Distribution**:
 ```
-SecKey:  Vault only (generated on deployment, never exported)
+Secret key:  Vault only (generated on deployment, never exported)
 EncKey:  Distributed to all team members (safe to share, encryption-only)
 EvalKey: Distributed to all team members (safe to share, FHE operations)
 ```
@@ -368,45 +372,13 @@ terraform apply -var="ha_enabled=true" \
 - Auto-failover <30s
 - Shared keys (no key synchronization needed)
 
-## Performance Characteristics
-
-### Latency Breakdown
-
-| Operation | Latency | Notes |
-|-----------|---------|-------|
-| get_public_key() | ~5ms | Read from disk, serialize JSON |
-| decrypt_scores() | ~50ms | FHE decryption (dim=2048, 10 results) |
-| Token validation | <1ms | Hash table lookup |
-| TLS handshake | ~20ms | First request only (reused connections) |
-
-**Total Search Latency**:
-- Client → enVector Cloud: ~100ms (network + FHE search)
-- enVector → Vault: ~50ms (decryption)
-- **End-to-end**: ~150ms (95th percentile)
-
-### Throughput
-
-| Workload | Throughput | Hardware |
-|----------|------------|----------|
-| Light (10 queries/min) | 2 OCPU, 8GB RAM | OCI VM.Standard.E4.Flex |
-| Medium (100 queries/min) | 4 OCPU, 16GB RAM | Scale up |
-| Heavy (1000 queries/min) | 3x instances + LB | Scale out |
-
-### Resource Usage
-
-**Typical Team** (10 members, 100 queries/day):
-- CPU: 10-20% average
-- Memory: 2GB (FHE keys loaded)
-- Disk: 1GB (keys + logs)
-- Network: 10GB/month
-
 ## Operational Considerations
 
 ### Backup & Recovery
 
 **Critical Assets**:
 - `/vault_keys/SecKey.json` - **MUST backup** (cannot regenerate)
-- `/vault_keys/EncKey.json` - Regenerable from SecKey
+- `/vault_keys/EncKey.json` - Regenerable from secret key
 - Vault token - Rotatable via Terraform
 
 **Backup Strategy**:

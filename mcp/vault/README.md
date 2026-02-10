@@ -7,7 +7,7 @@ It acts as a Trusted Client responsible for holding Secret Keys and performing s
 
 *   **Vault**: An MCP Server (Python) that holds the `SecKey.json`.
 *   **Agent**: An AI Agent (or client script) that retrieves the Public Key (`EncKey.json`), encrypts queries, and requests Score Decryption.
-*   **Security**: The Agent NEVER sees the `SecKey`. It requires the Vault to decrypt scores.
+*   **Security**: The Agent NEVER sees the secret key. It requires the Vault to decrypt scores.
 
 ## Setup
 

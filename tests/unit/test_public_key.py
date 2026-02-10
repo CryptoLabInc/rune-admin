@@ -50,7 +50,7 @@ class TestGetPublicKey:
         assert "EvalKey.json" in bundle
         assert "MetadataKey.json" in bundle
         
-        # Should NOT contain SecKey
+        # Should NOT contain secret key
         assert "SecKey.json" not in bundle
     
     def test_invalid_token_raises_error(self, test_keys, monkeypatch):

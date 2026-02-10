@@ -113,7 +113,7 @@ groups:
           component: vault
         annotations:
           summary: "Vault decryption operations are failing"
-          description: "{{ humanize $value }} decryption operations per second are failing. Check SecKey availability."
+          description: "{{ humanize $value }} decryption operations per second are failing. Check secret key availability."
 
       - alert: VaultNoDecryptionOperations
         expr: rate(vault_decryption_operations_total[10m]) == 0
@@ -134,7 +134,7 @@ groups:
           component: vault
         annotations:
           summary: "Vault key access is failing"
-          description: "{{ humanize $value }} key access operations per second are failing. SecKey may be missing or corrupted!"
+          description: "{{ humanize $value }} key access operations per second are failing. Secret key may be missing or corrupted!"
 
       - alert: VaultUnauthorizedKeyAccess
         expr: rate(vault_key_access_total{status="unauthorized"}[5m]) > 5
