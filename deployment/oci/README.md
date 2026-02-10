@@ -276,7 +276,7 @@ terraform destroy
 For production, deploy with standby Vault:
 
 1. Deploy second Vault in different availability domain
-2. Sync SecKey securely
+2. Sync secret key securely
 3. Configure health check failover
 4. Use load balancer (OCI LB or external)
 

@@ -6,16 +6,16 @@ This directory contains MCP (Model Context Protocol) server implementations for 
 
 ### Vault MCP
 
-**Purpose:** FHE key management and decryption (SecKey holder)
+**Purpose:** FHE key management and decryption (secret key holder)
 
 **Location:** `vault/`
 
 **Features:**
 - Manages FHE encryption keys (team-shared)
 - Distributes public keys (EncKey, EvalKey) to envector-mcp-server
-- Decrypts search results (only component with SecKey)
+- Decrypts search results (only component with secret key)
 - Runs in isolated environment (TEE/secure network)
-- Never exposes SecKey to agents or other services
+- Never exposes secret key to agents or other services
 
 **Documentation:** [vault/README.md](vault/README.md)
 
@@ -34,12 +34,17 @@ This directory contains MCP (Model Context Protocol) server implementations for 
 
 **Location:** `envector-mcp-server/` (git submodule)
 
+**Tools:**
+- **`search`**: Search operator's own encrypted data on enVector Cloud. Secret key is held locally by the MCP server runtime.
+- **`remember`**: Recall from shared team memory. Secret key is held exclusively by Rune-Vault. Orchestrates: encrypted similarity scoring → Vault decrypts → metadata retrieval. Vault enforces access policy (max 10 results, audit trail).
+- **`insert`**: Insert vectors/metadata into enVector Cloud.
+
 **Features:**
 - Fetches public keys (EncKey, EvalKey) from Vault at startup
 - Encrypts vectors and queries using public keys
 - Connects to enVector Cloud for storage and search
 - Scalable: multiple instances share same keys
-- Never has access to SecKey (cannot decrypt)
+- Accepts text queries (auto-embedded), vector arrays, or JSON-encoded vectors
 
 **Documentation:** [envector-mcp-server/MANUAL.md](envector-mcp-server/MANUAL.md)
 
@@ -70,19 +75,28 @@ MCP (Model Context Protocol) is a standard protocol for AI agents to communicate
      │                      │<───────────────────────┤
      │                      │                        │
      │  2. insert/search    │                        │
-     ├─────────────────────>│                        │
-     │  (plaintext vectors) │                        │
-     │                      │  3. Encrypt & Store    │
-     │                      │     (uses EncKey)      │
-     │  <encrypted results> │                        │
+     ├─────────────────────>│  (search: local secret │
+     │                      │   decrypts directly)   │
+     │  <results>           │                        │
      │<─────────────────────┤                        │
      │                      │                        │
-     │  4. decrypt_scores   │                        │
-     ├──────────────────────────────────────────────>│
-     │                      │                        │
-     │  <decrypted data>    │                        │
-     │<──────────────────────────────────────────────┤
+     │  3. remember         │                        │
+     ├─────────────────────>│                        │
+     │                      │  3a. encrypted scoring │
+     │                      │      on enVector Cloud │
+     │                      │  3b. decrypt_scores    │
+     │                      ├───────────────────────>│
+     │                      │  <top-k indices>       │
+     │                      │<───────────────────────┤
+     │                      │  3c. retrieve metadata │
+     │  <recalled context>  │      from enVector     │
+     │<─────────────────────┤                        │
 ```
+
+**Key**: Agent never contacts Vault directly. The `remember` tool in envector-mcp-server
+orchestrates Vault decryption as part of its 3-step pipeline.
+- **`search`**: Operator's own data; secret key held locally by MCP server runtime.
+- **`remember`**: Shared team memory; secret key held exclusively by Vault.
 
 ### Message Format
 

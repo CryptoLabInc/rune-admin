@@ -348,18 +348,9 @@ After successful integration:
    - See [skills/envector/SKILL.md](../skills/envector/SKILL.md)
    - Learn about organizational memory use cases
 
-2. **Try Example Workflows:**
-   - Capture decisions from Slack
-   - Search for architectural rationale
-   - Synthesize context for new team members
-
-3. **Set Up Team Vault:**
+2. **Set Up Team Vault:**
    - Deploy shared vault for your team
    - See [deployment/README.md](../deployment/README.md)
-
-4. **Configure Monitor Agents:**
-   - Automatically capture decisions
-   - See [agents/monitor-agent.md](../agents/monitor-agent.md)
 
 ---
 

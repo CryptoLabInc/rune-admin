@@ -136,7 +136,7 @@ cd deployment/monitoring
           │    Rune-Vault MCP     │
           │ (Your Infrastructure) │
           │                       │
-          │  - SecKey (isolated)  │
+          │  - secret key (isolated)│
           │  - get_public_key()   │
           │  - decrypt_scores()   │
           │  - Auth & Monitoring  │
@@ -146,8 +146,9 @@ cd deployment/monitoring
 **Key Points:**
 - **ONE Vault per team** (centralized key management)
 - Agents call envector-mcp-server tools; they never contact Vault directly
-- The `remember` tool orchestrates: encrypted similarity search → Vault decrypt → metadata
-- Vault holds SecKey (never exposed); MCP servers only have EncKey/EvalKey
+- **`search`**: Operator's own data; secret key held locally by MCP server runtime
+- **`remember`**: Shared team memory; secret key held exclusively by Vault. Orchestrates: encrypted similarity scoring → Vault decrypts result ciphertext → retrieve metadata for top-k indices. This isolation prevents agent tampering attacks.
+- Vault holds secret key (never exposed); MCP servers only have EncKey/EvalKey
 
 ## Repository Structure
 
@@ -315,25 +316,19 @@ export VAULT_TOKEN="evt_xxx"
 
 ### Key Isolation
 
-- **SecKey**: Never leaves Vault VM (architectural constraint)
+- **Secret key**: Never leaves Vault VM (architectural constraint)
 - **EncKey/EvalKey**: Safe to distribute (public keys)
 - **Vault Token**: Rotate every 90 days
 
 ## Deployment Targets
 
-### OCI (Oracle Cloud) - Recommended
-- **Cost**: ~$30/month
-- **Performance**: Excellent (2 OCPU, 8GB RAM)
+### OCI (Oracle Cloud)
 - **Setup**: [deployment/oci/README.md](deployment/oci/README.md)
 
 ### AWS (Amazon Web Services)
-- **Cost**: ~$60/month
-- **Performance**: Good (t3.medium)
 - **Setup**: [deployment/aws/README.md](deployment/aws/README.md)
 
 ### GCP (Google Cloud Platform)
-- **Cost**: ~$55/month
-- **Performance**: Good (e2-medium)
 - **Setup**: [deployment/gcp/README.md](deployment/gcp/README.md)
 
 ## Development
