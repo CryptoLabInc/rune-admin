@@ -9,7 +9,10 @@ from collections import defaultdict
 from threading import Lock
 from pyenvector.crypto import KeyGenerator, Cipher
 from pyenvector.crypto.block import CipherBlock, Query
-from pyenvector.proto_gen.v2.common.type_pb2 import CiphertextScore
+try:
+    from pyenvector.proto_gen.v2.common.type_pb2 import CiphertextScore
+except ModuleNotFoundError:
+    from pyenvector.proto_gen.type_pb2 import CiphertextScore
 import asyncio
 
 try:
@@ -29,8 +32,10 @@ DIM = 1024  # FHE cipher supports up to 2^12, using 1024 for production
 
 # Initialize Keys on Startup
 def ensure_keys():
-    if not os.path.exists(KEY_DIR):
+    enc_key = os.path.join(KEY_DIR, "EncKey.json")
+    if not os.path.exists(enc_key):
         print(f"Generating keys in {KEY_DIR}...")
+        os.makedirs(KEY_DIR, exist_ok=True)
         keygen = KeyGenerator(key_path=KEY_DIR, key_id=KEY_ID, dim_list=[DIM])
         keygen.generate_keys()
     else:
@@ -59,8 +64,7 @@ if _ENV_TOKENS:
 else:
     # Demo tokens for local testing only
     VALID_TOKENS = {
-        "DEMO-TOKEN-GET-YOUR-OWN-AT-ENVECTOR-IO",
-        "DEMO-ADMIN-SIGNUP-AT-ENVECTOR-IO"
+        "TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION",
     }
     print("WARNING: Using demo tokens. Set VAULT_TOKENS env var for production.")
 
@@ -288,24 +292,26 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.command == "server":
-        print(f"Starting enVector-Vault MCP Server (SSE) on {args.host}:{args.port}...")
-        
-        # SSE is standard for FastMCP
+        print(f"Starting enVector-Vault MCP Server on {args.host}:{args.port}...")
+
         import uvicorn
-        # Note: sse_app() returns a Starlette/FastAPI app
-        app = mcp.sse_app()
-        
+        # FastMCP 2.x uses http_app(), fallback to sse_app() for older versions
+        if hasattr(mcp, 'http_app'):
+            app = mcp.http_app()
+        else:
+            app = mcp.sse_app()
+
         if MONITORING_AVAILABLE:
             # Add monitoring endpoints (health, metrics)
             monitoring.add_monitoring_endpoints(app)
-            
+
             # Start health check background task
             @app.on_event("startup")
             async def startup_event():
                 asyncio.create_task(monitoring.periodic_health_check())
         else:
             print("WARNING: Monitoring module not available. skipping /health and /metrics.")
-            
+
         uvicorn.run(app, host=args.host, port=args.port)
             
     else:
