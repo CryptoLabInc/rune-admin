@@ -1,4 +1,5 @@
 from fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 import base64
 import pickle
 import numpy as np
@@ -147,7 +148,7 @@ def _get_public_key_impl(token: str) -> str:
 # MCP Server
 mcp = FastMCP("enVector-Vault")
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
 def get_public_key(token: str) -> str:
     """
     Returns the public key bundle (EncKey, EvalKey, MetadataKey).
@@ -244,7 +245,7 @@ def _decrypt_scores_impl(token: str, encrypted_blob_b64: str, top_k: int = 5) ->
     except Exception as e:
         return json.dumps({"error": str(e)})
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
 def decrypt_scores(token: str, encrypted_blob_b64: str, top_k: int = 5) -> str:
     """
     Decrypts a blob of encrypted scores using the Vault's Secret Key.
