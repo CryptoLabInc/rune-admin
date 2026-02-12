@@ -1,41 +1,63 @@
-# docker-compose.yml
-
 services:
   vault-mcp:
-    image: envector/vault-mcp:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rune-vault:latest
     container_name: vault-mcp
-    
+
     volumes:
-      # Keys (encrypted at rest)
-      - ./keys:/secure/keys:rw
-      # Backups
+      - vault-keys:/app/vault_keys:rw
       - ./backups:/secure/backups:rw
-      # Logs
       - ./logs:/var/log/vault-mcp:rw
-    
+
     environment:
-      - VAULT_ENCRYPTION_KEY=${VAULT_ENCRYPTION_KEY}
-      - VAULT_AUTH_TOKEN=${VAULT_AUTH_TOKEN}
-    
+      - VAULT_TOKENS=${VAULT_TOKENS:-}
+
     networks:
-      - vault-internal
-    
+      - vault-net
+
     ports:
-      # Only expose on localhost
       - "127.0.0.1:50080:50080"
-    
+
     security_opt:
       - no-new-privileges:true
-    
+
     restart: unless-stopped
-    
+
     healthcheck:
-      test: ["CMD", "vault-mcp", "health"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:50080/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
 
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: vault-ngrok
+    command: http vault-mcp:50080 --log stdout
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    networks:
+      - vault-net
+    ports:
+      - "127.0.0.1:4040:4040"
+    depends_on:
+      vault-mcp:
+        condition: service_healthy
+    restart: unless-stopped
+
 networks:
-  vault-internal:
+  vault-net:
     driver: bridge
-    internal: true  # No external access
+
+volumes:
+  vault-keys:
