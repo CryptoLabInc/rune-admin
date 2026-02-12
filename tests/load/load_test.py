@@ -30,7 +30,7 @@ import base64
 import numpy as np
 
 # Configuration
-VAULT_TOKEN = os.getenv("VAULT_TOKEN", "evt_test_token")
+RUNEVAULT_TOKEN = os.getenv("RUNEVAULT_TOKEN", "evt_test_token")
 TEST_DIMENSION = 1024
 
 # Sample encrypted data (mocked for testing)
@@ -57,7 +57,7 @@ class VaultUser(HttpUser):
         """Called when a user starts. Setup user context."""
         self.headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {VAULT_TOKEN}"
+            "Authorization": f"Bearer {RUNEVAULT_TOKEN}"
         }
         
         # Pre-generate some test data
@@ -81,7 +81,7 @@ class VaultUser(HttpUser):
     def get_public_key(self):
         """Get public key bundle (common operation)"""
         payload = {
-            "token": VAULT_TOKEN
+            "token": RUNEVAULT_TOKEN
         }
         
         start_time = time.time()
@@ -112,7 +112,7 @@ class VaultUser(HttpUser):
     def decrypt_search_result(self):
         """Decrypt search result (core operation, most frequent)"""
         payload = {
-            "token": VAULT_TOKEN,
+            "token": RUNEVAULT_TOKEN,
             "encrypted_result": random.choice(self.encrypted_vectors),
             "metadata": {
                 "query_id": f"query_{random.randint(1000, 9999)}",
@@ -169,7 +169,7 @@ class BurstVaultUser(HttpUser):
         """Called when a user starts."""
         self.headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {VAULT_TOKEN}"
+            "Authorization": f"Bearer {RUNEVAULT_TOKEN}"
         }
         self.encrypted_vectors = [generate_mock_encrypted_vector() for _ in range(10)]
     
@@ -177,7 +177,7 @@ class BurstVaultUser(HttpUser):
     def rapid_decrypt(self):
         """Rapid-fire decrypt requests"""
         payload = {
-            "token": VAULT_TOKEN,
+            "token": RUNEVAULT_TOKEN,
             "encrypted_result": random.choice(self.encrypted_vectors)
         }
         
@@ -198,7 +198,7 @@ def on_test_start(environment, **kwargs):
     print("\n" + "="*60)
     print("Rune-Vault Load Test Started")
     print(f"Target: {environment.host}")
-    print(f"Token: {VAULT_TOKEN[:20]}...")
+    print(f"Token: {RUNEVAULT_TOKEN[:20]}...")
     print("="*60 + "\n")
 
 @events.test_stop.add_listener

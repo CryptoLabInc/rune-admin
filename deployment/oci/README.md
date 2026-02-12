@@ -86,8 +86,8 @@ terraform output vault_url
 terraform output vault_token
 
 # Share with team (use secure channel)
-export VAULT_URL=$(terraform output -raw vault_url)
-export VAULT_TOKEN=$(terraform output -raw vault_token)
+export RUNEVAULT_ENDPOINT=$(terraform output -raw vault_url)
+export RUNEVAULT_TOKEN=$(terraform output -raw vault_token)
 ```
 
 ## Architecture

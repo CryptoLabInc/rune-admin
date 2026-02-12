@@ -36,7 +36,7 @@ Create or edit: `.mcp/settings.json` in your workspace root
       ],
       "cwd": "/absolute/path/to/rune/mcp/vault",
       "env": {
-        "VAULT_TOKEN": "envector-team-alpha"
+        "RUNEVAULT_TOKEN": "envector-team-alpha"
       }
     }
   }
@@ -76,7 +76,7 @@ Create or edit: `.mcp/settings.json` in your workspace root
       ],
       "cwd": "C:/absolute/path/to/rune/mcp/vault",
       "env": {
-        "VAULT_TOKEN": "envector-team-alpha"
+        "RUNEVAULT_TOKEN": "envector-team-alpha"
       }
     }
   }
@@ -96,7 +96,7 @@ Create or edit: `.mcp/settings.json` in your workspace root
       ],
       "cwd": "C:/absolute/path/to/rune/mcp/vault",
       "env": {
-        "VAULT_TOKEN": "envector-team-alpha"
+        "RUNEVAULT_TOKEN": "envector-team-alpha"
       }
     }
   }
@@ -162,7 +162,7 @@ Edit: `~/Library/Application Support/Claude/config.json`
       ],
       "env": {
         "PYTHONPATH": "/absolute/path/to/rune/.vault_venv/lib/python3.12/site-packages",
-        "VAULT_TOKEN": "envector-team-alpha"
+        "RUNEVAULT_TOKEN": "envector-team-alpha"
       }
     }
   }
@@ -199,7 +199,7 @@ Edit: `%APPDATA%\Claude\config.json`
       ],
       "env": {
         "PYTHONPATH": "C:\\Users\\YOUR_USERNAME\\repo\\cryptolab\\rune\\.vault_venv\\Lib\\site-packages",
-        "VAULT_TOKEN": "envector-team-alpha"
+        "RUNEVAULT_TOKEN": "envector-team-alpha"
       }
     }
   }
@@ -223,7 +223,7 @@ Edit: `%APPDATA%\Claude\config.json`
 ```json
 "env": {
   "PYTHONPATH": "/absolute/path/to/.vault_venv/lib/python3.12/site-packages",
-  "VAULT_TOKEN": "envector-team-alpha"
+  "RUNEVAULT_TOKEN": "envector-team-alpha"
 }
 ```
 
@@ -312,8 +312,8 @@ python3 vault_mcp.py server --port 8080
 2. **Update Claude config:**
 ```json
 "env": {
-  "VAULT_URL": "http://localhost:8080",
-  "VAULT_TOKEN": "envector-team-alpha"
+  "RUNEVAULT_ENDPOINT": "http://localhost:8080",
+  "RUNEVAULT_TOKEN": "envector-team-alpha"
 }
 ```
 
@@ -322,8 +322,8 @@ For team deployment:
 
 ```json
 "env": {
-  "VAULT_URL": "https://vault-your-team.oci.envector.io",
-  "VAULT_TOKEN": "evt_your_production_token"
+  "RUNEVAULT_ENDPOINT": "https://vault-your-team.oci.envector.io",
+  "RUNEVAULT_TOKEN": "evt_your_production_token"
 }
 ```
 
@@ -332,7 +332,7 @@ To see detailed logs:
 
 ```json
 "env": {
-  "VAULT_TOKEN": "envector-team-alpha",
+  "RUNEVAULT_TOKEN": "envector-team-alpha",
   "MCP_DEBUG": "1",
   "PYTHONUNBUFFERED": "1"
 }

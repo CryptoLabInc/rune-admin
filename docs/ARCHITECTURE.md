@@ -472,7 +472,7 @@ cat /vault_keys/SecKey.json | jq '.dim'
 **Diagnosis**:
 ```bash
 # Check token is correct
-echo $VAULT_TOKEN
+echo $RUNEVAULT_TOKEN
 
 # Verify Vault sees requests
 ssh admin@vault-yourteam.oci.envector.io

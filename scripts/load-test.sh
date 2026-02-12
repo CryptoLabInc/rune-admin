@@ -13,8 +13,8 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-VAULT_URL="${VAULT_URL:-https://vault-demo.oci.envector.io}"
-VAULT_TOKEN="${VAULT_TOKEN:-}"
+RUNEVAULT_ENDPOINT="${RUNEVAULT_ENDPOINT:-https://vault-demo.oci.envector.io}"
+RUNEVAULT_TOKEN="${RUNEVAULT_TOKEN:-}"
 OUTPUT_DIR="${OUTPUT_DIR:-./load-test-results}"
 
 # Ensure output directory exists
@@ -50,25 +50,25 @@ check_requirements() {
     print_success "Locust is installed"
     
     # Check if Vault URL is set
-    if [ -z "$VAULT_URL" ]; then
-        print_error "VAULT_URL is not set"
-        echo "Set with: export VAULT_URL=https://vault-yourteam.oci.envector.io"
+    if [ -z "$RUNEVAULT_ENDPOINT" ]; then
+        print_error "RUNEVAULT_ENDPOINT is not set"
+        echo "Set with: export RUNEVAULT_ENDPOINT=https://vault-yourteam.oci.envector.io"
         exit 1
     fi
-    print_success "Vault URL: $VAULT_URL"
+    print_success "Vault URL: $RUNEVAULT_ENDPOINT"
     
     # Check if Vault token is set
-    if [ -z "$VAULT_TOKEN" ]; then
-        print_warning "VAULT_TOKEN is not set (some tests may fail)"
+    if [ -z "$RUNEVAULT_TOKEN" ]; then
+        print_warning "RUNEVAULT_TOKEN is not set (some tests may fail)"
     else
         print_success "Vault token is set"
     fi
     
     # Check if Vault is reachable
-    if curl -s --max-time 5 "$VAULT_URL/health" > /dev/null 2>&1; then
+    if curl -s --max-time 5 "$RUNEVAULT_ENDPOINT/health" > /dev/null 2>&1; then
         print_success "Vault is reachable"
     else
-        print_error "Vault is not reachable at $VAULT_URL"
+        print_error "Vault is not reachable at $RUNEVAULT_ENDPOINT"
         exit 1
     fi
 }
@@ -83,7 +83,7 @@ run_smoke_test() {
     echo ""
     
     locust -f load_test.py \
-        --host="$VAULT_URL" \
+        --host="$RUNEVAULT_ENDPOINT" \
         --users=5 \
         --spawn-rate=1 \
         --run-time=1m \
@@ -104,7 +104,7 @@ run_baseline_test() {
     echo ""
     
     locust -f load_test.py \
-        --host="$VAULT_URL" \
+        --host="$RUNEVAULT_ENDPOINT" \
         --users=25 \
         --spawn-rate=5 \
         --run-time=5m \
@@ -125,7 +125,7 @@ run_sustained_load_test() {
     echo ""
     
     locust -f load_test.py \
-        --host="$VAULT_URL" \
+        --host="$RUNEVAULT_ENDPOINT" \
         --users=50 \
         --spawn-rate=5 \
         --run-time=10m \
@@ -154,7 +154,7 @@ run_stress_test() {
     fi
     
     locust -f load_test.py \
-        --host="$VAULT_URL" \
+        --host="$RUNEVAULT_ENDPOINT" \
         --users=100 \
         --spawn-rate=10 \
         --run-time=15m \
@@ -177,7 +177,7 @@ run_spike_test() {
     # Phase 1: Baseline
     print_header "Phase 1: Baseline (10 users, 2 min)"
     locust -f load_test.py \
-        --host="$VAULT_URL" \
+        --host="$RUNEVAULT_ENDPOINT" \
         --users=10 \
         --spawn-rate=5 \
         --run-time=2m \
@@ -188,7 +188,7 @@ run_spike_test() {
     # Phase 2: Spike
     print_header "Phase 2: Spike (100 users, 3 min)"
     locust -f load_test.py \
-        --host="$VAULT_URL" \
+        --host="$RUNEVAULT_ENDPOINT" \
         --users=100 \
         --spawn-rate=20 \
         --run-time=3m \
@@ -199,7 +199,7 @@ run_spike_test() {
     # Phase 3: Recovery
     print_header "Phase 3: Recovery (10 users, 2 min)"
     locust -f load_test.py \
-        --host="$VAULT_URL" \
+        --host="$RUNEVAULT_ENDPOINT" \
         --users=10 \
         --spawn-rate=5 \
         --run-time=2m \
@@ -225,7 +225,7 @@ run_custom_test() {
     echo ""
     
     locust -f load_test.py \
-        --host="$VAULT_URL" \
+        --host="$RUNEVAULT_ENDPOINT" \
         --users="$USERS" \
         --spawn-rate="$SPAWN_RATE" \
         --run-time="$DURATION" \
@@ -245,7 +245,7 @@ run_interactive_test() {
     echo "Press Ctrl+C to stop"
     echo ""
     
-    locust -f load_test.py --host="$VAULT_URL"
+    locust -f load_test.py --host="$RUNEVAULT_ENDPOINT"
 }
 
 show_results() {
