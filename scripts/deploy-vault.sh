@@ -52,7 +52,7 @@ deploy_oci() {
     log_info "Deploying Vault to Oracle Cloud Infrastructure..."
     
     REGION="${REGION:-us-ashburn-1}"
-    VAULT_URL="https://vault-${TEAM_NAME}.oci.envector.io"
+    RUNEVAULT_ENDPOINT="https://vault-${TEAM_NAME}.oci.envector.io"
     
     log_info "Using deployment configuration from: deployment/oci/"
     
@@ -71,24 +71,24 @@ deploy_oci() {
         -auto-approve
     
     # Get outputs
-    VAULT_URL=$(terraform output -raw vault_url)
-    VAULT_TOKEN=$(terraform output -raw vault_token)
+    RUNEVAULT_ENDPOINT=$(terraform output -raw vault_url)
+    RUNEVAULT_TOKEN=$(terraform output -raw vault_token)
     
     log_info "✓ Vault deployed successfully!"
     echo ""
-    echo "${GREEN}Vault Endpoint:${NC} $VAULT_URL"
-    echo "${GREEN}Team Token:${NC} $VAULT_TOKEN"
+    echo "${GREEN}Vault Endpoint:${NC} $RUNEVAULT_ENDPOINT"
+    echo "${GREEN}Team Token:${NC} $RUNEVAULT_TOKEN"
     echo ""
     echo "${YELLOW}Share these credentials with your team:${NC}"
-    echo "export VAULT_URL=\"$VAULT_URL\""
-    echo "export VAULT_TOKEN=\"$VAULT_TOKEN\""
+    echo "export RUNEVAULT_ENDPOINT=\"$RUNEVAULT_ENDPOINT\""
+    echo "export RUNEVAULT_TOKEN=\"$RUNEVAULT_TOKEN\""
 }
 
 deploy_aws() {
     log_info "Deploying Vault to Amazon Web Services..."
     
     REGION="${REGION:-us-east-1}"
-    VAULT_URL="https://vault-${TEAM_NAME}.aws.envector.io"
+    RUNEVAULT_ENDPOINT="https://vault-${TEAM_NAME}.aws.envector.io"
     
     log_info "Using deployment configuration from: deployment/aws/"
     
@@ -107,24 +107,24 @@ deploy_aws() {
         -auto-approve
     
     # Get outputs
-    VAULT_URL=$(terraform output -raw vault_url)
-    VAULT_TOKEN=$(terraform output -raw vault_token)
+    RUNEVAULT_ENDPOINT=$(terraform output -raw vault_url)
+    RUNEVAULT_TOKEN=$(terraform output -raw vault_token)
     
     log_info "✓ Vault deployed successfully!"
     echo ""
-    echo "${GREEN}Vault Endpoint:${NC} $VAULT_URL"
-    echo "${GREEN}Team Token:${NC} $VAULT_TOKEN"
+    echo "${GREEN}Vault Endpoint:${NC} $RUNEVAULT_ENDPOINT"
+    echo "${GREEN}Team Token:${NC} $RUNEVAULT_TOKEN"
     echo ""
     echo "${YELLOW}Share these credentials with your team:${NC}"
-    echo "export VAULT_URL=\"$VAULT_URL\""
-    echo "export VAULT_TOKEN=\"$VAULT_TOKEN\""
+    echo "export RUNEVAULT_ENDPOINT=\"$RUNEVAULT_ENDPOINT\""
+    echo "export RUNEVAULT_TOKEN=\"$RUNEVAULT_TOKEN\""
 }
 
 deploy_gcp() {
     log_info "Deploying Vault to Google Cloud Platform..."
     
     REGION="${REGION:-us-central1}"
-    VAULT_URL="https://vault-${TEAM_NAME}.gcp.envector.io"
+    RUNEVAULT_ENDPOINT="https://vault-${TEAM_NAME}.gcp.envector.io"
     
     log_info "Using deployment configuration from: deployment/gcp/"
     
@@ -143,23 +143,23 @@ deploy_gcp() {
         -auto-approve
     
     # Get outputs
-    VAULT_URL=$(terraform output -raw vault_url)
-    VAULT_TOKEN=$(terraform output -raw vault_token)
+    RUNEVAULT_ENDPOINT=$(terraform output -raw vault_url)
+    RUNEVAULT_TOKEN=$(terraform output -raw vault_token)
     
     log_info "✓ Vault deployed successfully!"
     echo ""
-    echo "${GREEN}Vault Endpoint:${NC} $VAULT_URL"
-    echo "${GREEN}Team Token:${NC} $VAULT_TOKEN"
+    echo "${GREEN}Vault Endpoint:${NC} $RUNEVAULT_ENDPOINT"
+    echo "${GREEN}Team Token:${NC} $RUNEVAULT_TOKEN"
     echo ""
     echo "${YELLOW}Share these credentials with your team:${NC}"
-    echo "export VAULT_URL=\"$VAULT_URL\""
-    echo "export VAULT_TOKEN=\"$VAULT_TOKEN\""
+    echo "export RUNEVAULT_ENDPOINT=\"$RUNEVAULT_ENDPOINT\""
+    echo "export RUNEVAULT_TOKEN=\"$RUNEVAULT_TOKEN\""
 }
 
 deploy_on_premise() {
     log_info "Deploying Vault on-premise..."
     
-    VAULT_URL="https://vault.${TEAM_NAME}.internal"
+    RUNEVAULT_ENDPOINT="https://vault.${TEAM_NAME}.internal"
     
     log_info "Using deployment configuration from: deployment/on-premise/"
     
@@ -174,18 +174,18 @@ deploy_on_premise() {
     docker-compose up -d
     
     # Generate token (in production, use proper auth)
-    VAULT_TOKEN="evt_${TEAM_NAME}_$(openssl rand -hex 16)"
+    RUNEVAULT_TOKEN="evt_${TEAM_NAME}_$(openssl rand -hex 16)"
     
     log_info "✓ Vault deployed successfully!"
     echo ""
-    echo "${GREEN}Vault Endpoint:${NC} $VAULT_URL"
-    echo "${GREEN}Team Token:${NC} $VAULT_TOKEN"
+    echo "${GREEN}Vault Endpoint:${NC} $RUNEVAULT_ENDPOINT"
+    echo "${GREEN}Team Token:${NC} $RUNEVAULT_TOKEN"
     echo ""
     echo "${YELLOW}Configure DNS to point vault.${TEAM_NAME}.internal to this server${NC}"
     echo ""
     echo "${YELLOW}Share these credentials with your team:${NC}"
-    echo "export VAULT_URL=\"$VAULT_URL\""
-    echo "export VAULT_TOKEN=\"$VAULT_TOKEN\""
+    echo "export RUNEVAULT_ENDPOINT=\"$RUNEVAULT_ENDPOINT\""
+    echo "export RUNEVAULT_TOKEN=\"$RUNEVAULT_TOKEN\""
 }
 
 # Parse arguments

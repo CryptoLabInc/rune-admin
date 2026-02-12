@@ -28,7 +28,7 @@ write_files:
           ports:
             - "50080:50080"
           environment:
-            - VAULT_TOKEN=${vault_token}
+            - RUNEVAULT_TOKEN=${vault_token}
             - TEAM_NAME=${team_name}
           volumes:
             - ./keys:/app/keys

@@ -22,12 +22,12 @@ Required:
   --agent <type>        Agent type: claude, gemini, codex, custom
 
 Environment variables required:
-  VAULT_URL             Team Vault endpoint
-  VAULT_TOKEN           Team auth token
+  RUNEVAULT_ENDPOINT             Team Vault endpoint
+  RUNEVAULT_TOKEN           Team auth token
 
 Example:
-  export VAULT_URL="https://vault-your-team.oci.envector.io"
-  export VAULT_TOKEN="evt_xxx"
+  export RUNEVAULT_ENDPOINT="https://vault-your-team.oci.envector.io"
+  export RUNEVAULT_TOKEN="evt_xxx"
   $0 --agent claude
 
 EOF
@@ -65,13 +65,13 @@ if [ -z "$AGENT" ]; then
     usage
 fi
 
-if [ -z "$VAULT_URL" ]; then
-    log_error "Environment variable VAULT_URL not set"
+if [ -z "$RUNEVAULT_ENDPOINT" ]; then
+    log_error "Environment variable RUNEVAULT_ENDPOINT not set"
     usage
 fi
 
-if [ -z "$VAULT_TOKEN" ]; then
-    log_error "Environment variable VAULT_TOKEN not set"
+if [ -z "$RUNEVAULT_TOKEN" ]; then
+    log_error "Environment variable RUNEVAULT_TOKEN not set"
     usage
 fi
 
@@ -83,8 +83,8 @@ case "$AGENT" in
         CONFIG_DIR="$HOME/.claude"
         mkdir -p "$CONFIG_DIR"
         cat > "$CONFIG_DIR/envector.env" << EOF
-VAULT_URL=$VAULT_URL
-VAULT_TOKEN=$VAULT_TOKEN
+RUNEVAULT_ENDPOINT=$RUNEVAULT_ENDPOINT
+RUNEVAULT_TOKEN=$RUNEVAULT_TOKEN
 CLOUD_URL=https://api.envector.io
 EOF
         log_info "✓ Claude configured: $CONFIG_DIR/envector.env"
@@ -93,8 +93,8 @@ EOF
         CONFIG_DIR="$HOME/.gemini"
         mkdir -p "$CONFIG_DIR"
         cat > "$CONFIG_DIR/envector.env" << EOF
-VAULT_URL=$VAULT_URL
-VAULT_TOKEN=$VAULT_TOKEN
+RUNEVAULT_ENDPOINT=$RUNEVAULT_ENDPOINT
+RUNEVAULT_TOKEN=$RUNEVAULT_TOKEN
 CLOUD_URL=https://api.envector.io
 EOF
         log_info "✓ Gemini configured: $CONFIG_DIR/envector.env"
@@ -103,16 +103,16 @@ EOF
         CONFIG_DIR="$HOME/.codex"
         mkdir -p "$CONFIG_DIR"
         cat > "$CONFIG_DIR/envector.env" << EOF
-VAULT_URL=$VAULT_URL
-VAULT_TOKEN=$VAULT_TOKEN
+RUNEVAULT_ENDPOINT=$RUNEVAULT_ENDPOINT
+RUNEVAULT_TOKEN=$RUNEVAULT_TOKEN
 CLOUD_URL=https://api.envector.io
 EOF
         log_info "✓ Codex configured: $CONFIG_DIR/envector.env"
         ;;
     custom)
         log_info "For custom agents, ensure these environment variables are set:"
-        echo "  VAULT_URL=$VAULT_URL"
-        echo "  VAULT_TOKEN=$VAULT_TOKEN"
+        echo "  RUNEVAULT_ENDPOINT=$RUNEVAULT_ENDPOINT"
+        echo "  RUNEVAULT_TOKEN=$RUNEVAULT_TOKEN"
         echo "  CLOUD_URL=https://api.envector.io"
         ;;
     *)

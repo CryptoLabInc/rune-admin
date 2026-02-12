@@ -293,7 +293,7 @@ terraform apply -var="ha_enabled=true"
 **Security best practices:**
 ```bash
 # ✅ Good: Environment variables
-export VAULT_TOKEN="evt_xxx"
+export RUNEVAULT_TOKEN="evt_xxx"
 
 # ✅ Good: Encrypted config files
 # ✅ Good: Team setup packages (secure distribution)
