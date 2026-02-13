@@ -20,7 +20,7 @@ def run_demo():
     print("=== Mocked enVector-Vault Demo (Local) ===")
     
     # 1. Agent: Request Public Key Bundle
-    print("\n[Agent] Requesting Public Key Bundle (EncKey, EvalKey, MetadataKey)...")
+    print("\n[Agent] Requesting Public Key Bundle (EncKey, EvalKey)...")
     # Using a valid token issued by Admin
     token = "envector-team-alpha"
     bundle_json = vault_mcp.get_public_key(token=token)

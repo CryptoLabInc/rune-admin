@@ -94,7 +94,7 @@ class HealthChecker:
         import os
         try:
             key_dir = os.getenv("KEY_DIR", "vault_keys")
-            required_keys = ["EncKey.json", "SecKey.json", "EvalKey.json", "MetadataKey.json"]
+            required_keys = ["EncKey.json", "SecKey.json", "EvalKey.json"]
             
             missing_keys = []
             for key_file in required_keys:

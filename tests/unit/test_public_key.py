@@ -48,10 +48,10 @@ class TestGetPublicKey:
         # Should contain public keys
         assert "EncKey.json" in bundle
         assert "EvalKey.json" in bundle
-        assert "MetadataKey.json" in bundle
         
-        # Should NOT contain secret key
+        # Should NOT contain secret keys
         assert "SecKey.json" not in bundle
+        assert "MetadataKey.json" not in bundle
     
     def test_invalid_token_raises_error(self, test_keys, monkeypatch):
         """Invalid token should raise ValueError."""

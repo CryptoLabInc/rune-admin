@@ -202,7 +202,7 @@ terraform apply
 /vault_keys/
 ├── EncKey.json      # Public (distributed to team members)
 ├── EvalKey.json     # Public (for FHE operations)
-├── MetadataKey.json # Public
+├── MetadataKey.json # Secret (NEVER leaves Vault)
 └── SecKey.json      # Secret (NEVER leaves Vault)
 ```
 
