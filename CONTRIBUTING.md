@@ -33,7 +33,7 @@ Feature requests should include:
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.12
 - Docker (for testing deployments)
 - Access to cloud provider (OCI/AWS/GCP) for integration testing
 
