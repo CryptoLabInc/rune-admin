@@ -48,15 +48,14 @@ This Vault requires simple Token-based authentication.
 The server exposes the following tools to any MCP Client (Claude, etc.):
 
 ### `get_public_key(token)`
-Returns the public key bundle (`EncKey`, `EvalKey`, `MetadataKey`).
+Returns the public key bundle (`EncKey`, `EvalKey`).
 *   **Args**:
     *   `token` (str): Valid authentication token.
 *   **Returns**: `str` (JSON object)
     ```json
     {
         "EncKey.json": "...",
-        "EvalKey.json": "...",
-        "MetadataKey.json": "..."
+        "EvalKey.json": "..."
     }
     ```
 

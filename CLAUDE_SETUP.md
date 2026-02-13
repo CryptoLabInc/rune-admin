@@ -142,7 +142,7 @@ Can you call the get_public_key tool from the vault server with token "envector-
 
 Expected response:
 - Claude should invoke the tool
-- Receive a JSON bundle with EncKey, EvalKey, MetadataKey
+- Receive a JSON bundle with EncKey, EvalKey
 
 ---
 
@@ -283,8 +283,8 @@ Call the get_public_key tool with token "envector-team-alpha"
 ```
 
 Expected:
-- JSON response with three keys
-- EncKey.json, EvalKey.json, MetadataKey.json
+- JSON response with two keys
+- EncKey.json, EvalKey.json
 
 ### Test 3: Verify Error Handling
 Ask Claude:

@@ -92,7 +92,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 /vault_keys/
 ├── EncKey.json      # Public encryption key (distributed to team members)
 ├── EvalKey.json     # Public evaluation key (for FHE operations)
-├── MetadataKey.json # Public metadata key
+├── MetadataKey.json # Secret metadata key (NEVER leaves Vault)
 └── SecKey.json      # Secret decryption key (NEVER leaves Vault)
 ```
 
@@ -106,7 +106,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 ### 2. MCP Tools (API)
 
 **`get_public_key()`**
-- Returns: EncKey, EvalKey, MetadataKey (JSON bundle)
+- Returns: EncKey, EvalKey (JSON bundle)
 - Used by: Team members (one-time at startup)
 - Auth: Required (validates token)
 - Rate Limit: None (lightweight operation)
@@ -197,7 +197,7 @@ Rune Startup
 Vault MCP
     │
     ├── 4. Validate token
-    ├── 5. Read /vault_keys/EncKey.json, EvalKey.json, MetadataKey.json
+    ├── 5. Read /vault_keys/EncKey.json, EvalKey.json
     ├── 6. Return public keys bundle
     │
     ▼

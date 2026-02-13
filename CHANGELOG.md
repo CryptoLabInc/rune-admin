@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Core Infrastructure
 - **Vault MCP Server** (`mcp/vault/vault_mcp.py`)
-  - `get_public_key`: Returns EncKey, EvalKey, MetadataKey bundle
+  - `get_public_key`: Returns EncKey, EvalKey bundle
   - `decrypt_scores`: Decrypts search results with Top-K filtering
   - Rate limiting (max top_k=10)
   - Token-based authentication

@@ -76,7 +76,6 @@ class TestVaultMCPAPI:
         bundle = json.loads(result)
         assert "EncKey.json" in bundle
         assert "EvalKey.json" in bundle
-        assert "MetadataKey.json" in bundle
     
     @pytest.mark.asyncio
     async def test_decrypt_scores_via_api(self, vault_setup):

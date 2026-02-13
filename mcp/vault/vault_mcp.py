@@ -10,6 +10,7 @@ from collections import defaultdict
 from threading import Lock
 from pyenvector.crypto import KeyGenerator, Cipher
 from pyenvector.crypto.block import CipherBlock, Query
+from pyenvector.utils.aes import decrypt_metadata as aes_decrypt_metadata
 try:
     from pyenvector.proto_gen.v2.common.type_pb2 import CiphertextScore
 except ModuleNotFoundError:
@@ -45,6 +46,7 @@ def ensure_keys():
 ensure_keys()
 enc_key_path = os.path.join(KEY_DIR, "EncKey.json")
 sec_key_path = os.path.join(KEY_DIR, "SecKey.json")
+metadata_key_path = os.path.join(KEY_DIR, "MetadataKey.json")
 
 # Initialize shared Cipher instance (thread-safety? FastMCP uses asyncio/uvicorn workers)
 # Usually safe for read-ops.
@@ -129,12 +131,12 @@ def _get_public_key_impl(token: str) -> str:
         token: Authentication token issued by Vault Admin.
         
     Returns:
-        JSON string containing EncKey, EvalKey, MetadataKey.
+        JSON string containing EncKey, EvalKey.
     """
     validate_token(token)
     
     bundle = {}
-    for filename in ["EncKey.json", "EvalKey.json", "MetadataKey.json"]:
+    for filename in ["EncKey.json", "EvalKey.json"]:
         path = os.path.join(KEY_DIR, filename)
         if os.path.exists(path):
             with open(path, "r") as f:
@@ -142,7 +144,7 @@ def _get_public_key_impl(token: str) -> str:
         else:
             # Should not happen if ensure_keys ran
             pass
-            
+
     return json.dumps(bundle)
 
 # MCP Server
@@ -151,18 +153,17 @@ mcp = FastMCP("enVector-Vault")
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
 def get_public_key(token: str) -> str:
     """
-    Returns the public key bundle (EncKey, EvalKey, MetadataKey).
+    Returns the public key bundle (EncKey, EvalKey).
     This bundle allows the Agent to encrypt data/queries and register keys with the Cloud.
-    
+
     Args:
         token: Authentication token issued by Vault Admin.
-        
+
     Returns:
         JSON string containing:
         {
             "EncKey.json": "...",
-            "EvalKey.json": "...",
-            "MetadataKey.json": "..."
+            "EvalKey.json": "..."
         }
     """
     start_time = time.time()
@@ -279,6 +280,67 @@ def decrypt_scores(token: str, encrypted_blob_b64: str, top_k: int = 5) -> str:
             duration = time.time() - start_time
             monitoring.vault_requests_total.labels(method="decrypt_scores", endpoint="tool", status=status).inc()
             monitoring.vault_request_duration.labels(method="decrypt_scores", endpoint="tool").observe(duration)
+
+def _decrypt_metadata_impl(token: str, encrypted_metadata_list: list[str]) -> str:
+    """
+    Core implementation: Decrypts a list of AES-encrypted metadata strings
+    using the Vault's MetadataKey.
+
+    Args:
+        token: Authentication token issued by Vault Admin.
+        encrypted_metadata_list: List of Base64-encoded encrypted metadata strings.
+
+    Returns:
+        JSON string containing the list of decrypted metadata objects.
+    """
+    validate_token(token)
+
+    if not os.path.exists(metadata_key_path):
+        return json.dumps({"error": "MetadataKey not found in Vault"})
+
+    try:
+        results = []
+        for token_b64 in encrypted_metadata_list:
+            decrypted = aes_decrypt_metadata(token_b64, metadata_key_path)
+            results.append(decrypted)
+        return json.dumps(results)
+    except Exception as e:
+        return json.dumps({"error": f"Metadata decryption failed: {str(e)}"})
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
+def decrypt_metadata(token: str, encrypted_metadata_list: list[str]) -> str:
+    """
+    Decrypts a list of AES-encrypted metadata using the Vault's MetadataKey.
+    The MetadataKey never leaves Vault — Agent sends encrypted blobs, receives plaintext.
+
+    Args:
+        token: Authentication token issued by Vault Admin.
+        encrypted_metadata_list: List of Base64-encoded encrypted metadata strings from enVector Cloud.
+
+    Returns:
+        JSON string containing the list of decrypted metadata (original format preserved).
+    """
+    start_time = time.time()
+    status = "success"
+    try:
+        result = _decrypt_metadata_impl(token, encrypted_metadata_list)
+        try:
+            data = json.loads(result)
+            if isinstance(data, dict) and "error" in data:
+                status = "error"
+        except Exception:
+            pass
+        return result
+    except Exception:
+        status = "error"
+        raise
+    finally:
+        if MONITORING_AVAILABLE:
+            duration = time.time() - start_time
+            monitoring.vault_requests_total.labels(method="decrypt_metadata", endpoint="tool", status=status).inc()
+            monitoring.vault_request_duration.labels(method="decrypt_metadata", endpoint="tool").observe(duration)
+
 
 if __name__ == "__main__":
     import sys
