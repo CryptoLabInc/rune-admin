@@ -82,7 +82,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 - **On-Premise** (Self-hosted)
 
 **Runtime**:
-- Python 3.8+ with FastMCP framework
+- Python 3.12 with FastMCP framework
 - uvicorn ASGI server
 - Prometheus metrics exporter
 - System monitoring (psutil)
@@ -328,7 +328,7 @@ Cloud Resources Created
     │   ├── OS: Ubuntu 22.04 LTS
     │   ├── Shape: 2 OCPU, 8GB RAM, 50GB disk
     │   └── Software:
-    │       ├── Python 3.8+
+    │       ├── Python 3.12
     │       ├── FastMCP
     │       ├── pyenvector (FHE SDK)
     │       └── Prometheus exporter

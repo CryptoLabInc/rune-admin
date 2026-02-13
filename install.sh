@@ -38,13 +38,22 @@ print_step() {
 check_python() {
     if ! command -v python3 &> /dev/null; then
         print_error "Python 3 is not installed"
-        echo "Please install Python 3.8 or higher:"
+        echo "Please install Python 3.12 or higher:"
         echo "  - macOS: brew install python3"
         echo "  - Linux: sudo apt install python3 python3-pip"
         exit 1
     fi
     
     PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
+    PYTHON_MAJOR=$(echo "$PYTHON_VERSION" | cut -d. -f1)
+    PYTHON_MINOR=$(echo "$PYTHON_VERSION" | cut -d. -f2)
+    if [ "$PYTHON_MAJOR" -lt 3 ] || { [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 12 ]; }; then
+        print_error "Python 3.12 or higher is required (found $PYTHON_VERSION)"
+        echo "pyenvector requires Python 3.12. Please upgrade:"
+        echo "  - macOS: brew install python@3.12"
+        echo "  - Linux: sudo apt install python3.12 python3.12-venv"
+        exit 1
+    fi
     print_info "Python $PYTHON_VERSION detected"
 }
 

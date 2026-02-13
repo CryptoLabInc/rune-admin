@@ -107,7 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Version 0.2.0
 - **Focus**: Complete Vault infrastructure
-- **Breaking**: Requires Python 3.10+, ~4GB RAM for key generation
+- **Breaking**: Requires Python 3.12, ~4GB RAM for key generation
 - **Deployment**: Multi-cloud support with automated scripts
 
 ### Version 0.1.0

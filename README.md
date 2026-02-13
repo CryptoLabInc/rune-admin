@@ -18,7 +18,7 @@ Rune-Admin provides **infrastructure management** for Rune-Vault:
 
 ### For Administrators
 
-1. **Python 3.8+** with pip and virtualenv
+1. **Python 3.12** with pip and virtualenv
 2. **Terraform** for cloud infrastructure deployment
 3. **enVector Cloud account** at [https://envector.io](https://envector.io)
    - Organization ID and API Key
