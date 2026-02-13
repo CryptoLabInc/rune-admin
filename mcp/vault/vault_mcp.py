@@ -2,10 +2,13 @@ from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 import base64
 import pickle
+import logging
 import numpy as np
 import os
 import json
 import time
+
+logger = logging.getLogger("rune.vault")
 from collections import defaultdict
 from threading import Lock
 from pyenvector.crypto import KeyGenerator, Cipher
@@ -36,12 +39,12 @@ DIM = 1024  # FHE cipher supports up to 2^12, using 1024 for production
 def ensure_keys():
     enc_key = os.path.join(KEY_DIR, "EncKey.json")
     if not os.path.exists(enc_key):
-        print(f"Generating keys in {KEY_DIR}...")
+        logger.info(f"Generating keys in {KEY_DIR}...")
         os.makedirs(KEY_DIR, exist_ok=True)
         keygen = KeyGenerator(key_path=KEY_DIR, key_id=KEY_ID, dim_list=[DIM])
         keygen.generate_keys()
     else:
-        print(f"Keys found in {KEY_DIR}")
+        logger.info(f"Keys found in {KEY_DIR}")
 
 ensure_keys()
 enc_key_path = os.path.join(KEY_DIR, "EncKey.json")
@@ -69,7 +72,7 @@ else:
     VALID_TOKENS = {
         "TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION",
     }
-    print("WARNING: Using demo tokens. Set VAULT_TOKENS env var for production.")
+    logger.warning("Using demo tokens. Set VAULT_TOKENS env var for production.")
 
 
 # =============================================================================
@@ -355,7 +358,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.command == "server":
-        print(f"Starting enVector-Vault MCP Server on {args.host}:{args.port}...")
+        logger.info(f"Starting enVector-Vault MCP Server on {args.host}:{args.port}...")
 
         import uvicorn
         # FastMCP 2.x uses http_app(), fallback to sse_app() for older versions
@@ -373,7 +376,7 @@ if __name__ == "__main__":
             async def startup_event():
                 asyncio.create_task(monitoring.periodic_health_check())
         else:
-            print("WARNING: Monitoring module not available. skipping /health and /metrics.")
+            logger.warning("Monitoring module not available. Skipping /health and /metrics.")
 
         uvicorn.run(app, host=args.host, port=args.port)
             
