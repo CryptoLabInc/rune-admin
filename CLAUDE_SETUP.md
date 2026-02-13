@@ -356,7 +356,7 @@ After successful integration:
 
 ## Support
 
-**Issues:** https://github.com/CryptoLabInc/rune/issues  
+**Issues:** https://github.com/CryptoLabInc/rune-admin/issues  
 **Documentation:** [docs/AGENT-INTEGRATION.md](../docs/AGENT-INTEGRATION.md)  
 **Demo:** Run `python3 mcp/vault/demo_local.py`
 

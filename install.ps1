@@ -126,7 +126,7 @@ function Show-MemberNextSteps {
     Write-Host "  3. Restart your AI agent"
     Write-Host ""
     Write-Host "📚 Configuration Guide: CLAUDE_SETUP.md"
-    Write-Host "💬 Support: https://github.com/CryptoLabInc/rune/issues"
+    Write-Host "💬 Support: https://github.com/CryptoLabInc/rune-admin/issues"
     Write-Host ""
 }
 

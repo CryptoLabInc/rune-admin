@@ -291,6 +291,6 @@ See [../docs/HA-SETUP.md](../../docs/HA-SETUP.md) for details.
 
 ## Support
 
-- **Issues**: https://github.com/CryptoLabInc/rune/issues
+- **Issues**: https://github.com/CryptoLabInc/rune-admin/issues
 - **Docs**: https://docs.envector.io
 - **Email**: support@cryptolab.co.kr

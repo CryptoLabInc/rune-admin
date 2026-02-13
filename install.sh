@@ -76,7 +76,7 @@ setup_vault_dependencies() {
     # Install dependencies
     print_info "Installing Python packages (this may take a few minutes)..."
     pip install --quiet --upgrade pip
-    pip install --quiet pyenvector fastmcp psutil prometheus-client
+    pip install --quiet -r mcp/vault/requirements.txt
     
     print_info "Dependencies installed successfully!"
     
@@ -86,19 +86,18 @@ setup_vault_dependencies() {
 show_admin_next_steps() {
     print_header "Setup Complete! Next Steps for Admin"
     
-    echo "1️⃣  Deploy Rune-Vault to cloud:"
-    echo "   cd deployment/oci    # or aws, gcp"
-    echo "   terraform init"
-    echo "   terraform apply"
+    echo "1. Deploy Rune-Vault:"
+    echo "   cd mcp/vault && docker compose up -d"
+    echo "   Or deploy to cloud: cd deployment/oci && terraform apply"
     echo ""
-    echo "2️⃣  Share credentials with team members (securely):"
-    echo "   - Vault URL: https://vault-YOURTEAM.oci.envector.io"
-    echo "   - Vault Token: evt_YOURTEAM_xxx"
+    echo "2. Share credentials with team members (securely):"
+    echo "   - Vault URL (or ngrok public URL)"
+    echo "   - Vault Token (set in mcp/vault/.env)"
     echo ""
-    echo "3﹏⃣  Team members install Rune from Claude Marketplace"
+    echo "3. Team members install Rune from Claude Marketplace"
     echo ""
     echo "📚 Deployment Guide: deployment/oci/README.md"
-    echo "💬 Support: https://github.com/CryptoLabInc/rune/issues"
+    echo "💬 Support: https://github.com/CryptoLabInc/rune-admin/issues"
     echo ""
 }
 
@@ -115,7 +114,7 @@ show_member_next_steps() {
     echo "  3. Start using organizational memory"
     echo ""
     echo "📚 Configuration Guide: CLAUDE_SETUP.md"
-    echo "💬 Support: https://github.com/CryptoLabInc/rune/issues"
+    echo "💬 Support: https://github.com/CryptoLabInc/rune-admin/issues"
     echo ""
 }
 

@@ -223,6 +223,6 @@ Then reconfigure with `/rune configure`.
 
 ## Support
 
-- **Issues**: https://github.com/CryptoLabInc/rune/issues
+- **Issues**: https://github.com/CryptoLabInc/rune-admin/issues
 - **Email**: zotanika@cryptolab.co.kr
 - **Full docs**: https://github.com/CryptoLabInc/rune-admin

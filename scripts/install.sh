@@ -62,7 +62,7 @@ print_info "Python $PYTHON_VERSION detected"
 
 # Create virtual environment
 print_step "Setting up Python virtual environment..."
-cd "$PLUGIN_DIR"
+cd "$ADMIN_DIR"
 
 if [ ! -d ".venv" ]; then
     print_info "Creating virtual environment..."
@@ -96,9 +96,9 @@ echo "✓ Dependencies installed"
 echo "✓ Config directory: ~/.rune"
 echo ""
 echo "Next steps:"
-echo "  1. Generate Vault keys: cd mcp/vault && python vault_mcp.py"
-echo "  2. Configure tokens in vault_mcp.py VALID_TOKENS"
-echo "  3. Deploy Vault to cloud: See deployment/ directory"
+echo "  1. Deploy Vault: cd mcp/vault && docker compose up -d"
+echo "  2. Set tokens in mcp/vault/.env (VAULT_TOKENS)"
+echo "  3. Or deploy to cloud: See deployment/ directory"
 echo "  4. Share Vault URL and tokens with team members"
 echo ""
 print_info "Admin setup complete! 🎉"

@@ -59,12 +59,15 @@ else
     print_warn "curl not found, skipping Vault connectivity check"
 fi
 
-# Check if MCP servers are running
-if pgrep -f "vault_mcp.py" > /dev/null; then
+# Check if MCP servers are running (Docker or process)
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "vault-mcp"; then
+    print_check "Vault MCP server is running (Docker container: vault-mcp)"
+elif pgrep -f "vault_mcp.py" > /dev/null; then
     print_check "Vault MCP server is running (PID: $(pgrep -f vault_mcp.py))"
 else
     print_warn "Vault MCP server is not running"
-    echo "  Start with: scripts/start-mcp-servers.sh"
+    echo "  Start with: cd mcp/vault && docker compose up -d"
+    echo "  Or: scripts/start-mcp-servers.sh"
     # Not failing here, as it can be started later
 fi
 

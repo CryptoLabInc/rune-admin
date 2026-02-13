@@ -125,7 +125,7 @@ Claude: According to organizational memory from 2 weeks ago:
 
 - **Setup questions**: Contact your team administrator
 - **enVector signup**: [https://envector.io](https://envector.io)
-- **Technical issues**: [GitHub Issues](https://github.com/CryptoLabInc/rune/issues)
+- **Technical issues**: [GitHub Issues](https://github.com/CryptoLabInc/rune-admin/issues)
 - **Email support**: zotanika@cryptolab.co.kr
 
 ---

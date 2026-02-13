@@ -158,32 +158,35 @@ deploy_gcp() {
 
 deploy_on_premise() {
     log_info "Deploying Vault on-premise..."
-    
+
     RUNEVAULT_ENDPOINT="https://vault.${TEAM_NAME}.internal"
-    
-    log_info "Using deployment configuration from: deployment/on-premise/"
-    
+
+    log_info "Using deployment configuration from: mcp/vault/"
+
     # Check if Docker is installed
     if ! command -v docker &> /dev/null; then
         log_error "Docker not found. Install: https://docs.docker.com/get-docker/"
         exit 1
     fi
-    
-    # Deploy using Docker Compose
-    cd deployment/on-premise
-    docker-compose up -d
-    
-    # Generate token (in production, use proper auth)
+
+    # Generate token
     RUNEVAULT_TOKEN="evt_${TEAM_NAME}_$(openssl rand -hex 16)"
-    
+
+    # Write token to .env
+    cd mcp/vault
+    echo "VAULT_TOKENS=$RUNEVAULT_TOKEN" > .env.production
+
+    # Deploy using Docker Compose
+    docker compose --env-file .env.production up -d vault-mcp
+
     log_info "✓ Vault deployed successfully!"
     echo ""
-    echo "${GREEN}Vault Endpoint:${NC} $RUNEVAULT_ENDPOINT"
-    echo "${GREEN}Team Token:${NC} $RUNEVAULT_TOKEN"
+    echo -e "${GREEN}Vault Endpoint:${NC} $RUNEVAULT_ENDPOINT"
+    echo -e "${GREEN}Team Token:${NC} $RUNEVAULT_TOKEN"
     echo ""
-    echo "${YELLOW}Configure DNS to point vault.${TEAM_NAME}.internal to this server${NC}"
+    echo -e "${YELLOW}Configure DNS to point vault.${TEAM_NAME}.internal to this server${NC}"
     echo ""
-    echo "${YELLOW}Share these credentials with your team:${NC}"
+    echo -e "${YELLOW}Share these credentials with your team:${NC}"
     echo "export RUNEVAULT_ENDPOINT=\"$RUNEVAULT_ENDPOINT\""
     echo "export RUNEVAULT_TOKEN=\"$RUNEVAULT_TOKEN\""
 }
