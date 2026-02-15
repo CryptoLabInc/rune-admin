@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package rune.vault.v1;
+
+// Rune-Vault gRPC service.
+// Holds the FHE secret key and performs all decryption operations.
+// Phase 1: dual-stack alongside FastMCP HTTP/SSE (port 50080).
+service VaultService {
+  // Returns the public key bundle (EncKey, EvalKey, optional team index name).
+  rpc GetPublicKey(GetPublicKeyRequest) returns (GetPublicKeyResponse);
+
+  // Decrypts FHE-encrypted similarity scores and applies Top-K filtering.
+  rpc DecryptScores(DecryptScoresRequest) returns (DecryptScoresResponse);
+
+  // Decrypts a list of AES-encrypted metadata strings.
+  rpc DecryptMetadata(DecryptMetadataRequest) returns (DecryptMetadataResponse);
+}
+
+// ─── GetPublicKey ──────────────────────────────────────────────────
+
+message GetPublicKeyRequest {
+  string token = 1;  // Auth token
+}
+
+message GetPublicKeyResponse {
+  // JSON string: {"EncKey.json": "...", "EvalKey.json": "...", "index_name": "..."}
+  string key_bundle_json = 1;
+  string error = 2;  // Non-empty on error
+}
+
+// ─── DecryptScores ─────────────────────────────────────────────────
+
+message DecryptScoresRequest {
+  string token = 1;
+  string encrypted_blob_b64 = 2;  // Base64-encoded CiphertextScore protobuf
+  int32  top_k = 3;               // Max 10, enforced by Vault policy
+}
+
+message ScoreEntry {
+  int32  shard_idx = 1;
+  int32  row_idx   = 2;
+  double score     = 3;
+}
+
+message DecryptScoresResponse {
+  repeated ScoreEntry results = 1;  // Top-K results sorted by score descending
+  string error = 2;                 // Non-empty on error
+}
+
+// ─── DecryptMetadata ───────────────────────────────────────────────
+
+message DecryptMetadataRequest {
+  string token = 1;
+  repeated string encrypted_metadata_list = 2;  // Base64-encoded AES blobs
+}
+
+message DecryptMetadataResponse {
+  // Each element is a JSON-serialized decrypted metadata object
+  repeated string decrypted_metadata = 1;
+  string error = 2;  // Non-empty on error
+}

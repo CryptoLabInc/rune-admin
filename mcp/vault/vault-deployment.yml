@@ -33,7 +33,15 @@ spec:
         ports:
         - containerPort: 50080
           protocol: TCP
-        
+        - containerPort: 50051
+          protocol: TCP
+
+        readinessProbe:
+          grpc:
+            port: 50051
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
         resources:
           requests:
             memory: "512Mi"

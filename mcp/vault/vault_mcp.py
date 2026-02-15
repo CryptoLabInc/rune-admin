@@ -363,12 +363,23 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the enVector-Vault MCP server.")
     parser.add_argument("command", nargs="?", choices=["server"], help="Command to run")
     parser.add_argument("--mode", choices=["sse", "http"], default="sse", help="Transport mode")
-    parser.add_argument("--port", type=int, default=50080, help="Port to bind")
+    parser.add_argument("--port", type=int, default=50080, help="HTTP/MCP port to bind")
+    parser.add_argument("--grpc-port", type=int, default=50051, help="gRPC port to bind")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind")
-    
+
     args = parser.parse_args()
 
     if args.command == "server":
+        # Start gRPC server (non-blocking, runs in thread pool)
+        grpc_server = None
+        try:
+            from vault_grpc_server import serve_grpc
+            grpc_server = serve_grpc(host=args.host, port=args.grpc_port)
+        except Exception as e:
+            logger.error(f"Failed to start gRPC server: {e}")
+            logger.warning("Continuing with HTTP/MCP only.")
+
+        # Start HTTP/MCP server (blocking)
         logger.info(f"Starting enVector-Vault MCP Server on {args.host}:{args.port}...")
 
         import uvicorn
@@ -389,8 +400,12 @@ if __name__ == "__main__":
         else:
             logger.warning("Monitoring module not available. Skipping /health and /metrics.")
 
-        uvicorn.run(app, host=args.host, port=args.port)
-            
+        try:
+            uvicorn.run(app, host=args.host, port=args.port)
+        finally:
+            if grpc_server is not None:
+                grpc_server.stop(grace=5)
+
     else:
         # Default to stdio for CLI / Inspector usage
         mcp.run()
