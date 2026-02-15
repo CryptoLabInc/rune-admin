@@ -74,6 +74,13 @@ else:
     }
     logger.warning("Using demo tokens. Set VAULT_TOKENS env var for production.")
 
+# Team index name (set by admin, distributed to all team members via get_public_key)
+VAULT_INDEX_NAME = os.getenv("VAULT_INDEX_NAME", "").strip() or None
+if VAULT_INDEX_NAME:
+    logger.info(f"Team index name configured: {VAULT_INDEX_NAME}")
+else:
+    logger.info("No team index name configured (VAULT_INDEX_NAME not set)")
+
 
 # =============================================================================
 # Rate Limiting
@@ -147,6 +154,10 @@ def _get_public_key_impl(token: str) -> str:
         else:
             # Should not happen if ensure_keys ran
             pass
+
+    # Include team index name if configured by admin
+    if VAULT_INDEX_NAME:
+        bundle["index_name"] = VAULT_INDEX_NAME
 
     return json.dumps(bundle)
 
