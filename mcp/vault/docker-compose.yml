@@ -1,0 +1,75 @@
+services:
+  vault-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rune-vault:latest
+    container_name: vault-mcp
+
+    volumes:
+      - vault-keys:/app/vault_keys:rw
+      - ./backups:/secure/backups:rw
+      - ./logs:/var/log/vault-mcp:rw
+
+    environment:
+      - VAULT_TOKENS=${VAULT_TOKENS:-}
+      - VAULT_INDEX_NAME=${VAULT_INDEX_NAME:-runecontext}
+      - ENVECTOR_ENDPOINT=${ENVECTOR_ENDPOINT:-}
+      - ENVECTOR_API_KEY=${ENVECTOR_API_KEY:-}
+      - EMBEDDING_DIM=${EMBEDDING_DIM:-384}
+
+    networks:
+      - vault-net
+
+    ports:
+      - "127.0.0.1:50080:50080"
+      - "127.0.0.1:50051:50051"
+
+    security_opt:
+      - no-new-privileges:true
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:50080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+
+  # To expose Vault gRPC over the internet via ngrok:
+  #   1. Sign up at https://ngrok.com and get your authtoken
+  #   2. Set the env var before running docker compose:
+  #        export NGROK_AUTHTOKEN=<your-authtoken>
+  #        docker compose up -d
+  #   3. Check the ngrok dashboard at http://localhost:4040 for the assigned TCP address
+  #   4. Use that address as vault.endpoint in ~/.rune/config.json
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: vault-ngrok
+    command: tcp vault-mcp:50051 --log stdout
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    networks:
+      - vault-net
+    ports:
+      - "127.0.0.1:4040:4040"
+    depends_on:
+      vault-mcp:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  vault-net:
+    driver: bridge
+
+volumes:
+  vault-keys:
