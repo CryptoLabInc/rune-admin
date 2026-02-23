@@ -1,7 +1,9 @@
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 import base64
+import hashlib
 import heapq
+import hmac
 import logging
 import os
 import json
@@ -118,6 +120,7 @@ def ensure_vault():
                 dim=EMBEDDING_DIM,
                 index_params={"index_type": "FLAT"},
                 query_encryption="plain",
+                metadata_encryption=False,
             )
             logger.info(f"Created team index '{VAULT_INDEX_NAME}' (dim={EMBEDDING_DIM}).")
     except Exception as e:
@@ -130,6 +133,18 @@ metadata_key_path = os.path.join(KEY_SUBDIR, "MetadataKey.json")
 
 # Initialize shared Cipher instance
 cipher = Cipher(enc_key_path=enc_key_path, dim=DIM)
+
+# =============================================================================
+# Per-Agent Metadata Key Derivation
+# =============================================================================
+def _load_master_key() -> bytes:
+    """Load MetadataKey as master key for per-agent DEK derivation."""
+    from pyenvector.utils.utils import get_key_stream
+    return get_key_stream(metadata_key_path)
+
+def derive_agent_key(master_key: bytes, agent_id: str) -> bytes:
+    """Derive a 32-byte AES-256 DEK for a specific agent via HMAC-SHA256."""
+    return hmac.new(master_key, agent_id.encode('utf-8'), hashlib.sha256).digest()
 
 # =============================================================================
 # Authorization
@@ -217,9 +232,17 @@ def _get_public_key_impl(token: str) -> str:
             # Should not happen if ensure_keys ran
             pass
 
-    # Include team index name if configured by admin
+    # Include team index name and key_id so clients discover them dynamically
     if VAULT_INDEX_NAME:
         bundle["index_name"] = VAULT_INDEX_NAME
+    bundle["key_id"] = KEY_ID
+
+    # Per-agent metadata DEK: derived from master key + token-based agent_id
+    agent_id = hashlib.sha256(token.encode('utf-8')).hexdigest()[:16]
+    master_key = _load_master_key()
+    agent_dek = derive_agent_key(master_key, agent_id)
+    bundle["agent_id"] = agent_id
+    bundle["agent_dek"] = base64.b64encode(agent_dek).decode('ascii')
 
     return json.dumps(bundle)
 
@@ -358,12 +381,14 @@ def decrypt_scores(token: str, encrypted_blob_b64: str, top_k: int = 5) -> str:
 
 def _decrypt_metadata_impl(token: str, encrypted_metadata_list: list[str]) -> str:
     """
-    Core implementation: Decrypts a list of AES-encrypted metadata strings
-    using the Vault's MetadataKey.
+    Core implementation: Decrypts a list of per-agent AES-encrypted metadata.
+
+    Each item is a JSON string: {"a": "<agent_id>", "c": "<base64_ciphertext>"}.
+    Vault derives the agent's DEK from master key + agent_id, then decrypts.
 
     Args:
         token: Authentication token issued by Vault Admin.
-        encrypted_metadata_list: List of Base64-encoded encrypted metadata strings.
+        encrypted_metadata_list: List of JSON-encoded per-agent encrypted blobs.
 
     Returns:
         JSON string containing the list of decrypted metadata objects.
@@ -374,9 +399,16 @@ def _decrypt_metadata_impl(token: str, encrypted_metadata_list: list[str]) -> st
         return json.dumps({"error": "MetadataKey not found in Vault"})
 
     try:
+        master_key = _load_master_key()
         results = []
-        for token_b64 in encrypted_metadata_list:
-            decrypted = aes_decrypt_metadata(token_b64, metadata_key_path)
+        for blob_str in encrypted_metadata_list:
+            blob = json.loads(blob_str)
+            agent_id = blob["a"]
+            ct_b64 = blob["c"]
+            agent_dek = derive_agent_key(master_key, agent_id)
+            decrypted = aes_decrypt_metadata(ct_b64, agent_dek)
+            if isinstance(decrypted, bytes):
+                decrypted = decrypted.decode('utf-8')
             results.append(decrypted)
         return json.dumps(results)
     except Exception as e:
