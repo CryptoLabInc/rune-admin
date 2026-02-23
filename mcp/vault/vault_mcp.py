@@ -71,17 +71,32 @@ def ensure_vault():
         return
 
     logger.info(f"Connecting to enVector Cloud ({ENVECTOR_ENDPOINT})...")
-    ev.init(
-        address=ENVECTOR_ENDPOINT,
-        key_path=KEY_DIR,
-        key_id=KEY_ID,
-        dim=EMBEDDING_DIM,
-        eval_mode="rmp",
-        auto_key_setup=True,
-        access_token=ENVECTOR_API_KEY,
-        query_encryption="plain",
-    )
-    logger.info("Key registered on enVector Cloud (auto_key_setup).")
+    try:
+        ev.init(
+            address=ENVECTOR_ENDPOINT,
+            key_path=KEY_DIR,
+            key_id=KEY_ID,
+            dim=EMBEDDING_DIM,
+            eval_mode="rmp",
+            auto_key_setup=True,
+            access_token=ENVECTOR_API_KEY,
+            query_encryption="plain",
+        )
+        logger.info("Key registered on enVector Cloud (auto_key_setup).")
+    except Exception as e:
+        logger.warning(f"auto_key_setup failed (key may already be registered): {e}")
+        logger.info("Retrying with auto_key_setup=False...")
+        ev.init(
+            address=ENVECTOR_ENDPOINT,
+            key_path=KEY_DIR,
+            key_id=KEY_ID,
+            dim=EMBEDDING_DIM,
+            eval_mode="rmp",
+            auto_key_setup=False,
+            access_token=ENVECTOR_API_KEY,
+            query_encryption="plain",
+        )
+        logger.info("Connected to enVector Cloud (auto_key_setup=False).")
 
     # Phase 3: ensure team index
     if not VAULT_INDEX_NAME:
@@ -194,7 +209,7 @@ def _get_public_key_impl(token: str) -> str:
     
     bundle = {}
     for filename in ["EncKey.json", "EvalKey.json"]:
-        path = os.path.join(KEY_DIR, filename)
+        path = os.path.join(KEY_SUBDIR, filename)
         if os.path.exists(path):
             with open(path, "r") as f:
                 bundle[filename] = f.read()
