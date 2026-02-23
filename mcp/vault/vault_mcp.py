@@ -1,6 +1,7 @@
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 import base64
+import functools
 import hashlib
 import heapq
 import hmac
@@ -137,6 +138,7 @@ cipher = Cipher(enc_key_path=enc_key_path, dim=DIM)
 # =============================================================================
 # Per-Agent Metadata Key Derivation
 # =============================================================================
+@functools.lru_cache(maxsize=1)
 def _load_master_key() -> bytes:
     """Load MetadataKey as master key for per-agent DEK derivation."""
     from pyenvector.utils.utils import get_key_stream
@@ -238,7 +240,7 @@ def _get_public_key_impl(token: str) -> str:
     bundle["key_id"] = KEY_ID
 
     # Per-agent metadata DEK: derived from master key + token-based agent_id
-    agent_id = hashlib.sha256(token.encode('utf-8')).hexdigest()[:16]
+    agent_id = hashlib.sha256(token.encode('utf-8')).hexdigest()[:32]
     master_key = _load_master_key()
     agent_dek = derive_agent_key(master_key, agent_id)
     bundle["agent_id"] = agent_id
@@ -252,7 +254,7 @@ mcp = FastMCP("enVector-Vault")
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
 def get_public_key(token: str) -> str:
     """
-    Returns the public key bundle (EncKey, EvalKey).
+    Returns the public key bundle and per-agent metadata DEK.
     This bundle allows the Agent to encrypt data/queries and register keys with the Cloud.
 
     Args:
@@ -262,7 +264,11 @@ def get_public_key(token: str) -> str:
         JSON string containing:
         {
             "EncKey.json": "...",
-            "EvalKey.json": "..."
+            "EvalKey.json": "...",
+            "index_name": "<team index>",
+            "key_id": "<vault key id>",
+            "agent_id": "<128-bit hex agent identifier>",
+            "agent_dek": "<base64 AES-256 DEK for metadata encryption>"
         }
     """
     start_time = time.time()
@@ -402,11 +408,15 @@ def _decrypt_metadata_impl(token: str, encrypted_metadata_list: list[str]) -> st
         master_key = _load_master_key()
         results = []
         for blob_str in encrypted_metadata_list:
-            blob = json.loads(blob_str)
-            agent_id = blob["a"]
-            ct_b64 = blob["c"]
-            agent_dek = derive_agent_key(master_key, agent_id)
-            decrypted = aes_decrypt_metadata(ct_b64, agent_dek)
+            try:
+                blob = json.loads(blob_str)
+                agent_id = blob["a"]
+                ct_b64 = blob["c"]
+                agent_dek = derive_agent_key(master_key, agent_id)
+                decrypted = aes_decrypt_metadata(ct_b64, agent_dek)
+            except (json.JSONDecodeError, KeyError):
+                # Legacy format: plain base64, decrypt with master metadata key
+                decrypted = aes_decrypt_metadata(blob_str, metadata_key_path)
             if isinstance(decrypted, bytes):
                 decrypted = decrypted.decode('utf-8')
             results.append(decrypted)
