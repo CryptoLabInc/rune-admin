@@ -12,16 +12,16 @@ import json
 import base64
 from unittest.mock import MagicMock, patch, call
 
-# Add mcp/vault to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../mcp/vault'))
+# Add vault to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../vault'))
 
-from vault_mcp import (
+from vault_core import (
     derive_agent_key,
     _decrypt_metadata_impl as decrypt_metadata,
     _load_master_key,
     rate_limiter,
 )
-import vault_mcp
+import vault_core
 
 VALID_TOKEN = "TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION"
 
@@ -77,14 +77,14 @@ class TestDecryptMetadataImpl:
     def test_per_agent_envelope_decryption(self, monkeypatch):
         """Per-agent JSON envelope should be parsed and decrypted with derived DEK."""
         fake_master = b"fake-master-key-32-bytes-long!!!"
-        monkeypatch.setattr('vault_mcp._load_master_key', lambda: fake_master)
-        monkeypatch.setattr('vault_mcp.metadata_key_path', '/fake/MetadataKey.json')
+        monkeypatch.setattr('vault_core._load_master_key', lambda: fake_master)
+        monkeypatch.setattr('vault_core.metadata_key_path', '/fake/MetadataKey.json')
         # Make metadata_key_path exist check pass
         monkeypatch.setattr('os.path.exists', lambda p: True)
 
         expected_dek = derive_agent_key(fake_master, "agent123")
         mock_decrypt = MagicMock(return_value=b'{"text": "hello"}')
-        monkeypatch.setattr('vault_mcp.aes_decrypt_metadata', mock_decrypt)
+        monkeypatch.setattr('vault_core.aes_decrypt_metadata', mock_decrypt)
 
         envelope = self._make_envelope("agent123", "Y2lwaGVydGV4dA==")
         result = decrypt_metadata(VALID_TOKEN, [envelope])
@@ -100,12 +100,12 @@ class TestDecryptMetadataImpl:
     def test_legacy_fallback(self, monkeypatch):
         """Plain base64 (non-JSON) should fall back to master metadata key."""
         fake_master = b"fake-master-key-32-bytes-long!!!"
-        monkeypatch.setattr('vault_mcp._load_master_key', lambda: fake_master)
-        monkeypatch.setattr('vault_mcp.metadata_key_path', '/fake/MetadataKey.json')
+        monkeypatch.setattr('vault_core._load_master_key', lambda: fake_master)
+        monkeypatch.setattr('vault_core.metadata_key_path', '/fake/MetadataKey.json')
         monkeypatch.setattr('os.path.exists', lambda p: True)
 
         mock_decrypt = MagicMock(return_value=b'legacy plaintext')
-        monkeypatch.setattr('vault_mcp.aes_decrypt_metadata', mock_decrypt)
+        monkeypatch.setattr('vault_core.aes_decrypt_metadata', mock_decrypt)
 
         # Plain base64 string — not valid JSON envelope
         legacy_blob = base64.b64encode(b"some-encrypted-data").decode()
@@ -122,12 +122,12 @@ class TestDecryptMetadataImpl:
     def test_missing_key_in_envelope_triggers_fallback(self, monkeypatch):
         """JSON without 'a' or 'c' key should fall back to legacy path."""
         fake_master = b"fake-master-key-32-bytes-long!!!"
-        monkeypatch.setattr('vault_mcp._load_master_key', lambda: fake_master)
-        monkeypatch.setattr('vault_mcp.metadata_key_path', '/fake/MetadataKey.json')
+        monkeypatch.setattr('vault_core._load_master_key', lambda: fake_master)
+        monkeypatch.setattr('vault_core.metadata_key_path', '/fake/MetadataKey.json')
         monkeypatch.setattr('os.path.exists', lambda p: True)
 
         mock_decrypt = MagicMock(return_value=b'fallback result')
-        monkeypatch.setattr('vault_mcp.aes_decrypt_metadata', mock_decrypt)
+        monkeypatch.setattr('vault_core.aes_decrypt_metadata', mock_decrypt)
 
         # Valid JSON but missing expected keys
         bad_envelope = json.dumps({"x": "y"})
@@ -140,8 +140,8 @@ class TestDecryptMetadataImpl:
     def test_mixed_envelope_and_legacy(self, monkeypatch):
         """A list mixing per-agent envelopes and legacy blobs should handle both."""
         fake_master = b"fake-master-key-32-bytes-long!!!"
-        monkeypatch.setattr('vault_mcp._load_master_key', lambda: fake_master)
-        monkeypatch.setattr('vault_mcp.metadata_key_path', '/fake/MetadataKey.json')
+        monkeypatch.setattr('vault_core._load_master_key', lambda: fake_master)
+        monkeypatch.setattr('vault_core.metadata_key_path', '/fake/MetadataKey.json')
         monkeypatch.setattr('os.path.exists', lambda p: True)
 
         expected_dek = derive_agent_key(fake_master, "agentABC")
@@ -152,7 +152,7 @@ class TestDecryptMetadataImpl:
             return b'legacy result'
 
         mock_decrypt = MagicMock(side_effect=side_effect)
-        monkeypatch.setattr('vault_mcp.aes_decrypt_metadata', mock_decrypt)
+        monkeypatch.setattr('vault_core.aes_decrypt_metadata', mock_decrypt)
 
         envelope = self._make_envelope("agentABC", "ZW5jcnlwdGVk")
         legacy_blob = "cGxhaW4tYjY0"  # not valid JSON
@@ -166,7 +166,7 @@ class TestDecryptMetadataImpl:
 
     def test_metadata_key_not_found(self, monkeypatch):
         """Missing MetadataKey file should return error."""
-        monkeypatch.setattr('vault_mcp.metadata_key_path', '/nonexistent/MetadataKey.json')
+        monkeypatch.setattr('vault_core.metadata_key_path', '/nonexistent/MetadataKey.json')
         _load_master_key.cache_clear()
 
         result = decrypt_metadata(VALID_TOKEN, ["anything"])
@@ -183,12 +183,12 @@ class TestDecryptMetadataImpl:
     def test_decryption_error_returns_error(self, monkeypatch):
         """If aes_decrypt_metadata raises, should return error JSON."""
         fake_master = b"fake-master-key-32-bytes-long!!!"
-        monkeypatch.setattr('vault_mcp._load_master_key', lambda: fake_master)
-        monkeypatch.setattr('vault_mcp.metadata_key_path', '/fake/MetadataKey.json')
+        monkeypatch.setattr('vault_core._load_master_key', lambda: fake_master)
+        monkeypatch.setattr('vault_core.metadata_key_path', '/fake/MetadataKey.json')
         monkeypatch.setattr('os.path.exists', lambda p: True)
 
         mock_decrypt = MagicMock(side_effect=Exception("decrypt boom"))
-        monkeypatch.setattr('vault_mcp.aes_decrypt_metadata', mock_decrypt)
+        monkeypatch.setattr('vault_core.aes_decrypt_metadata', mock_decrypt)
 
         envelope = self._make_envelope("agent1", "ct_data")
         result = decrypt_metadata(VALID_TOKEN, [envelope])

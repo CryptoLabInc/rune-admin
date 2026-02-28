@@ -1,5 +1,5 @@
 """
-Unit tests for decrypt_scores MCP tool (including Top-K).
+Unit tests for decrypt_scores (including Top-K).
 
 Uses mock-based approach: since we cannot create real CiphertextScore blobs
 without running FHE scoring on an actual index from enVector Cloud, we mock
@@ -14,11 +14,11 @@ import base64
 import numpy as np
 from unittest.mock import MagicMock, patch
 
-# Add mcp/vault to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../mcp/vault'))
+# Add vault to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../vault'))
 
 # Import the implementation function (not the MCP-decorated version)
-from vault_mcp import _decrypt_scores_impl as decrypt_scores, rate_limiter
+from vault_core import _decrypt_scores_impl as decrypt_scores, rate_limiter
 
 
 def _make_fake_blob() -> str:
@@ -47,10 +47,10 @@ class TestDecryptScores:
         """Helper to mock cipher, CiphertextScore, and CipherBlock."""
         mock_cipher = MagicMock()
         mock_cipher.decrypt_score.return_value = scores_return
-        monkeypatch.setattr('vault_mcp.cipher', mock_cipher)
-        monkeypatch.setattr('vault_mcp.sec_key_path', '/fake/SecKey.json')
-        monkeypatch.setattr('vault_mcp.CiphertextScore', MagicMock)
-        monkeypatch.setattr('vault_mcp.CipherBlock', MagicMock)
+        monkeypatch.setattr('vault_core.cipher', mock_cipher)
+        monkeypatch.setattr('vault_core.sec_key_path', '/fake/SecKey.json')
+        monkeypatch.setattr('vault_core.CiphertextScore', MagicMock)
+        monkeypatch.setattr('vault_core.CipherBlock', MagicMock)
 
     def test_decrypt_valid_scores_flat(self, monkeypatch):
         """Valid encrypted scores (FLAT) should decrypt successfully."""

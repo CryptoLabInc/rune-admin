@@ -60,7 +60,7 @@ check_python() {
 setup_vault_dependencies() {
     print_step "Setting up Rune-Vault dependencies..."
     
-    cd mcp/vault
+    cd vault
     
     # Create virtual environment
     if [ ! -d ".venv" ]; then
@@ -80,19 +80,19 @@ setup_vault_dependencies() {
     
     print_info "Dependencies installed successfully!"
     
-    cd ../..
+    cd ..
 }
 
 show_admin_next_steps() {
     print_header "Setup Complete! Next Steps for Admin"
     
     echo "1. Deploy Rune-Vault:"
-    echo "   cd mcp/vault && docker compose up -d"
+    echo "   cd vault && docker compose up -d"
     echo "   Or deploy to cloud: cd deployment/oci && terraform apply"
     echo ""
     echo "2. Share credentials with team members (securely):"
     echo "   - Vault Endpoint (e.g., vault-YOURTEAM.oci.envector.io:50051)"
-    echo "   - Vault Token (set in mcp/vault/.env)"
+    echo "   - Vault Token (set in vault/.env)"
     echo ""
     echo "3. Team members install Rune from Claude Marketplace"
     echo ""

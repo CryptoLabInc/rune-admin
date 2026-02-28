@@ -26,7 +26,8 @@ write_files:
           container_name: rune-vault
           restart: unless-stopped
           ports:
-            - "50080:50080"
+            - "50051:50051"
+            - "9090:9090"
           volumes:
             - ./keys:/vault/keys
             - ./vault_token:/vault/token:ro
@@ -39,7 +40,7 @@ write_files:
             # - ENVECTOR_API_KEY=your-api-key
             # - EMBEDDING_DIM=384
           healthcheck:
-            test: ["CMD", "curl", "-f", "http://localhost:50080/health"]
+            test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
             interval: 30s
             timeout: 10s
             retries: 3
@@ -54,7 +55,7 @@ write_files:
           ssl_certificate_key /etc/letsencrypt/live/vault-${team_name}.oci.envector.io/privkey.pem;
 
           location / {
-              proxy_pass http://localhost:50080;
+              proxy_pass http://localhost:9090;
               proxy_http_version 1.1;
               proxy_set_header Upgrade $http_upgrade;
               proxy_set_header Connection 'upgrade';
@@ -63,7 +64,7 @@ write_files:
           }
 
           location /health {
-              proxy_pass http://localhost:50080/health;
+              proxy_pass http://localhost:9090/health;
               access_log off;
           }
       }

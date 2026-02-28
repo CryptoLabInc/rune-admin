@@ -10,10 +10,10 @@ import numpy as np
 from pathlib import Path
 from unittest.mock import patch
 
-# Add mcp/vault to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../mcp/vault'))
+# Add vault to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../vault'))
 
-from vault_mcp import ensure_keys, KEY_DIR, KEY_ID, DIM
+from vault_core import ensure_vault, KEY_DIR, KEY_ID, DIM
 from pyenvector.crypto import KeyGenerator, Cipher
 
 
@@ -27,9 +27,9 @@ class TestKeyGeneration:
         yield temp_dir
         shutil.rmtree(temp_dir, ignore_errors=True)
     
-    def test_ensure_keys_creates_directory(self, temp_key_dir, monkeypatch):
-        """ensure_keys should create key directory if not exists."""
-        monkeypatch.setattr('vault_mcp.KEY_DIR', temp_key_dir)
+    def test_ensure_vault_creates_directory(self, temp_key_dir, monkeypatch):
+        """ensure_vault should create key directory if not exists."""
+        monkeypatch.setattr('vault_core.KEY_DIR', temp_key_dir)
         
         # Remove directory to test creation
         if os.path.exists(temp_key_dir):
@@ -47,17 +47,17 @@ class TestKeyGeneration:
                     with open(os.path.join(self.key_path, key_name), "w") as f:
                         f.write('{"test": "key"}')
         
-        monkeypatch.setattr('vault_mcp.KeyGenerator', MockKeyGenerator)
+        monkeypatch.setattr('vault_core.KeyGenerator', MockKeyGenerator)
         
         # Import with mocked KeyGenerator
-        from vault_mcp import ensure_keys as ensure_keys_test
-        ensure_keys_test()
+        from vault_core import ensure_vault as ensure_vault_test
+        ensure_vault_test()
         
         assert os.path.exists(temp_key_dir)
     
-    def test_ensure_keys_finds_existing_keys(self, temp_key_dir, monkeypatch):
-        """ensure_keys should detect existing keys."""
-        monkeypatch.setattr('vault_mcp.KEY_DIR', temp_key_dir)
+    def test_ensure_vault_finds_existing_keys(self, temp_key_dir, monkeypatch):
+        """ensure_vault should detect existing keys."""
+        monkeypatch.setattr('vault_core.KEY_DIR', temp_key_dir)
 
         # Create directory and dummy keys
         os.makedirs(temp_key_dir, exist_ok=True)
@@ -66,9 +66,9 @@ class TestKeyGeneration:
 
         # Should log "Keys found" via logger.info (not print)
         import logging
-        from vault_mcp import ensure_keys as ensure_keys_test
-        with patch('vault_mcp.logger') as mock_logger:
-            ensure_keys_test()
+        from vault_core import ensure_vault as ensure_vault_test
+        with patch('vault_core.logger') as mock_logger:
+            ensure_vault_test()
             mock_logger.info.assert_any_call(f"Keys found in {temp_key_dir}")
     
     def test_key_files_have_correct_names(self, temp_key_dir):
@@ -115,7 +115,7 @@ class TestEncryptionDecryption:
         # Decrypt
         decrypted = cipher.decrypt(encrypted, sec_key_path=crypto_keys["sec_key"])
         
-        # Unwrap list if needed (matching vault_mcp logic)
+        # Unwrap list if needed (matching vault_core logic)
         if isinstance(decrypted, list) and len(decrypted) > 0:
             if isinstance(decrypted[0], list) or isinstance(decrypted[0], np.ndarray):
                 decrypted = decrypted[0]

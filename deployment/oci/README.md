@@ -105,7 +105,7 @@ export RUNEVAULT_TOKEN=$(terraform output -raw vault_token)
 │  │  │  │ - 1 OCPU, 4GB RAM     │  │  │  │
 │  │  │  │                       │  │  │  │
 │  │  │  │ Docker:               │  │  │  │
-│  │  │  │ └─ rune-vault:50080   │  │  │  │
+│  │  │  │ └─ rune-vault:50051   │  │  │  │
 │  │  │  │                       │  │  │  │
 │  │  │  │ Nginx (SSL):443       │  │  │  │
 │  │  │  └───────────────────────┘  │  │  │
@@ -127,7 +127,7 @@ export RUNEVAULT_TOKEN=$(terraform output -raw vault_token)
    - VCN (Virtual Cloud Network)
    - Public subnet
    - Internet Gateway
-   - Security List (ports 443, 50080, 22)
+   - Security List (ports 443, 50051, 9090, 22)
 
 2. **Compute**:
    - VM.Standard.E4.Flex (1 OCPU, 4GB RAM)
@@ -136,7 +136,7 @@ export RUNEVAULT_TOKEN=$(terraform output -raw vault_token)
    - Nginx with SSL (Let's Encrypt)
 
 3. **Rune-Vault**:
-   - Docker container running on port 50080
+   - Docker container running on ports 50051 (gRPC) and 9090 (metrics/health)
    - Reverse proxy through Nginx (443)
    - **TLS encryption** for all API communications
    - Health checks enabled

@@ -28,7 +28,7 @@ if _version_not_supported:
 class VaultServiceStub(object):
     """Rune-Vault gRPC service.
     Holds the FHE secret key and performs all decryption operations.
-    Phase 1: dual-stack alongside FastMCP HTTP/SSE (port 50080).
+    gRPC-only transport on port 50051.
     """
 
     def __init__(self, channel):
@@ -57,7 +57,7 @@ class VaultServiceStub(object):
 class VaultServiceServicer(object):
     """Rune-Vault gRPC service.
     Holds the FHE secret key and performs all decryption operations.
-    Phase 1: dual-stack alongside FastMCP HTTP/SSE (port 50080).
+    gRPC-only transport on port 50051.
     """
 
     def GetPublicKey(self, request, context):
@@ -110,7 +110,7 @@ def add_VaultServiceServicer_to_server(servicer, server):
 class VaultService(object):
     """Rune-Vault gRPC service.
     Holds the FHE secret key and performs all decryption operations.
-    Phase 1: dual-stack alongside FastMCP HTTP/SSE (port 50080).
+    gRPC-only transport on port 50051.
     """
 
     @staticmethod

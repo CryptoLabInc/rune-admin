@@ -110,8 +110,8 @@ terraform apply
 ./scripts/vault-dev.sh
 
 # Output:
-# Vault MCP:  http://localhost:50080
-# Vault gRPC: localhost:50051
+# Vault gRPC:   localhost:50051
+# Vault Health:  http://localhost:9090/health
 # Token: demo_token_123 (INSECURE - development only!)
 ```
 

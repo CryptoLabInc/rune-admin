@@ -77,13 +77,13 @@ resource "google_compute_firewall" "vault_https" {
   target_tags   = ["rune-vault"]
 }
 
-resource "google_compute_firewall" "vault_mcp" {
-  name    = "rune-vault-mcp-${var.team_name}"
+resource "google_compute_firewall" "vault_metrics" {
+  name    = "rune-vault-metrics-${var.team_name}"
   network = google_compute_network.vault_network.name
 
   allow {
     protocol = "tcp"
-    ports    = ["50080"]
+    ports    = ["9090"]
   }
 
   source_ranges = ["0.0.0.0/0"]

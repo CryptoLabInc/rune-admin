@@ -41,7 +41,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
                    │              │ (called by remember)
                    ▼              ▼
   ┌──────────────────────┐  ┌────────────────────────────┐
-  │ enVector Cloud(SaaS) │  │      Rune-Vault MCP        │
+  │ enVector Cloud(SaaS) │  │        Rune-Vault           │
   │  https://envector.io │  │  (Your Infrastructure)     │
   │                      │  │                            │
   │  - Encrypted vectors │  │  ┌──────────────────────┐  │
@@ -83,9 +83,9 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 - **On-Premise** (Self-hosted)
 
 **Runtime**:
-- Python 3.12 dual-stack server
-- gRPC server on port 50051 (primary — used by envector-mcp-server)
-- FastMCP/uvicorn on port 50080 (legacy MCP compatibility)
+- Python 3.12 gRPC server
+- gRPC server on port 50051 (used by envector-mcp-server)
+- HTTP health/metrics endpoint on port 9090
 - Prometheus metrics exporter
 - System monitoring (psutil)
 
@@ -287,7 +287,7 @@ indiscriminately decrypting shared vectors.
 
 **Why Secret Key Never Leaves Vault**:
 - **Principle**: Decryption capability = highest privilege
-- **Constraint**: Only Vault MCP has secret key, no export API
+- **Constraint**: Only Vault has secret key, no export API
 - **Benefit**: Even if client compromised, attacker cannot decrypt historical data
 
 **Key Distribution**:
@@ -338,7 +338,6 @@ Cloud Resources Created
     │   ├── Shape: 2 OCPU, 8GB RAM, 50GB disk
     │   └── Software:
     │       ├── Python 3.12
-    │       ├── FastMCP
     │       ├── pyenvector (FHE SDK)
     │       └── Prometheus exporter
     │
@@ -394,7 +393,7 @@ terraform apply -var="ha_enabled=true" \
 ```bash
 # Automated backup (run daily via cron)
 # Manually back up vault keys
-tar czf vault_keys_backup_$(date +%Y-%m-%d).tar.gz mcp/vault/vault_keys/
+tar czf vault_keys_backup_$(date +%Y-%m-%d).tar.gz vault/vault_keys/
 
 # Output:
 # vault_keys_backup_2026-02-04.tar.gz.enc

@@ -4,11 +4,11 @@ This directory contains MCP (Model Context Protocol) server implementations for 
 
 ## Available Servers
 
-### Vault MCP
+### Rune-Vault (gRPC Server)
 
 **Purpose:** FHE key management and decryption (secret key holder)
 
-**Location:** `vault/`
+**Location:** [`../vault/`](../vault/) (moved out of `mcp/` — Vault is a gRPC service, not an MCP server)
 
 **Features:**
 - Manages FHE encryption keys (team-shared)
@@ -17,7 +17,7 @@ This directory contains MCP (Model Context Protocol) server implementations for 
 - Runs in isolated environment (TEE/secure network)
 - Never exposes secret key to agents or other services
 
-**Documentation:** [vault/README.md](vault/README.md)
+**Documentation:** [../vault/README.md](../vault/README.md)
 
 **Deployment:**
 ```bash
@@ -52,7 +52,7 @@ This directory contains MCP (Model Context Protocol) server implementations for 
 ```bash
 # With Rune-Vault integration
 python envector-mcp-server/srcs/server.py \
-  --vault-endpoint "vault-mcp:50051" \
+  --vault-endpoint "vault:50051" \
   --vault-token "your-token" \
   --no-auto-key-setup
 ```
@@ -66,7 +66,7 @@ MCP (Model Context Protocol) is a standard protocol for AI agents to communicate
 ```
 ┌──────────┐        ┌─────────────────┐        ┌──────────┐
 │  Agent   │        │ envector-mcp    │        │  Vault   │
-│          │        │    server       │        │   MCP    │
+│          │        │    server       │        │  (gRPC)  │
 └──────────┘        └─────────────────┘        └──────────┘
      │                      │                        │
      │                      │  1. get_public_key     │
@@ -117,7 +117,7 @@ orchestrates Vault decryption as part of its 3-step pipeline.
 }
 ```
 
-**Vault MCP: Decrypt Tool Call:**
+**Vault gRPC: Decrypt Scores Call:**
 ```json
 {
   "jsonrpc": "2.0",
@@ -472,7 +472,7 @@ print(result)
 
 ## Next Steps
 
-- Review [Vault MCP documentation](vault/README.md)
+- Review [Vault documentation](../vault/README.md)
 - Learn [system architecture](../docs/ARCHITECTURE.md)
 - Try [deployment scripts](../scripts/)
 - Join community discussions

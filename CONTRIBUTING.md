@@ -85,7 +85,7 @@ pytest tests/unit/ -v
 pytest tests/unit/test_crypto.py -v
 
 # With coverage
-pytest tests/unit/ --cov=mcp/vault --cov-report=html
+pytest tests/unit/ --cov=vault --cov-report=html
 
 # Integration tests (requires Vault setup)
 pytest tests/integration/ -v
@@ -151,12 +151,12 @@ def validate_token(token: str) -> None:
 ### Local Testing
 
 ```bash
-# Test MCP server locally
-cd mcp/vault
-python vault_mcp.py
+# Test Vault server locally
+cd vault
+python vault_grpc_server.py
 
-# In another terminal, test endpoints
-curl http://localhost:50080/health
+# In another terminal, test health endpoint
+curl http://localhost:9090/health
 ```
 
 ### Platform Testing
@@ -242,13 +242,12 @@ Closes #123
 
 ```
 rune-admin/
-├── mcp/
-│   └── vault/              # Vault MCP server
-│       ├── vault_mcp.py    # Main server code
-│       ├── vault_grpc_server.py  # gRPC interface
-│       ├── monitoring.py   # Health & metrics endpoints
-│       ├── demo_local.py   # Local testing demo
-│       └── verify_crypto_flow.py  # Crypto verification
+├── vault/                  # Rune-Vault gRPC server
+│   ├── vault_core.py       # Core business logic
+│   ├── vault_grpc_server.py  # gRPC entry point
+│   ├── monitoring.py       # Health & metrics endpoints
+│   ├── demo_local.py       # Local testing demo
+│   └── verify_crypto_flow.py  # Crypto verification
 ├── deployment/
 │   ├── oci/               # Oracle Cloud deployment
 │   ├── aws/               # AWS deployment
@@ -265,7 +264,7 @@ rune-admin/
 
 ## Key Components
 
-- **vault_mcp.py**: MCP server exposing Vault operations
+- **vault_core.py**: Core business logic for Vault operations
 - **Deployment scripts**: Platform-specific deployment automation
 - **Test suite**: Comprehensive testing of all functionality
 - **Documentation**: Admin guides and architecture details

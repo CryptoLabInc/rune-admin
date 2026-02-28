@@ -54,13 +54,13 @@ log_info "Starting local development Vault..."
 log_warn "This is for TESTING ONLY. DO NOT use in production!"
 
 # Try Docker Compose first (preferred)
-if [ -f "$ADMIN_DIR/mcp/vault/docker-compose.yml" ]; then
-    cd "$ADMIN_DIR/mcp/vault"
+if [ -f "$ADMIN_DIR/vault/docker-compose.yml" ]; then
+    cd "$ADMIN_DIR/vault"
 
     # Build if image doesn't exist
     if ! docker images | grep -q "rune-vault"; then
         log_info "Building rune-vault image..."
-        docker compose build vault-mcp
+        docker compose build vault
     fi
 
     log_info "Starting Vault via Docker Compose..."
@@ -68,34 +68,34 @@ if [ -f "$ADMIN_DIR/mcp/vault/docker-compose.yml" ]; then
     ENVECTOR_ENDPOINT="$ENVECTOR_ENDPOINT" \
     ENVECTOR_API_KEY="$ENVECTOR_API_KEY" \
     EMBEDDING_DIM="$EMBEDDING_DIM" \
-    docker compose up -d vault-mcp
+    docker compose up -d vault
 
     # Wait for Vault to be ready
     log_info "Waiting for Vault to be ready..."
     for i in $(seq 1 30); do
-        if curl -s http://localhost:50080/health > /dev/null 2>&1; then
+        if curl -s http://localhost:9090/health > /dev/null 2>&1; then
             break
         fi
         sleep 1
     done
 
-    if curl -s http://localhost:50080/health > /dev/null 2>&1; then
+    if curl -s http://localhost:9090/health > /dev/null 2>&1; then
         log_info "Vault is running!"
     else
-        log_warn "Vault may not be ready yet. Check: docker logs vault-mcp"
+        log_warn "Vault may not be ready yet. Check: docker logs vault"
     fi
 
     echo ""
     echo -e "${GREEN}Local Development Vault Started!${NC}"
     echo ""
-    echo -e "${YELLOW}Endpoint:${NC} http://localhost:50080"
+    echo -e "${YELLOW}Endpoint:${NC} http://localhost:9090"
     echo -e "${YELLOW}Token:${NC} $DEMO_TOKEN"
     echo ""
     echo "Export these for testing:"
-    echo "  export RUNEVAULT_ENDPOINT=\"http://localhost:50080\""
+    echo "  export RUNEVAULT_ENDPOINT=\"http://localhost:9090\""
     echo "  export RUNEVAULT_TOKEN=\"$DEMO_TOKEN\""
     echo ""
-    echo "Stop with: cd mcp/vault && docker compose down"
+    echo "Stop with: cd vault && docker compose down"
     exit 0
 fi
 
@@ -108,19 +108,19 @@ if [ ! -d "$VENV_PATH" ]; then
     python3 -m venv "$VENV_PATH"
     source "$VENV_PATH/bin/activate"
     log_info "Installing dependencies..."
-    pip install -q -r "$ADMIN_DIR/mcp/vault/requirements.txt"
+    pip install -q -r "$ADMIN_DIR/vault/requirements.txt"
 else
     log_info "Using existing virtual environment..."
     source "$VENV_PATH/bin/activate"
 fi
 
-cd "$ADMIN_DIR/mcp/vault"
-log_info "Starting Vault MCP server on http://localhost:50080..."
+cd "$ADMIN_DIR/vault"
+log_info "Starting Vault gRPC server on localhost:50051..."
 VAULT_INDEX_NAME="$VAULT_INDEX_NAME" \
 ENVECTOR_ENDPOINT="$ENVECTOR_ENDPOINT" \
 ENVECTOR_API_KEY="$ENVECTOR_API_KEY" \
 EMBEDDING_DIM="$EMBEDDING_DIM" \
-python3 vault_mcp.py server --port 50080 --host 127.0.0.1 &
+python3 vault_grpc_server.py --host 127.0.0.1 --grpc-port 50051 --metrics-port 9090 &
 VAULT_PID=$!
 
 sleep 3
@@ -128,12 +128,12 @@ sleep 3
 echo ""
 echo -e "${GREEN}Local Development Vault Started (Python)!${NC}"
 echo ""
-echo -e "${YELLOW}Endpoint:${NC} http://localhost:50080"
+echo -e "${YELLOW}Endpoint:${NC} http://localhost:9090"
 echo -e "${YELLOW}Token:${NC} $DEMO_TOKEN"
 echo -e "${YELLOW}PID:${NC} $VAULT_PID"
 echo ""
 echo "Export these for testing:"
-echo "  export RUNEVAULT_ENDPOINT=\"http://localhost:50080\""
+echo "  export RUNEVAULT_ENDPOINT=\"http://localhost:9090\""
 echo "  export RUNEVAULT_TOKEN=\"$DEMO_TOKEN\""
 echo ""
 echo "Stop with: kill $VAULT_PID"

@@ -6,11 +6,11 @@ import pickle
 import base64
 import json
 
-# Adjust path to import vault_mcp
+# Adjust path to import vault_core
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    import vault_mcp
+    import vault_core
     from pyenvector.crypto import Cipher
 except ImportError as e:
     print(f"Error importing modules: {e}")
@@ -23,7 +23,7 @@ def run_demo():
     print("\n[Agent] Requesting Public Key Bundle (EncKey, EvalKey)...")
     # Using a valid token issued by Admin
     token = "TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION"
-    bundle_json = vault_mcp.get_public_key(token=token)
+    bundle_json = vault_core.get_public_key(token=token)
     key_bundle = json.loads(bundle_json)
     
     print(f"  Got Bundle with keys: {list(key_bundle.keys())}")
@@ -78,7 +78,7 @@ def run_demo():
     # 4. Agent: Request Decryption from Vault
     print("\n[Agent] Sending Encrypted Blob to Vault for Decryption (Top-K=3)...")
     try:
-        json_result = vault_mcp.decrypt_scores(token=token, encrypted_blob_b64=blob_b64, top_k=3)
+        json_result = vault_core.decrypt_scores(token=token, encrypted_blob_b64=blob_b64, top_k=3)
         results = json.loads(json_result)
         
         print("\n[Vault] Decrypted & Filtered Results:")

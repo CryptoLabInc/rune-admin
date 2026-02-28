@@ -161,7 +161,7 @@ deploy_on_premise() {
 
     RUNEVAULT_ENDPOINT="https://vault.${TEAM_NAME}.internal"
 
-    log_info "Using deployment configuration from: mcp/vault/"
+    log_info "Using deployment configuration from: vault/"
 
     # Check if Docker is installed and accessible
     if ! command -v docker &> /dev/null; then
@@ -178,12 +178,12 @@ deploy_on_premise() {
     RUNEVAULT_TOKEN="evt_${TEAM_NAME}_$(openssl rand -hex 32)"
 
     # Write token to .env
-    cd mcp/vault
+    cd vault
     echo "VAULT_TOKENS=$RUNEVAULT_TOKEN" > .env.production
     chmod 600 .env.production
 
     # Deploy using Docker Compose
-    docker compose --env-file .env.production up -d vault-mcp
+    docker compose --env-file .env.production up -d vault
 
     log_info "✓ Vault deployed successfully!"
     echo ""

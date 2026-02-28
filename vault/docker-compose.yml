@@ -1,15 +1,15 @@
 services:
-  vault-mcp:
+  vault:
     build:
       context: .
       dockerfile: Dockerfile
     image: rune-vault:latest
-    container_name: vault-mcp
+    container_name: rune-vault
 
     volumes:
       - vault-keys:/app/vault_keys:rw
       - ./backups:/secure/backups:rw
-      - ./logs:/var/log/vault-mcp:rw
+      - ./logs:/var/log/rune-vault:rw
 
     environment:
       - VAULT_TOKENS=${VAULT_TOKENS:-}
@@ -22,8 +22,8 @@ services:
       - vault-net
 
     ports:
-      - "127.0.0.1:50080:50080"
       - "127.0.0.1:50051:50051"
+      - "127.0.0.1:9090:9090"
 
     security_opt:
       - no-new-privileges:true
@@ -31,7 +31,7 @@ services:
     restart: unless-stopped
 
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:50080/health')"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9090/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -55,7 +55,7 @@ services:
   ngrok:
     image: ngrok/ngrok:latest
     container_name: vault-ngrok
-    command: tcp vault-mcp:50051 --log stdout
+    command: tcp vault:50051 --log stdout
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
     networks:
@@ -63,7 +63,7 @@ services:
     ports:
       - "127.0.0.1:4040:4040"
     depends_on:
-      vault-mcp:
+      vault:
         condition: service_healthy
     restart: unless-stopped
 

@@ -3,37 +3,37 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vault-mcp
+  name: rune-vault
 spec:
   replicas: 2  # warm standby
   selector:
     matchLabels:
-      app: vault-mcp
+      app: rune-vault
   template:
     metadata:
       labels:
-        app: vault-mcp
+        app: rune-vault
     spec:
       containers:
-      - name: vault-mcp
-        image: envector/vault-mcp:latest
-        
+      - name: rune-vault
+        image: envector/rune-vault:latest
+
         volumeMounts:
         - name: keys
           mountPath: /secure/keys
           readOnly: false
-        
+
         env:
         - name: VAULT_ENCRYPTION_KEY
           valueFrom:
             secretKeyRef:
               name: vault-secrets
               key: encryption-key
-        
+
         ports:
-        - containerPort: 50080
-          protocol: TCP
         - containerPort: 50051
+          protocol: TCP
+        - containerPort: 9090
           protocol: TCP
 
         readinessProbe:
@@ -42,6 +42,12 @@ spec:
           initialDelaySeconds: 5
           periodSeconds: 10
 
+        livenessProbe:
+          grpc:
+            port: 50051
+          initialDelaySeconds: 10
+          periodSeconds: 20
+
         resources:
           requests:
             memory: "512Mi"
@@ -49,18 +55,18 @@ spec:
           limits:
             memory: "1Gi"
             cpu: "1000m"
-        
+
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
           readOnlyRootFilesystem: true
           allowPrivilegeEscalation: false
-      
+
       volumes:
       - name: keys
         persistentVolumeClaim:
           claimName: vault-keys-pvc
-      
+
       # Anti-affinity: Don't run both replicas on same node
       affinity:
         podAntiAffinity:
@@ -70,5 +76,5 @@ spec:
               - key: app
                 operator: In
                 values:
-                - vault-mcp
+                - rune-vault
             topologyKey: kubernetes.io/hostname
