@@ -164,11 +164,12 @@ rune-admin/
 │   ├── aws/           # AWS deployment
 │   ├── gcp/           # GCP deployment
 │   └── monitoring/    # Grafana + Prometheus
-├── mcp/
-│   └── vault/         # Rune-Vault MCP server
-│       ├── run_vault.sh        # Local dev script
-│       ├── verify_crypto_flow.py  # Crypto validation
-│       └── vault_keys/         # Generated FHE keys
+├── vault/             # Rune-Vault gRPC server
+│   ├── vault_core.py          # Core business logic
+│   ├── vault_grpc_server.py   # gRPC entry point
+│   ├── monitoring.py          # Health & metrics
+│   ├── run_vault.sh           # Local dev script
+│   └── vault_keys/            # Generated FHE keys
 ├── scripts/
 │   ├── deploy-vault.sh        # Automated deployment
 │   ├── vault-dev.sh           # Local Vault for testing
@@ -344,8 +345,8 @@ export RUNEVAULT_TOKEN="evt_xxx"
 ./scripts/vault-dev.sh
 
 # Output:
-# Vault MCP:  http://localhost:50080
-# Vault gRPC: localhost:50051
+# Vault gRPC:   localhost:50051
+# Vault Health:  http://localhost:9090/health
 # Token: demo_token_123 (INSECURE!)
 ```
 

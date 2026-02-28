@@ -5,6 +5,25 @@ All notable changes to Rune-Admin will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-02-28
+
+### Changed - Remove FastMCP, Pure gRPC Vault
+- **Directory restructure**: Moved `mcp/vault/` to `vault/` — Vault is a gRPC service, not an MCP server
+- **Extract business logic**: Created `vault_core.py` with all core logic (key management, auth, decryption)
+- **Sole entry point**: `vault_grpc_server.py` is now the only server entry point with CLI args (`--host`, `--grpc-port`, `--metrics-port`)
+- **Rewrite monitoring**: Replaced starlette-based monitoring with stdlib `http.server` on port 9090
+- **Port change**: Health/metrics endpoint moved from port 50080 to port 9090
+
+### Removed
+- `vault_mcp.py` — FastMCP wrapper removed; business logic extracted to `vault_core.py`
+- `fastmcp` and `uvicorn` dependencies
+- Port 50080 (legacy MCP HTTP endpoint) — no clients used it
+
+### Updated
+- All Docker, Kubernetes, and cloud deployment files (OCI/AWS/GCP) updated for new ports and entry point
+- All tests updated: path `mcp/vault` → `vault`, module `vault_mcp` → `vault_core`
+- Scripts, documentation, and README updated to reflect new structure
+
 ## [0.3.0] - 2026-02-04
 
 ### Changed - Infrastructure Focus

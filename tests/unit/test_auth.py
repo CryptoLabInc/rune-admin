@@ -6,10 +6,10 @@ import sys
 import os
 import time
 
-# Add mcp/vault to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../mcp/vault'))
+# Add vault to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../vault'))
 
-from vault_mcp import validate_token, VALID_TOKENS, rate_limiter, RateLimiter
+from vault_core import validate_token, VALID_TOKENS, rate_limiter, RateLimiter
 
 # Demo tokens used when VAULT_TOKENS env var is not set
 DEMO_TOKEN = "TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION"
@@ -142,9 +142,9 @@ class TestRateLimiter:
         """validate_token should enforce rate limiting."""
         # Create a fresh rate limiter with low limit for testing
         test_limiter = RateLimiter(max_requests=2, window_seconds=60)
-        import vault_mcp
-        original_limiter = vault_mcp.rate_limiter
-        vault_mcp.rate_limiter = test_limiter
+        import vault_core
+        original_limiter = vault_core.rate_limiter
+        vault_core.rate_limiter = test_limiter
 
         try:
             validate_token(DEMO_TOKEN)
@@ -152,4 +152,4 @@ class TestRateLimiter:
             with pytest.raises(ValueError, match="Rate limit exceeded"):
                 validate_token(DEMO_TOKEN)
         finally:
-            vault_mcp.rate_limiter = original_limiter
+            vault_core.rate_limiter = original_limiter

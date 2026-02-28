@@ -127,8 +127,8 @@ resource "oci_core_security_list" "vault_security_list" {
     source   = "0.0.0.0/0"
 
     tcp_options {
-      min = 50080
-      max = 50080
+      min = 9090
+      max = 9090
     }
   }
 }

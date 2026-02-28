@@ -134,13 +134,13 @@ resource "aws_security_group" "vault_sg" {
     description = "HTTPS (public)"
   }
 
-  # Vault MCP (fallback, if SSL not configured)
+  # Vault metrics/health (HTTP)
   ingress {
-    from_port   = 50080
-    to_port     = 50080
+    from_port   = 9090
+    to_port     = 9090
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-    description = "Vault MCP (fallback)"
+    description = "Vault metrics and health"
   }
 
   # SSH

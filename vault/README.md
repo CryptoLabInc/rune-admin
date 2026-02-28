@@ -1,10 +1,10 @@
 # Rune-Vault
 
-This directory contains the Rune-Vault server — a **dual-stack service** (gRPC + MCP) that holds FHE secret keys and performs all decryption operations.
+This directory contains the Rune-Vault server — a **gRPC service** that holds FHE secret keys and performs all decryption operations.
 
 ## Architecture
 
-*   **Vault**: A dual-stack server (gRPC on port 50051, MCP/HTTP on port 50080) that holds `SecKey.json`.
+*   **Vault**: A gRPC server (port 50051) with a metrics/health HTTP endpoint (port 9090) that holds `SecKey.json`.
 *   **envector-mcp-server**: Communicates with Vault via **gRPC** for key fetching and decryption (the `remember` pipeline).
 *   **Security**: The Agent NEVER sees the secret key. All decryption is delegated to Vault.
 
@@ -31,10 +31,10 @@ Edit `.env` and fill in the required values:
 
 ```bash
 # Build image and start Vault
-docker compose up -d vault-mcp
+docker compose up -d vault
 
 # Check logs
-docker logs -f vault-mcp
+docker logs -f rune-vault
 ```
 
 FHE keys (`EncKey.json`, `SecKey.json`, etc.) are generated automatically on first run and persisted in the `vault-keys` Docker volume.
@@ -57,7 +57,7 @@ The assigned address (e.g. `0.tcp.jp.ngrok.io:12345`) is your public gRPC endpoi
 
 ```bash
 # Health check (HTTP)
-curl http://localhost:50080/health
+curl http://localhost:9090/health
 
 # gRPC health check
 grpcurl -plaintext localhost:50051 grpc.health.v1.Health/Check
@@ -79,11 +79,11 @@ docker compose build         # rebuild after code changes
 <summary>Click to expand</summary>
 
 ```bash
-python3.12 -m venv ../../.vault_venv
-source ../../.vault_venv/bin/activate
+python3.12 -m venv ../.vault_venv
+source ../.vault_venv/bin/activate
 pip install -r requirements.txt
 
-python3 vault_mcp.py server --host 0.0.0.0 --port 50080 --grpc-port 50051
+python3 vault_grpc_server.py --host 0.0.0.0 --grpc-port 50051 --metrics-port 9090
 ```
 
 </details>
@@ -91,10 +91,10 @@ python3 vault_mcp.py server --host 0.0.0.0 --port 50080 --grpc-port 50051
 ## Authentication
 This Vault requires simple Token-based authentication.
 *   **Valid Tokens**: Configured via `VAULT_TOKENS` environment variable (comma-separated).
-*   **Mechanism**: Token passed per request (gRPC message field or MCP tool argument).
+*   **Mechanism**: Token passed per gRPC request message field.
 *   *Note: In a real deployment, tokens would be validated against a database or OAuth provider.*
 
-## gRPC Service (Primary — used by envector-mcp-server)
+## gRPC Service (used by envector-mcp-server)
 
 Defined in `proto/vault_service.proto` (`rune.vault.v1.VaultService`):
 
@@ -111,15 +111,8 @@ Decrypts AES-encrypted metadata strings using Vault's MetadataKey.
 ### Health Check
 Standard `grpc.health.v1.Health` protocol on port 50051.
 
-## MCP Tools (Legacy — kept for backward compatibility)
-
-The same operations are also available as MCP tools on port 50080:
-
-### `get_public_key(token)` / `decrypt_scores(token, encrypted_blob_b64, top_k)` / `decrypt_metadata(token, encrypted_metadata_list)`
-Same as gRPC RPCs above, but over MCP/HTTP transport with JSON string returns.
-
 ## Implementation Details
 *   **Crypto**: Uses real `pyenvector` SDK (FHE).
-*   **Transport**: gRPC with protobuf (primary), MCP/HTTP with JSON (legacy).
+*   **Transport**: gRPC with protobuf.
 *   **Max message size**: 256 MB (EvalKey can be tens of MB).
-*   **Monitoring**: Prometheus metrics at `/metrics`, health check at `/health`.
+*   **Monitoring**: Prometheus metrics at `:9090/metrics`, health check at `:9090/health`.

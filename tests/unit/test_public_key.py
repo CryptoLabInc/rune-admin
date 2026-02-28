@@ -1,5 +1,5 @@
 """
-Unit tests for get_public_key MCP tool.
+Unit tests for get_public_key.
 """
 import pytest
 import sys
@@ -9,12 +9,12 @@ import tempfile
 import shutil
 from pathlib import Path
 
-# Add mcp/vault to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../mcp/vault'))
+# Add vault to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../vault'))
 
-# Import the implementation function (not the MCP-decorated version)
-from vault_mcp import _get_public_key_impl as get_public_key, rate_limiter
-import vault_mcp
+# Import the implementation function
+from vault_core import _get_public_key_impl as get_public_key, rate_limiter
+import vault_core
 from pyenvector.crypto import KeyGenerator
 
 
@@ -39,12 +39,12 @@ class TestGetPublicKey:
     def patch_vault_paths(self, test_keys, monkeypatch):
         """Patch vault paths to point to test-generated keys."""
         # KeyGenerator creates files directly in key_path (not in a subdirectory)
-        monkeypatch.setattr('vault_mcp.KEY_SUBDIR', test_keys)
-        monkeypatch.setattr('vault_mcp.metadata_key_path',
+        monkeypatch.setattr('vault_core.KEY_SUBDIR', test_keys)
+        monkeypatch.setattr('vault_core.metadata_key_path',
                             os.path.join(test_keys, "MetadataKey.json"))
         # Mock _load_master_key so it doesn't hit real get_key_stream
-        vault_mcp._load_master_key.cache_clear()
-        monkeypatch.setattr('vault_mcp._load_master_key',
+        vault_core._load_master_key.cache_clear()
+        monkeypatch.setattr('vault_core._load_master_key',
                             lambda: b'test-master-key-for-public-key!!')
     
     def test_valid_token_returns_bundle(self, test_keys):
@@ -85,7 +85,7 @@ class TestGetPublicKey:
     def test_missing_key_file_handled(self, test_keys, monkeypatch):
         """Missing key files should be handled gracefully."""
         temp_dir = tempfile.mkdtemp(prefix="test_missing_")
-        monkeypatch.setattr('vault_mcp.KEY_SUBDIR', temp_dir)
+        monkeypatch.setattr('vault_core.KEY_SUBDIR', temp_dir)
 
         # Create only EncKey
         with open(os.path.join(temp_dir, "EncKey.json"), "w") as f:

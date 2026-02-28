@@ -1,5 +1,10 @@
-from fastmcp import FastMCP
-from mcp.types import ToolAnnotations
+"""
+Rune-Vault Core Business Logic
+
+Pure business logic for FHE key management, authentication, and decryption.
+No transport layer (MCP, gRPC) — consumed by vault_grpc_server.py.
+"""
+
 import base64
 import functools
 import hashlib
@@ -20,7 +25,6 @@ try:
     from pyenvector.proto_gen.v2.common.type_pb2 import CiphertextScore
 except ModuleNotFoundError:
     from pyenvector.proto_gen.type_pb2 import CiphertextScore
-import asyncio
 
 try:
     import monitoring
@@ -211,19 +215,21 @@ def validate_token(token: str):
     if token not in VALID_TOKENS:
         raise ValueError("Access Denied: Invalid authentication token")
 
-# Core Business Logic (testable without MCP framework)
+# =============================================================================
+# Core Business Logic
+# =============================================================================
 def _get_public_key_impl(token: str) -> str:
     """
     Core implementation: Returns the public key bundle.
-    
+
     Args:
         token: Authentication token issued by Vault Admin.
-        
+
     Returns:
         JSON string containing EncKey, EvalKey.
     """
     validate_token(token)
-    
+
     bundle = {}
     for filename in ["EncKey.json", "EvalKey.json"]:
         path = os.path.join(KEY_SUBDIR, filename)
@@ -231,7 +237,7 @@ def _get_public_key_impl(token: str) -> str:
             with open(path, "r") as f:
                 bundle[filename] = f.read()
         else:
-            # Should not happen if ensure_keys ran
+            # Should not happen if ensure_vault ran
             pass
 
     # Include team index name and key_id so clients discover them dynamically
@@ -247,50 +253,6 @@ def _get_public_key_impl(token: str) -> str:
     bundle["agent_dek"] = base64.b64encode(agent_dek).decode('ascii')
 
     return json.dumps(bundle)
-
-# MCP Server
-mcp = FastMCP("enVector-Vault")
-
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
-def get_public_key(token: str) -> str:
-    """
-    Returns the public key bundle and per-agent metadata DEK.
-    This bundle allows the Agent to encrypt data/queries and register keys with the Cloud.
-
-    Args:
-        token: Authentication token issued by Vault Admin.
-
-    Returns:
-        JSON string containing:
-        {
-            "EncKey.json": "...",
-            "EvalKey.json": "...",
-            "index_name": "<team index>",
-            "key_id": "<vault key id>",
-            "agent_id": "<128-bit hex agent identifier>",
-            "agent_dek": "<base64 AES-256 DEK for metadata encryption>"
-        }
-    """
-    start_time = time.time()
-    status = "success"
-    try:
-        result = _get_public_key_impl(token)
-        # Check for soft errors in JSON response
-        try:
-             data = json.loads(result)
-             if isinstance(data, dict) and "error" in data:
-                 status = "error"
-        except Exception:
-             pass
-        return result
-    except Exception:
-        status = "error"
-        raise
-    finally:
-        if MONITORING_AVAILABLE:
-            duration = time.time() - start_time
-            monitoring.vault_requests_total.labels(method="get_public_key", endpoint="tool", status=status).inc()
-            monitoring.vault_request_duration.labels(method="get_public_key", endpoint="tool").observe(duration)
 
 def _decrypt_scores_impl(token: str, encrypted_blob_b64: str, top_k: int = 5) -> str:
     """
@@ -350,41 +312,6 @@ def _decrypt_scores_impl(token: str, encrypted_blob_b64: str, top_k: int = 5) ->
     except Exception as e:
         return json.dumps({"error": str(e)})
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
-def decrypt_scores(token: str, encrypted_blob_b64: str, top_k: int = 5) -> str:
-    """
-    Decrypts a blob of encrypted scores using the Vault's Secret Key.
-    Applies Top-K filtering and returns the result.
-
-    Args:
-        token: Authentication token issued by Vault Admin.
-        encrypted_blob_b64: Base64 string of the serialized CipherBlock (Query) from the Cloud.
-        top_k: Number of top results to return (max 10 allowed).
-
-    Returns:
-        JSON string containing the list of scores (and implicitly indices).
-    """
-    start_time = time.time()
-    status = "success"
-    try:
-        result = _decrypt_scores_impl(token, encrypted_blob_b64, top_k)
-        # Check for soft errors
-        try:
-             data = json.loads(result)
-             if isinstance(data, dict) and "error" in data:
-                 status = "error"
-        except Exception:
-             pass
-        return result
-    except Exception:
-        status = "error"
-        raise
-    finally:
-        if MONITORING_AVAILABLE:
-            duration = time.time() - start_time
-            monitoring.vault_requests_total.labels(method="decrypt_scores", endpoint="tool", status=status).inc()
-            monitoring.vault_request_duration.labels(method="decrypt_scores", endpoint="tool").observe(duration)
-
 def _decrypt_metadata_impl(token: str, encrypted_metadata_list: list[str]) -> str:
     """
     Core implementation: Decrypts a list of per-agent AES-encrypted metadata.
@@ -423,92 +350,3 @@ def _decrypt_metadata_impl(token: str, encrypted_metadata_list: list[str]) -> st
         return json.dumps(results)
     except Exception as e:
         return json.dumps({"error": f"Metadata decryption failed: {str(e)}"})
-
-
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
-def decrypt_metadata(token: str, encrypted_metadata_list: list[str]) -> str:
-    """
-    Decrypts a list of AES-encrypted metadata using the Vault's MetadataKey.
-    The MetadataKey never leaves Vault — Agent sends encrypted blobs, receives plaintext.
-
-    Args:
-        token: Authentication token issued by Vault Admin.
-        encrypted_metadata_list: List of Base64-encoded encrypted metadata strings from enVector Cloud.
-
-    Returns:
-        JSON string containing the list of decrypted metadata (original format preserved).
-    """
-    start_time = time.time()
-    status = "success"
-    try:
-        result = _decrypt_metadata_impl(token, encrypted_metadata_list)
-        try:
-            data = json.loads(result)
-            if isinstance(data, dict) and "error" in data:
-                status = "error"
-        except Exception:
-            pass
-        return result
-    except Exception:
-        status = "error"
-        raise
-    finally:
-        if MONITORING_AVAILABLE:
-            duration = time.time() - start_time
-            monitoring.vault_requests_total.labels(method="decrypt_metadata", endpoint="tool", status=status).inc()
-            monitoring.vault_request_duration.labels(method="decrypt_metadata", endpoint="tool").observe(duration)
-
-
-if __name__ == "__main__":
-    import sys
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Run the enVector-Vault MCP server.")
-    parser.add_argument("command", nargs="?", choices=["server"], help="Command to run")
-    parser.add_argument("--mode", choices=["sse", "http"], default="sse", help="Transport mode")
-    parser.add_argument("--port", type=int, default=50080, help="HTTP/MCP port to bind")
-    parser.add_argument("--grpc-port", type=int, default=50051, help="gRPC port to bind")
-    parser.add_argument("--host", default="0.0.0.0", help="Host to bind")
-
-    args = parser.parse_args()
-
-    if args.command == "server":
-        # Start gRPC server (non-blocking, runs in thread pool)
-        grpc_server = None
-        try:
-            from vault_grpc_server import serve_grpc
-            grpc_server = serve_grpc(host=args.host, port=args.grpc_port)
-        except Exception as e:
-            logger.error(f"Failed to start gRPC server: {e}")
-            logger.warning("Continuing with HTTP/MCP only.")
-
-        # Start HTTP/MCP server (blocking)
-        logger.info(f"Starting enVector-Vault MCP Server on {args.host}:{args.port}...")
-
-        import uvicorn
-        # FastMCP 2.x uses http_app(), fallback to sse_app() for older versions
-        if hasattr(mcp, 'http_app'):
-            app = mcp.http_app()
-        else:
-            app = mcp.sse_app()
-
-        if MONITORING_AVAILABLE:
-            # Add monitoring endpoints (health, metrics)
-            monitoring.add_monitoring_endpoints(app)
-
-            # Start health check background task
-            @app.on_event("startup")
-            async def startup_event():
-                asyncio.create_task(monitoring.periodic_health_check())
-        else:
-            logger.warning("Monitoring module not available. Skipping /health and /metrics.")
-
-        try:
-            uvicorn.run(app, host=args.host, port=args.port)
-        finally:
-            if grpc_server is not None:
-                grpc_server.stop(grace=5)
-
-    else:
-        # Default to stdio for CLI / Inspector usage
-        mcp.run()

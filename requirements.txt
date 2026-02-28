@@ -3,9 +3,6 @@
 # FHE Encryption SDK
 pyenvector>=1.2.0
 
-# MCP Server Framework
-fastmcp>=2.2.0
-
 # System Monitoring
 psutil>=5.9.0
 

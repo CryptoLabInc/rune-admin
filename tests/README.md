@@ -1,6 +1,6 @@
 # Rune-Vault Test Suite
 
-Unit and integration tests for Rune-Vault MCP server.
+Unit and integration tests for Rune-Vault server.
 
 ## Structure
 
@@ -25,7 +25,7 @@ tests/
 # Install test dependencies
 pip install -r tests/requirements.txt
 
-# Or if running from mcp/vault:
+# Or if running from vault:
 pip install -r requirements.txt pytest pytest-asyncio pytest-cov httpx
 ```
 
@@ -68,7 +68,7 @@ pytest tests/unit/test_auth.py::TestTokenValidation::test_valid_token_team_alpha
 pip install pytest-cov
 
 # Run with coverage report
-pytest tests/unit tests/integration --cov=mcp/vault --cov-report=html
+pytest tests/unit tests/integration --cov=vault --cov-report=html
 
 # View report
 open htmlcov/index.html  # macOS
@@ -139,7 +139,7 @@ Use `monkeypatch` for isolated tests:
 
 ```python
 def test_with_temp_keys(monkeypatch):
-    monkeypatch.setattr('vault_mcp.KEY_DIR', '/tmp/test_keys')
+    monkeypatch.setattr('vault_core.KEY_DIR', '/tmp/test_keys')
     # ... test code ...
 ```
 
@@ -175,7 +175,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          cd mcp/vault
+          cd vault
           python -m venv .venv
           source .venv/bin/activate
           pip install -r requirements.txt
@@ -183,8 +183,8 @@ jobs:
       
       - name: Run tests
         run: |
-          source mcp/vault/.venv/bin/activate
-          pytest tests/unit tests/integration -v --cov=mcp/vault
+          source vault/.venv/bin/activate
+          pytest tests/unit tests/integration -v --cov=vault
       
       - name: Upload coverage
         uses: codecov/codecov-action@v3
@@ -204,11 +204,11 @@ jobs:
 
 ### Import Errors
 
-If you see `ModuleNotFoundError: No module named 'vault_mcp'`:
+If you see `ModuleNotFoundError: No module named 'vault_core'`:
 
 ```bash
 # Ensure you're running from repository root
-export PYTHONPATH="${PYTHONPATH}:$(pwd)/mcp/vault"
+export PYTHONPATH="${PYTHONPATH}:$(pwd)/vault"
 pytest tests/unit -v
 ```
 

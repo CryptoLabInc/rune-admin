@@ -4,7 +4,6 @@ package rune.vault.v1;
 
 // Rune-Vault gRPC service.
 // Holds the FHE secret key and performs all decryption operations.
-// Phase 1: dual-stack alongside FastMCP HTTP/SSE (port 50080).
 service VaultService {
   // Returns the public key bundle (EncKey, EvalKey, optional team index name).
   rpc GetPublicKey(GetPublicKeyRequest) returns (GetPublicKeyResponse);

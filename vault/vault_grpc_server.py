@@ -1,11 +1,12 @@
 """
-gRPC server for Rune-Vault (Phase 1 dual-stack).
+gRPC server for Rune-Vault.
 
-Runs alongside the existing FastMCP HTTP/SSE server.
-Delegates to the same _*_impl() pure functions in vault_mcp.py.
+Sole entry point for the Vault service.
+Delegates to _*_impl() pure functions in vault_core.py.
 """
 
 import json
+import signal
 import time
 import logging
 import grpc
@@ -14,7 +15,7 @@ from concurrent import futures
 from grpc_health.v1 import health_pb2, health_pb2_grpc
 from grpc_health.v1.health import HealthServicer
 
-from vault_mcp import (
+from vault_core import (
     _get_public_key_impl,
     _decrypt_scores_impl,
     _decrypt_metadata_impl,
@@ -35,7 +36,7 @@ MAX_MESSAGE_LENGTH = 256 * 1024 * 1024  # 256 MB (EvalKey can be tens of MB)
 
 
 class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
-    """gRPC implementation that delegates to vault_mcp._*_impl() functions."""
+    """gRPC implementation that delegates to vault_core._*_impl() functions."""
 
     def GetPublicKey(self, request, context):
         start_time = time.time()
@@ -181,3 +182,37 @@ def serve_grpc(host: str = "0.0.0.0", port: int = 50051) -> grpc.Server:
     server.start()
     logger.info(f"gRPC server started on {host}:{port}")
     return server
+
+
+if __name__ == "__main__":
+    import argparse
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    )
+
+    parser = argparse.ArgumentParser(description="Run the Rune-Vault gRPC server.")
+    parser.add_argument("--host", default="0.0.0.0", help="Host to bind")
+    parser.add_argument("--grpc-port", type=int, default=50051, help="gRPC port")
+    parser.add_argument("--metrics-port", type=int, default=9090, help="Metrics/health HTTP port")
+    args = parser.parse_args()
+
+    # Start monitoring HTTP server (metrics + health)
+    if MONITORING_AVAILABLE:
+        monitoring.start_monitoring(port=args.metrics_port)
+        logger.info(f"Monitoring HTTP server started on :{args.metrics_port}")
+
+    # Start gRPC server (non-blocking)
+    grpc_server = serve_grpc(host=args.host, port=args.grpc_port)
+
+    # Graceful shutdown on SIGTERM / SIGINT
+    def _shutdown(signum, frame):
+        logger.info("Received shutdown signal, stopping...")
+        grpc_server.stop(grace=5)
+
+    signal.signal(signal.SIGTERM, _shutdown)
+    signal.signal(signal.SIGINT, _shutdown)
+
+    logger.info("Rune-Vault is ready.")
+    grpc_server.wait_for_termination()
