@@ -6,6 +6,7 @@ Delegates to _*_impl() pure functions in vault_core.py.
 """
 
 import json
+import os
 import signal
 import time
 import logging
@@ -153,6 +154,40 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
                 ).observe(duration)
 
 
+def _load_tls_credentials():
+    """
+    Load TLS credentials from environment variables.
+
+    Returns grpc.ServerCredentials or None (if TLS disabled).
+    Raises SystemExit if TLS is required but cert/key not provided.
+    """
+    if os.environ.get("VAULT_TLS_DISABLE", "").lower() == "true":
+        logger.warning(
+            "TLS DISABLED — gRPC traffic is unencrypted. "
+            "Do not use in production."
+        )
+        return None
+
+    cert_path = os.environ.get("VAULT_TLS_CERT")
+    key_path = os.environ.get("VAULT_TLS_KEY")
+
+    if not cert_path or not key_path:
+        logger.error(
+            "TLS certificate not configured. "
+            "Set VAULT_TLS_CERT and VAULT_TLS_KEY, "
+            "or set VAULT_TLS_DISABLE=true for insecure mode."
+        )
+        raise SystemExit(1)
+
+    with open(cert_path, "rb") as f:
+        cert_pem = f.read()
+    with open(key_path, "rb") as f:
+        key_pem = f.read()
+
+    logger.info("TLS configured — cert=%s", cert_path)
+    return grpc.ssl_server_credentials([(key_pem, cert_pem)])
+
+
 def serve_grpc(host: str = "0.0.0.0", port: int = 50051) -> grpc.Server:
     """
     Start the gRPC server. Non-blocking — returns the server object.
@@ -178,9 +213,16 @@ def serve_grpc(host: str = "0.0.0.0", port: int = 50051) -> grpc.Server:
     )
     health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
 
-    server.add_insecure_port(f"{host}:{port}")
+    addr = f"{host}:{port}"
+    credentials = _load_tls_credentials()
+    if credentials:
+        server.add_secure_port(addr, credentials)
+        logger.info("gRPC server started on %s (TLS)", addr)
+    else:
+        server.add_insecure_port(addr)
+        logger.info("gRPC server started on %s (insecure)", addr)
+
     server.start()
-    logger.info(f"gRPC server started on {host}:{port}")
     return server
 
 

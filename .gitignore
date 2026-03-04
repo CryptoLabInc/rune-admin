@@ -52,6 +52,7 @@ htmlcov/
 *.pub
 *_token
 vault_token.txt
+certs/
 
 # Logs
 *.log

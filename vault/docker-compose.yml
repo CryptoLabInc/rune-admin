@@ -8,11 +8,15 @@ services:
 
     volumes:
       - vault-keys:/app/vault_keys:rw
+      - ./certs:/app/certs:rw
       - ./backups:/secure/backups:rw
       - ./logs:/var/log/rune-vault:rw
 
     environment:
       - VAULT_TOKENS=${VAULT_TOKENS:-}
+      - VAULT_TLS_CERT=${VAULT_TLS_CERT:-}
+      - VAULT_TLS_KEY=${VAULT_TLS_KEY:-}
+      - VAULT_TLS_DISABLE=${VAULT_TLS_DISABLE:-}
       - VAULT_INDEX_NAME=${VAULT_INDEX_NAME:-runecontext}
       - ENVECTOR_ENDPOINT=${ENVECTOR_ENDPOINT:-}
       - ENVECTOR_API_KEY=${ENVECTOR_API_KEY:-}
