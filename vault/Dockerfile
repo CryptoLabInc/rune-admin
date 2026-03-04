@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc \
         python3-dev \
         openssl \
+        gosu \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -u 1000 vault
@@ -20,8 +21,6 @@ RUN chmod +x docker-entrypoint.sh
 
 RUN mkdir -p /app/vault_keys /app/certs /secure/backups /var/log/rune-vault \
     && chown -R vault:vault /app /secure /var/log/rune-vault
-
-USER vault
 
 EXPOSE 50051 9090
 
