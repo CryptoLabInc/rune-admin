@@ -26,7 +26,7 @@ services:
       - vault-net
 
     ports:
-      - "127.0.0.1:50051:50051"
+      - "0.0.0.0:50051:50051"
       - "127.0.0.1:9090:9090"
 
     security_opt:
@@ -49,27 +49,6 @@ services:
           memory: 512M
           cpus: "0.5"
 
-  # To expose Vault gRPC over the internet via ngrok:
-  #   1. Sign up at https://ngrok.com and get your authtoken
-  #   2. Set the env var before running docker compose:
-  #        export NGROK_AUTHTOKEN=<your-authtoken>
-  #        docker compose up -d
-  #   3. Check the ngrok dashboard at http://localhost:4040 for the assigned TCP address
-  #   4. Use that address as vault.endpoint in ~/.rune/config.json
-  ngrok:
-    image: ngrok/ngrok:latest
-    container_name: vault-ngrok
-    command: tcp vault:50051 --log stdout
-    environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
-    networks:
-      - vault-net
-    ports:
-      - "127.0.0.1:4040:4040"
-    depends_on:
-      vault:
-        condition: service_healthy
-    restart: unless-stopped
 
 networks:
   vault-net:
