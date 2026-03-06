@@ -10,6 +10,11 @@
 #   <output-dir>/ca.key       — CA private key (keep secret)
 #   <output-dir>/server.pem   — Server certificate
 #   <output-dir>/server.key   — Server private key
+#
+# The certificate SAN automatically includes:
+#   - localhost, vault, rune-vault, 127.0.0.1 (always)
+#   - <hostname> argument (if provided)
+#   - Public IP via ifconfig.me (auto-detected)
 
 set -euo pipefail
 
@@ -18,6 +23,15 @@ HOSTNAME="${2:-localhost}"
 
 CA_DAYS=3650      # 10 years
 SERVER_DAYS=825   # ~2.25 years (Apple max)
+
+# Auto-detect public IP
+echo "==> Detecting public IP..."
+PUBLIC_IP=$(curl -4 -sf --connect-timeout 5 ifconfig.me 2>/dev/null || true)
+if [ -n "$PUBLIC_IP" ]; then
+    echo "    Public IP: $PUBLIC_IP"
+else
+    echo "    Could not detect public IP (skipping)"
+fi
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -48,7 +62,15 @@ prompt = no
 CN = ${HOSTNAME}
 
 [v3_req]
-subjectAltName = DNS:localhost,DNS:vault,DNS:rune-vault,DNS:${HOSTNAME},IP:127.0.0.1
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = localhost
+DNS.2 = vault
+DNS.3 = rune-vault
+DNS.4 = ${HOSTNAME}
+IP.1  = 127.0.0.1
+$([ -n "$PUBLIC_IP" ] && echo "IP.2  = $PUBLIC_IP")
 EOF
 
 openssl req -new \
@@ -82,4 +104,6 @@ echo "  ca.key      — CA private key (keep secret)"
 echo "  server.pem  — Server certificate"
 echo "  server.key  — Server private key"
 echo ""
-echo "Server cert SANs: localhost, vault, rune-vault, ${HOSTNAME}, 127.0.0.1"
+SAN_SUMMARY="localhost, vault, rune-vault, ${HOSTNAME}, 127.0.0.1"
+[ -n "$PUBLIC_IP" ] && SAN_SUMMARY="${SAN_SUMMARY}, ${PUBLIC_IP}"
+echo "Server cert SANs: ${SAN_SUMMARY}"
