@@ -22,6 +22,9 @@ spec:
         - name: keys
           mountPath: /secure/keys
           readOnly: false
+        - name: tls-certs
+          mountPath: /app/certs
+          readOnly: true
 
         env:
         - name: VAULT_ENCRYPTION_KEY
@@ -29,6 +32,10 @@ spec:
             secretKeyRef:
               name: vault-secrets
               key: encryption-key
+        - name: VAULT_TLS_CERT
+          value: /app/certs/tls.crt
+        - name: VAULT_TLS_KEY
+          value: /app/certs/tls.key
 
         ports:
         - containerPort: 50051
@@ -66,6 +73,10 @@ spec:
       - name: keys
         persistentVolumeClaim:
           claimName: vault-keys-pvc
+      - name: tls-certs
+        secret:
+          secretName: vault-tls
+          optional: true
 
       # Anti-affinity: Don't run both replicas on same node
       affinity:
