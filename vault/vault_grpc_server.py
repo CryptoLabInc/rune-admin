@@ -15,6 +15,7 @@ from concurrent import futures
 
 from grpc_health.v1 import health_pb2, health_pb2_grpc
 from grpc_health.v1.health import HealthServicer
+from grpc_reflection.v1alpha import reflection
 
 from vault_core import (
     _get_public_key_impl,
@@ -203,6 +204,13 @@ def serve_grpc(host: str = "0.0.0.0", port: int = 50051) -> grpc.Server:
 
     # Register VaultService
     pb2_grpc.add_VaultServiceServicer_to_server(VaultServiceServicer(), server)
+
+    # Enable gRPC server reflection (for grpcurl, etc.)
+    SERVICE_NAMES = (
+        pb2.DESCRIPTOR.services_by_name["VaultService"].full_name,
+        reflection.SERVICE_NAME,
+    )
+    reflection.enable_server_reflection(SERVICE_NAMES, server)
 
     # Register gRPC health checking (standard grpc.health.v1 protocol)
     health_servicer = HealthServicer()
