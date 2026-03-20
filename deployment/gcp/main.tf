@@ -1,6 +1,6 @@
 terraform {
   required_version = ">= 1.0"
-  
+
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -27,9 +27,13 @@ variable "region" {
 }
 
 variable "zone" {
-  description = "GCP zone"
+  description = "GCP zone (defaults to region-a)"
   type        = string
-  default     = "us-central1-a"
+  default     = ""
+}
+
+locals {
+  zone = var.zone != "" ? var.zone : "${var.region}-a"
 }
 
 variable "team_name" {
@@ -43,10 +47,45 @@ variable "vault_token" {
   sensitive   = true
 }
 
+variable "tls_mode" {
+  description = "TLS mode: self-signed, custom, or none"
+  type        = string
+  default     = "self-signed"
+}
+
+variable "tls_hostname" {
+  description = "Domain name to include in TLS certificate SAN"
+  type        = string
+  default     = ""
+}
+
+variable "envector_endpoint" {
+  description = "enVector Cloud endpoint"
+  type        = string
+}
+
+variable "envector_api_key" {
+  description = "enVector Cloud API key"
+  type        = string
+  sensitive   = true
+}
+
+variable "vault_index_name" {
+  description = "Vault index name"
+  type        = string
+  default     = "runecontext"
+}
+
 variable "machine_type" {
   description = "Compute Engine machine type"
   type        = string
   default     = "e2-medium"  # 2 vCPU, 4GB RAM
+}
+
+variable "public_key" {
+  description = "SSH public key content for instance access"
+  type        = string
+  default     = ""
 }
 
 # VPC Network
@@ -64,26 +103,13 @@ resource "google_compute_subnetwork" "vault_subnet" {
 }
 
 # Firewall Rules
-resource "google_compute_firewall" "vault_https" {
-  name    = "rune-vault-https-${var.team_name}"
+resource "google_compute_firewall" "vault_grpc" {
+  name    = "rune-vault-grpc-${var.team_name}"
   network = google_compute_network.vault_network.name
 
   allow {
     protocol = "tcp"
-    ports    = ["443"]
-  }
-
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["rune-vault"]
-}
-
-resource "google_compute_firewall" "vault_metrics" {
-  name    = "rune-vault-metrics-${var.team_name}"
-  network = google_compute_network.vault_network.name
-
-  allow {
-    protocol = "tcp"
-    ports    = ["9090"]
+    ports    = ["50051"]
   }
 
   source_ranges = ["0.0.0.0/0"]
@@ -113,7 +139,7 @@ resource "google_compute_address" "vault_ip" {
 resource "google_compute_instance" "vault" {
   name         = "rune-vault-${var.team_name}"
   machine_type = var.machine_type
-  zone         = var.zone
+  zone         = local.zone
 
   tags = ["rune-vault"]
 
@@ -134,12 +160,17 @@ resource "google_compute_instance" "vault" {
   }
 
   metadata = {
-    ssh-keys  = ""  # Add your SSH public key here if needed
+    ssh-keys = var.public_key != "" ? "ubuntu:${var.public_key}" : ""
   }
 
-  metadata_startup_script = templatefile("${path.module}/cloud-init.yaml", {
-    vault_token = var.vault_token
-    team_name   = var.team_name
+  metadata_startup_script = templatefile("${path.module}/startup-script.sh", {
+    vault_token       = var.vault_token
+    team_name         = var.team_name
+    tls_mode          = var.tls_mode
+    tls_hostname      = var.tls_hostname
+    envector_endpoint = var.envector_endpoint
+    envector_api_key  = var.envector_api_key
+    vault_index_name  = var.vault_index_name
   })
 
   service_account {
@@ -158,8 +189,8 @@ resource "google_compute_instance" "vault" {
 
 # Outputs
 output "vault_url" {
-  description = "Rune-Vault URL"
-  value       = "https://vault-${var.team_name}.${var.region}.gcp.envector.io"
+  description = "Rune-Vault gRPC endpoint"
+  value       = "${google_compute_address.vault_ip.address}:50051"
 }
 
 output "vault_token" {
@@ -180,15 +211,10 @@ output "vault_private_ip" {
 
 output "ssh_command" {
   description = "SSH command to connect to Vault instance"
-  value       = "gcloud compute ssh ${google_compute_instance.vault.name} --zone=${var.zone}"
+  value       = "gcloud compute ssh ${google_compute_instance.vault.name} --zone=${local.zone}"
 }
 
 output "instance_name" {
   description = "Compute Engine instance name"
   value       = google_compute_instance.vault.name
-}
-
-output "instance_self_link" {
-  description = "Compute Engine instance self-link"
-  value       = google_compute_instance.vault.self_link
 }
