@@ -22,11 +22,10 @@ Rune-Admin provides **infrastructure management** for Rune-Vault:
 
 ### For Administrators
 
-1. **Python 3.12** with pip and virtualenv
-2. **Terraform** for cloud infrastructure deployment
-3. **enVector Cloud account** at [https://envector.io](https://envector.io)
-   - Organization ID and API Key
-4. **Cloud provider account** (OCI, AWS, or GCP)
+1. **enVector Cloud account** at [https://envector.io](https://envector.io) — Organization ID and API Key
+2. **Cloud provider account** (OCI, AWS, or GCP) — only needed for cloud deployment
+
+The [installer](#quick-start) will automatically check and install required tools (Docker, Terraform, etc.).
 
 ### For Team Members
 
@@ -36,50 +35,34 @@ Team members install [Rune](https://github.com/CryptoLabInc/rune) from Claude Ma
 
 ## Quick Start
 
-### 1. Install Dependencies
+### 1. Deploy Rune-Vault
 
 ```bash
-# Clone repository
-git clone https://github.com/CryptoLabInc/rune-admin.git
-cd rune-admin
-
-# Run interactive installer
-./install.sh
-
-# Choose role: Administrator
+curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/install.sh -o install.sh && sudo bash install.sh
 ```
 
-### 2. Deploy Rune-Vault
-
-```bash
-# Initialize Terraform
-cd deployment/oci  # or aws, gcp
-terraform init
-
-# Configure variables
-cp terraform.tfvars.example terraform.tfvars
-# Edit: team_name, region, envector credentials
-
-# Deploy
-terraform apply
-```
+The installer will interactively guide you through:
+- Cloud provider selection (AWS / GCP / OCI)
+- enVector Cloud credentials
+- TLS certificate generation (step-ca)
+- Terraform-based VM provisioning
 
 **Output**:
 ```
 vault_endpoint = "vault-yourteam.oci.envector.io:50051"
 vault_token = "evt_yourteam_abc123xyz"
+ca.pem downloaded for TLS verification
 ```
 
-### 3. Verify Deployment
+### 2. Verify Deployment
 
 ```bash
-# Test Vault health
-curl https://vault-yourteam.oci.envector.io/health
+curl --cacert ca.pem https://<your-vault-host>/health
 
 # Expected: {"status": "healthy", "vault_version": "0.1.0"}
 ```
 
-### 4. Onboard Team Members
+### 3. Onboard Team Members
 
 Share Vault credentials with each team member:
 
@@ -97,7 +80,7 @@ Share Vault credentials with each team member:
 - Never share tokens in plain Slack/email
 - Rotate tokens periodically
 
-### 5. Monitor Vault
+### 4. Monitor Vault
 
 ```bash
 # View metrics
@@ -168,10 +151,9 @@ rune-admin/
 │   ├── vault_core.py          # Core business logic
 │   ├── vault_grpc_server.py   # gRPC entry point
 │   ├── monitoring.py          # Health & metrics
-│   ├── run_vault.sh           # Local dev script
+│   ├── Makefile               # Build & run commands
 │   └── vault_keys/            # Generated FHE keys
 ├── scripts/
-│   ├── deploy-vault.sh        # Automated deployment
 │   ├── vault-dev.sh           # Local Vault for testing
 │   └── load-test.sh           # Load testing runner
 ├── tests/
@@ -190,13 +172,12 @@ rune-admin/
 
 ```bash
 # One command deployment
-cd deployment/oci
-terraform apply
+curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/install.sh -o install.sh && sudo bash install.sh
 
 # Auto-provisions:
-# - VM instance
+# - TLS certificates (step-ca)
+# - VM instance (Terraform)
 # - Security groups
-# - SSL certificates
 # - FHE key generation
 # - Monitoring setup
 ```
@@ -235,16 +216,13 @@ terraform apply
 ### Deploy New Vault
 
 ```bash
-# 1. Configure Terraform
-cd deployment/oci
-cp terraform.tfvars.example terraform.tfvars
-# Edit variables
+curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/install.sh -o install.sh && sudo bash install.sh
 
-# 2. Deploy
-terraform apply
-
-# 3. Save credentials (from Terraform output)
-# vault_url, vault_token
+# The installer will guide you through:
+# 1. Deployment target (Local / AWS / GCP / OCI)
+# 2. TLS certificate generation
+# 3. Terraform provisioning (for cloud targets)
+# 4. Credential output (vault_endpoint, vault_token)
 ```
 
 ### Onboard New Team Member

@@ -1,113 +1,85 @@
 #cloud-config
 
 # Rune-Vault Installation Script for AWS EC2
-# This script installs Docker, Rune-Vault, and configures nginx with SSL
+# Deploys Docker-based Vault with gRPC (port 50051)
 
 package_update: true
 package_upgrade: true
 
 packages:
-  - docker.io
-  - docker-compose
-  - nginx
-  - certbot
-  - python3-certbot-nginx
+  - ca-certificates
   - curl
-  - git
+  - gnupg
   - jq
+  - openssl
 
 write_files:
   - path: /opt/rune/docker-compose.yml
     content: |
-      version: '3.8'
       services:
         vault:
-          image: cryptolab/rune-vault:latest
+          image: ghcr.io/cryptolabinc/rune-vault:latest
           container_name: rune-vault
           restart: unless-stopped
           ports:
-            - "50051:50051"
-            - "9090:9090"
+            - "0.0.0.0:50051:50051"
+            - "127.0.0.1:9090:9090"
           environment:
-            - RUNEVAULT_TOKEN=${vault_token}
-            - TEAM_NAME=${team_name}
+            - VAULT_TOKENS=${vault_token}
+            - VAULT_INDEX_NAME=${vault_index_name}
+            - ENVECTOR_ENDPOINT=${envector_endpoint}
+            - ENVECTOR_API_KEY=${envector_api_key}
+            - EMBEDDING_DIM=384
+            - VAULT_TLS_CERT=$${VAULT_TLS_CERT:-}
+            - VAULT_TLS_KEY=$${VAULT_TLS_KEY:-}
+            - VAULT_TLS_DISABLE=$${VAULT_TLS_DISABLE:-}
           volumes:
-            - ./keys:/app/keys
-            - ./logs:/app/logs
+            - vault-keys:/app/vault_keys:rw
+            - ./certs:/app/certs:rw
+            - ./backups:/secure/backups:rw
+            - ./logs:/var/log/rune-vault:rw
           healthcheck:
-            test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
+            test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9090/health')"]
             interval: 30s
             timeout: 10s
             retries: 3
-            start_period: 40s
+          security_opt:
+            - no-new-privileges:true
+          deploy:
+            resources:
+              limits:
+                memory: 1G
+                cpus: "1.0"
+              reservations:
+                memory: 512M
+                cpus: "0.5"
+
+      volumes:
+        vault-keys:
     owner: root:root
     permissions: '0644'
 
-  - path: /opt/rune/vault_token
-    content: ${vault_token}
+  - path: /opt/rune/.env
+    content: |
+      VAULT_TLS_CERT=${tls_mode == "none" ? "" : "/app/certs/server.pem"}
+      VAULT_TLS_KEY=${tls_mode == "none" ? "" : "/app/certs/server.key"}
+      VAULT_TLS_DISABLE=${tls_mode == "none" ? "true" : ""}
     owner: root:root
     permissions: '0600'
 
-  - path: /etc/nginx/sites-available/rune-vault
-    content: |
-      upstream vault_backend {
-          server 127.0.0.1:9090;
-      }
-
-      server {
-          listen 80;
-          server_name vault-${team_name}.*.aws.envector.io;
-
-          location /.well-known/acme-challenge/ {
-              root /var/www/html;
-          }
-
-          location / {
-              return 301 https://$host$request_uri;
-          }
-      }
-
-      server {
-          listen 443 ssl http2;
-          server_name vault-${team_name}.*.aws.envector.io;
-
-          # SSL certificates (will be configured by certbot)
-          ssl_certificate /etc/letsencrypt/live/vault-${team_name}.*.aws.envector.io/fullchain.pem;
-          ssl_certificate_key /etc/letsencrypt/live/vault-${team_name}.*.aws.envector.io/privkey.pem;
-
-          # SSL configuration
-          ssl_protocols TLSv1.2 TLSv1.3;
-          ssl_ciphers HIGH:!aNULL:!MD5;
-          ssl_prefer_server_ciphers on;
-
-          # Proxy to Vault
-          location / {
-              proxy_pass http://vault_backend;
-              proxy_http_version 1.1;
-              proxy_set_header Host $host;
-              proxy_set_header X-Real-IP $remote_addr;
-              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto $scheme;
-              
-              # WebSocket support (if needed)
-              proxy_set_header Upgrade $http_upgrade;
-              proxy_set_header Connection "upgrade";
-          }
-
-          # Health check endpoint
-          location /health {
-              proxy_pass http://vault_backend/health;
-              access_log off;
-          }
-      }
-    owner: root:root
-    permissions: '0644'
-
 runcmd:
   # Create Rune directory structure
-  - mkdir -p /opt/rune/keys
-  - mkdir -p /opt/rune/logs
-  - chmod 700 /opt/rune/keys
+  - mkdir -p /opt/rune/certs /opt/rune/backups /opt/rune/logs
+  - chmod 700 /opt/rune/certs
+
+  # Install Docker CE with compose plugin (v2)
+  - |
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+    apt-get update
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
   # Start Docker
   - systemctl enable docker
@@ -116,30 +88,64 @@ runcmd:
   # Add ubuntu user to docker group
   - usermod -aG docker ubuntu
 
-  # Pull and start Rune-Vault
-  - cd /opt/rune && docker-compose pull
-  - cd /opt/rune && docker-compose up -d
+  # TLS setup — inline cert generation (avoids GitHub rate limits)
+  - |
+    if [ "${tls_mode}" = "self-signed" ]; then
+      CERT_DIR="/opt/rune/certs"
+      PUBLIC_IP=$(curl -4 -sf --connect-timeout 5 ifconfig.me 2>/dev/null || true)
+      openssl genrsa -out "$CERT_DIR/ca.key" 4096 2>/dev/null
+      openssl req -new -x509 -key "$CERT_DIR/ca.key" -out "$CERT_DIR/ca.pem" \
+        -days 3650 -subj "/CN=Rune-Vault CA" -sha256
+      openssl genrsa -out "$CERT_DIR/server.key" 2048 2>/dev/null
+      TMPCONF=$(mktemp)
+      printf '%s\n' \
+        '[req]' \
+        'distinguished_name = req_dn' \
+        'req_extensions = v3_req' \
+        'prompt = no' \
+        '[req_dn]' \
+        'CN = localhost' \
+        '[v3_req]' \
+        'subjectAltName = @alt_names' \
+        '[alt_names]' \
+        'DNS.1 = localhost' \
+        'DNS.2 = vault' \
+        'DNS.3 = rune-vault' \
+        'IP.1  = 127.0.0.1' \
+        > "$TMPCONF"
+      TLS_HOSTNAME="${tls_hostname}"
+      if [ -n "$TLS_HOSTNAME" ]; then
+        echo "DNS.4 = $TLS_HOSTNAME" >> "$TMPCONF"
+      fi
+      if [ -n "$PUBLIC_IP" ]; then
+        echo "IP.2  = $PUBLIC_IP" >> "$TMPCONF"
+      fi
+      openssl req -new -key "$CERT_DIR/server.key" -out "$CERT_DIR/server.csr" -config "$TMPCONF"
+      openssl x509 -req -in "$CERT_DIR/server.csr" \
+        -CA "$CERT_DIR/ca.pem" -CAkey "$CERT_DIR/ca.key" -CAcreateserial \
+        -out "$CERT_DIR/server.pem" -days 825 -sha256 \
+        -extfile "$TMPCONF" -extensions v3_req 2>/dev/null
+      rm -f "$TMPCONF" "$CERT_DIR/server.csr" "$CERT_DIR/ca.srl"
+      chmod 600 "$CERT_DIR/ca.key" "$CERT_DIR/server.key"
+      chmod 644 "$CERT_DIR/ca.pem" "$CERT_DIR/server.pem"
+    fi
 
-  # Configure nginx
-  - ln -sf /etc/nginx/sites-available/rune-vault /etc/nginx/sites-enabled/
-  - rm -f /etc/nginx/sites-enabled/default
-  - nginx -t && systemctl restart nginx
+  # Pull with retry and start Rune-Vault
+  - |
+    cd /opt/rune
+    for i in 1 2 3 4 5; do
+      docker compose pull && break
+      echo "Docker pull retry $i..." && sleep 10
+    done
+  - cd /opt/rune && docker compose up -d
 
   # Wait for Vault to be ready
   - sleep 10
-  - timeout 60 bash -c 'until curl -f http://localhost:9090/health; do sleep 2; done'
-
-  # Note: SSL certificate must be obtained manually after DNS configuration
-  # Run: sudo certbot --nginx -d vault-${team_name}.us-east-1.aws.envector.io
+  - timeout 300 bash -c 'until curl -sf http://localhost:9090/health; do sleep 2; done'
 
 final_message: |
   Rune-Vault installation completed!
-  
-  Next steps:
-  1. Configure DNS: Point vault-${team_name}.*.aws.envector.io to this instance
-  2. Obtain SSL certificate: sudo certbot --nginx -d vault-${team_name}.*.aws.envector.io
-  3. Test health: curl https://vault-${team_name}.*.aws.envector.io/health
-  
-  Vault token location: /opt/rune/vault_token (mode 0600)
+
+  Vault gRPC endpoint: <public-ip>:50051
+  Health check: curl http://localhost:9090/health
   Docker logs: docker logs rune-vault
-  Nginx logs: /var/log/nginx/

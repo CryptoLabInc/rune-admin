@@ -11,7 +11,14 @@ terraform {
 }
 
 provider "oci" {
-  region = var.region
+  region              = var.region
+  config_file_profile = var.oci_profile
+}
+
+variable "oci_profile" {
+  description = "OCI CLI config profile name (~/.oci/config)"
+  type        = string
+  default     = "DEFAULT"
 }
 
 variable "region" {
@@ -30,15 +37,45 @@ variable "team_name" {
   type        = string
 }
 
-variable "admin_email" {
-  description = "Admin email for SSL certificate (Let's Encrypt)"
-  type        = string
-}
-
 variable "vault_token" {
   description = "Vault authentication token"
   type        = string
   sensitive   = true
+  default     = ""
+}
+
+variable "tls_mode" {
+  description = "TLS mode: self-signed, custom, or none"
+  type        = string
+  default     = "self-signed"
+}
+
+variable "tls_hostname" {
+  description = "Domain name to include in TLS certificate SAN"
+  type        = string
+  default     = ""
+}
+
+variable "envector_endpoint" {
+  description = "enVector Cloud endpoint"
+  type        = string
+}
+
+variable "envector_api_key" {
+  description = "enVector Cloud API key"
+  type        = string
+  sensitive   = true
+}
+
+variable "vault_index_name" {
+  description = "Vault index name"
+  type        = string
+  default     = "runecontext"
+}
+
+variable "public_key" {
+  description = "SSH public key content for instance access"
+  type        = string
   default     = ""
 }
 
@@ -50,7 +87,6 @@ resource "random_password" "vault_token" {
 
 locals {
   vault_token = var.vault_token != "" ? var.vault_token : "evt_${var.team_name}_${random_password.vault_token.result}"
-  vault_url   = "https://vault-${var.team_name}.${var.region}.oci.envector.io"
 }
 
 # VCN for Vault
@@ -91,7 +127,7 @@ resource "oci_core_route_table" "vault_route_table" {
   }
 }
 
-# Security List (Allow HTTPS and SSH)
+# Security List
 resource "oci_core_security_list" "vault_security_list" {
   compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.vault_vcn.id
@@ -102,16 +138,18 @@ resource "oci_core_security_list" "vault_security_list" {
     protocol    = "all"
   }
 
+  # gRPC
   ingress_security_rules {
     protocol = "6" # TCP
     source   = "0.0.0.0/0"
 
     tcp_options {
-      min = 443
-      max = 443
+      min = 50051
+      max = 50051
     }
   }
 
+  # SSH
   ingress_security_rules {
     protocol = "6" # TCP
     source   = "0.0.0.0/0"
@@ -121,16 +159,6 @@ resource "oci_core_security_list" "vault_security_list" {
       max = 22
     }
   }
-
-  ingress_security_rules {
-    protocol = "6" # TCP
-    source   = "0.0.0.0/0"
-
-    tcp_options {
-      min = 9090
-      max = 9090
-    }
-  }
 }
 
 # Compute Instance for Vault
@@ -138,7 +166,7 @@ resource "oci_core_instance" "vault_instance" {
   compartment_id      = var.compartment_id
   availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
   display_name        = "vault-${var.team_name}"
-  shape               = "VM.Standard.E4.Flex"
+  shape               = "VM.Standard.E5.Flex"
 
   shape_config {
     ocpus         = 1
@@ -157,11 +185,15 @@ resource "oci_core_instance" "vault_instance" {
   }
 
   metadata = {
-    ssh_authorized_keys = file("~/.ssh/id_rsa.pub")
-    user_data = base64encode(templatefile("${path.module}/cloud-init.yaml", {
-      vault_token = local.vault_token
-      team_name   = var.team_name
-      admin_email = var.admin_email
+    ssh_authorized_keys = var.public_key
+    user_data = base64encode(templatefile("${path.module}/startup-script.sh", {
+      vault_token       = local.vault_token
+      team_name         = var.team_name
+      tls_mode          = var.tls_mode
+      tls_hostname      = var.tls_hostname
+      envector_endpoint = var.envector_endpoint
+      envector_api_key  = var.envector_api_key
+      vault_index_name  = var.vault_index_name
     }))
   }
 }
@@ -186,8 +218,8 @@ data "oci_core_images" "ubuntu_image" {
 
 # Outputs
 output "vault_url" {
-  value       = local.vault_url
-  description = "Rune-Vault URL"
+  description = "Rune-Vault gRPC endpoint"
+  value       = "${oci_core_instance.vault_instance.public_ip}:50051"
 }
 
 output "vault_token" {

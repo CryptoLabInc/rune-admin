@@ -1,9 +1,6 @@
 services:
   vault:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: rune-vault:latest
+    image: ghcr.io/cryptolabinc/rune-vault:${RUNE_VAULT_TAG:-latest}
     container_name: rune-vault
 
     volumes:

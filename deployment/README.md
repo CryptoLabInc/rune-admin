@@ -2,14 +2,26 @@
 
 This directory contains Terraform configuration for deploying Rune-Vault on Oracle Cloud Infrastructure (OCI).
 
-## Prerequisites
+## Quick Start (Recommended)
+
+The easiest way to deploy on OCI is using the interactive installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/install.sh -o install.sh && sudo bash install.sh
+```
+
+Select **OCI** when prompted. The installer handles OCI CLI authentication, Terraform configuration, TLS certificates, and VM provisioning automatically.
+
+## Manual Deployment
+
+If you prefer to deploy manually, follow the steps below.
+
+### Prerequisites
 
 1. **OCI Account**: Sign up at https://cloud.oracle.com
 2. **OCI CLI**: Install from https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm
 3. **Terraform**: Install from https://www.terraform.io/downloads
 4. **SSH Key**: `~/.ssh/id_rsa.pub` (or update in main.tf)
-
-## Quick Start
 
 ### 1. Configure OCI CLI
 
@@ -130,7 +142,7 @@ export RUNEVAULT_TOKEN=$(terraform output -raw vault_token)
    - Security List (ports 443, 50051, 9090, 22)
 
 2. **Compute**:
-   - VM.Standard.E4.Flex (1 OCPU, 4GB RAM)
+   - VM.Standard.E5.Flex (1 OCPU, 4GB RAM)
    - Ubuntu 22.04
    - Docker + Docker Compose
    - Nginx with SSL (Let's Encrypt)
