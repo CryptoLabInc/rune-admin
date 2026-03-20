@@ -63,7 +63,7 @@ Team members will need:
 ### Step 1: Deploy Rune-Vault
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/latest/install.sh -o install.sh && sudo bash install.sh
+curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/install.sh -o install.sh && sudo bash install.sh
 ```
 
 The installer will prompt you to choose a deployment target:

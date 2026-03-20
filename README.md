@@ -38,7 +38,7 @@ Team members install [Rune](https://github.com/CryptoLabInc/rune) from Claude Ma
 ### 1. Deploy Rune-Vault
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/latest/install.sh -o install.sh && sudo bash install.sh
+curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/install.sh -o install.sh && sudo bash install.sh
 ```
 
 The installer will interactively guide you through:
@@ -172,7 +172,7 @@ rune-admin/
 
 ```bash
 # One command deployment
-curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/latest/install.sh -o install.sh && sudo bash install.sh
+curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/install.sh -o install.sh && sudo bash install.sh
 
 # Auto-provisions:
 # - TLS certificates (step-ca)
@@ -216,7 +216,7 @@ curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/latest/inst
 ### Deploy New Vault
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/latest/install.sh -o install.sh && sudo bash install.sh
+curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/install.sh -o install.sh && sudo bash install.sh
 
 # The installer will guide you through:
 # 1. Deployment target (Local / AWS / GCP / OCI)

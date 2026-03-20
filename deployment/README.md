@@ -7,7 +7,7 @@ This directory contains Terraform configuration for deploying Rune-Vault on Orac
 The easiest way to deploy on OCI is using the interactive installer:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/latest/install.sh -o install.sh && sudo bash install.sh
+curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/install.sh -o install.sh && sudo bash install.sh
 ```
 
 Select **OCI** when prompted. The installer handles OCI CLI authentication, Terraform configuration, TLS certificates, and VM provisioning automatically.
