@@ -188,7 +188,7 @@ resolve_version() {
     if [ -n "$VERSION_OVERRIDE" ]; then
         print_step "Using version override: ${VERSION_OVERRIDE}"
         VERSION="$VERSION_OVERRIDE"
-        DOCKER_TAG="$VERSION_OVERRIDE"
+        DOCKER_TAG="${VERSION_OVERRIDE#v}"
         GITHUB_RAW_BASE="https://raw.githubusercontent.com/${REPO}/${VERSION}"
         return
     fi
@@ -204,7 +204,7 @@ resolve_version() {
         DOCKER_TAG="latest"
     else
         print_info "Latest release: ${VERSION}"
-        DOCKER_TAG="${VERSION}"
+        DOCKER_TAG="${VERSION#v}"
     fi
 
     GITHUB_RAW_BASE="https://raw.githubusercontent.com/${REPO}/${VERSION}"
