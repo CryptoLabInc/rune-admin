@@ -8,11 +8,13 @@ This guide shows administrators how to deploy and manage Rune-Vault infrastructu
 
 ### For Administrators
 
-1. **Cloud Account**: OCI, AWS, or GCP account with billing enabled
-2. **Terraform**: Version 1.0+ installed
+1. **macOS or Linux** machine (Windows is not supported)
+2. **Cloud Account** (optional): OCI, AWS, or GCP account with billing enabled — only needed for cloud deployment
 3. **enVector Cloud**: Sign up at [https://envector.io](https://envector.io)
    - Obtain Organization ID and API Key
 4. **Security**: Secure channel for distributing credentials (1Password, Signal, etc.)
+
+The installer will automatically check and install required tools (Terraform, Docker, etc.).
 
 ### For Team Members
 
@@ -60,72 +62,49 @@ Team members will need:
 
 ### Step 1: Deploy Rune-Vault
 
-**Option A: OCI (Oracle Cloud) - Recommended**
-
 ```bash
-cd deployment/oci
-
-# Initialize Terraform
-terraform init
-
-# Review and customize variables
-cp terraform.tfvars.example terraform.tfvars
-# Edit: team_name, region, envector_org_id, envector_api_key
-
-# Deploy
-terraform apply
-
-# Output:
-# vault_endpoint = "vault-yourteam.oci.envector.io:50051"
-# vault_token = "evt_yourteam_abc123xyz"
+curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/latest/install.sh -o install.sh && sudo bash install.sh
 ```
 
-**Option B: AWS**
+The installer will prompt you to choose a deployment target:
 
-```bash
-cd deployment/aws
+| Option | Description | Use Case |
+|--------|-------------|----------|
+| **Local (This machine)** | Deploy Vault on the current server via Docker | Production on your own server, or testing |
+| **AWS** | Provision a new EC2 instance via Terraform | Cloud deployment on AWS |
+| **GCP** | Provision a new GCE instance via Terraform | Cloud deployment on GCP |
+| **OCI** | Provision a new OCI instance via Terraform | Cloud deployment on Oracle Cloud |
 
-terraform init
-cp terraform.tfvars.example terraform.tfvars
-# Edit variables
+The installer handles TLS certificate generation, Terraform configuration, and VM provisioning automatically.
 
-terraform apply
+**Output**:
+```
+vault_endpoint = "vault-yourteam.oci.envector.io:50051"
+vault_token = "evt_yourteam_abc123xyz"
+ca.pem downloaded for TLS verification
 ```
 
-**Option C: GCP**
-
-```bash
-cd deployment/gcp
-
-terraform init
-cp terraform.tfvars.example terraform.tfvars
-# Edit variables
-
-terraform apply
-```
-
-**Option D: Local Development (Testing Only)**
+**For local development only (without the installer)**:
 
 ```bash
 ./scripts/vault-dev.sh
 
 # Output:
 # Vault gRPC:   localhost:50051
-# Vault Health:  http://localhost:9090/health
 # Token: demo_token_123 (INSECURE - development only!)
 ```
 
 ### Step 2: Verify Deployment
 
 ```bash
-# Test Vault health
-curl https://vault-yourteam.oci.envector.io/health
+# For cloud deployments (with ca.pem from installer)
+curl --cacert ca.pem https://<your-vault-host>/health
+
+# For local deployment
+curl https://localhost:9090/health
 
 # Expected response:
 # {"status": "healthy", "vault_version": "0.1.0"}
-
-# Check Prometheus metrics (optional)
-curl https://vault-yourteam.oci.envector.io/metrics
 ```
 
 ### Step 3: Securely Distribute Credentials

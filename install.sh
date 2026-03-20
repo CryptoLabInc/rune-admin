@@ -1,6 +1,6 @@
 #!/bin/bash
 # Rune-Vault Interactive Server Setup
-# Usage: curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/install.sh -o install.sh && sudo bash install.sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/latest/install.sh -o install.sh && sudo bash install.sh
 
 set -euo pipefail
 
