@@ -13,11 +13,8 @@ import hmac
 import logging
 import os
 import json
-import time
 
 logger = logging.getLogger("rune.vault")
-from collections import defaultdict
-from threading import Lock
 from pyenvector.crypto import KeyGenerator, Cipher
 from pyenvector.crypto.block import CipherBlock, Query
 from pyenvector.utils.aes import decrypt_metadata as aes_decrypt_metadata
@@ -153,67 +150,37 @@ def derive_agent_key(master_key: bytes, agent_id: str) -> bytes:
     return hmac.new(master_key, agent_id.encode('utf-8'), hashlib.sha256).digest()
 
 # =============================================================================
-# Authorization
+# Authorization (per-user token auth via TokenStore)
 # =============================================================================
-_ENV_TOKENS = os.getenv("VAULT_TOKENS", "").strip()
-if _ENV_TOKENS:
-    VALID_TOKENS = set(filter(None, _ENV_TOKENS.split(",")))
+from token_store import (
+    token_store, TokenNotFoundError, TokenExpiredError,
+    RateLimitError, TopKExceededError, ScopeError,
+)
+
+# Team secret for DEK derivation (shared across all users)
+VAULT_TEAM_SECRET = (
+    os.getenv("VAULT_TEAM_SECRET", "").strip()
+    or os.getenv("VAULT_TOKENS", "").strip()
+)
+
+# Load token/role configuration (priority: files > env var > demo)
+_roles_path = os.getenv("VAULT_ROLES_FILE", "/app/config/vault-roles.yml")
+_tokens_path = os.getenv("VAULT_TOKENS_FILE", "/app/config/vault-tokens.yml")
+
+if os.path.exists(_roles_path) or os.path.exists(_tokens_path):
+    token_store.load_from_files(_roles_path, _tokens_path)
+    logger.info("Per-user token auth loaded from config files")
+elif VAULT_TEAM_SECRET:
+    token_store.load_legacy_env(VAULT_TEAM_SECRET)
+    logger.warning("Legacy single-token mode. Migrate to per-user tokens via runevault CLI.")
 else:
-    VALID_TOKENS = {
-        "TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION",
-    }
-    logger.warning("Using demo tokens. Set VAULT_TOKENS env var for production.")
+    token_store.load_defaults_with_demo_token()
+    logger.warning("Demo mode. Set VAULT_TEAM_SECRET for production.")
 
 
-# =============================================================================
-# Rate Limiting
-# =============================================================================
-class RateLimiter:
-    """Simple sliding window rate limiter."""
-
-    def __init__(self, max_requests: int = 30, window_seconds: int = 60):
-        self.max_requests = max_requests
-        self.window_seconds = window_seconds
-        self._requests: dict[str, list[float]] = defaultdict(list)
-        self._lock = Lock()
-
-    def is_allowed(self, client_id: str) -> bool:
-        """Check if request is allowed and record it."""
-        now = time.time()
-        with self._lock:
-            # Clean old entries
-            self._requests[client_id] = [
-                t for t in self._requests[client_id]
-                if now - t < self.window_seconds
-            ]
-            # Check limit
-            if len(self._requests[client_id]) >= self.max_requests:
-                return False
-            # Record request
-            self._requests[client_id].append(now)
-            return True
-
-    def get_retry_after(self, client_id: str) -> int:
-        """Returns seconds until next request is allowed."""
-        with self._lock:
-            if not self._requests[client_id]:
-                return 0
-            oldest = min(self._requests[client_id])
-            return max(0, int(self.window_seconds - (time.time() - oldest)))
-
-
-rate_limiter = RateLimiter(max_requests=30, window_seconds=60)
-
-
-def validate_token(token: str):
-    """Validate authentication token with rate limiting."""
-    # Rate limit by token (prevents brute-force)
-    if not rate_limiter.is_allowed(token):
-        retry_after = rate_limiter.get_retry_after(token)
-        raise ValueError(f"Rate limit exceeded. Retry after {retry_after} seconds.")
-
-    if token not in VALID_TOKENS:
-        raise ValueError("Access Denied: Invalid authentication token")
+def validate_token(token: str) -> tuple[str, object]:
+    """Validate per-user token. Returns (username, Role)."""
+    return token_store.validate(token)
 
 # =============================================================================
 # Core Business Logic
@@ -228,7 +195,8 @@ def _get_public_key_impl(token: str) -> str:
     Returns:
         JSON string containing EncKey, EvalKey.
     """
-    validate_token(token)
+    username, role = validate_token(token)
+    token_store.check_scope(role, "get_public_key")
 
     bundle = {}
     for filename in ["EncKey.json", "EvalKey.json"]:
@@ -245,8 +213,10 @@ def _get_public_key_impl(token: str) -> str:
         bundle["index_name"] = VAULT_INDEX_NAME
     bundle["key_id"] = KEY_ID
 
-    # Per-agent metadata DEK: derived from master key + token-based agent_id
-    agent_id = hashlib.sha256(token.encode('utf-8')).hexdigest()[:32]
+    # Team-shared metadata DEK: derived from VAULT_TEAM_SECRET (not per-user token)
+    # All team members get the same DEK so they can decrypt each other's metadata
+    dek_source = VAULT_TEAM_SECRET or token
+    agent_id = hashlib.sha256(dek_source.encode('utf-8')).hexdigest()[:32]
     master_key = _load_master_key()
     agent_dek = derive_agent_key(master_key, agent_id)
     bundle["agent_id"] = agent_id
@@ -270,11 +240,12 @@ def _decrypt_scores_impl(token: str, encrypted_blob_b64: str, top_k: int = 5) ->
     Returns:
         JSON string containing the list of {shard_idx, row_idx, score}.
     """
-    validate_token(token)
+    username, role = validate_token(token)
+    token_store.check_scope(role, "decrypt_scores")
 
-    # Policy Enforcement
-    if top_k > 10:
-        return json.dumps({"error": "Rate Limit Exceeded: Max top_k is 10"})
+    # Per-role top_k enforcement
+    if top_k > role.top_k:
+        raise TopKExceededError(top_k, role.top_k, role.name)
 
     try:
         # 1. Deserialize CiphertextScore protobuf
@@ -326,7 +297,8 @@ def _decrypt_metadata_impl(token: str, encrypted_metadata_list: list[str]) -> st
     Returns:
         JSON string containing the list of decrypted metadata objects.
     """
-    validate_token(token)
+    username, role = validate_token(token)
+    token_store.check_scope(role, "decrypt_metadata")
 
     if not os.path.exists(metadata_key_path):
         return json.dumps({"error": "MetadataKey not found in Vault"})

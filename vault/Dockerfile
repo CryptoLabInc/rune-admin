@@ -14,13 +14,13 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY vault_core.py vault_grpc_server.py monitoring.py ./
+COPY vault_core.py vault_grpc_server.py monitoring.py token_store.py admin_server.py vault_admin_cli.py ./
 COPY proto/ proto/
 COPY docker-entrypoint.sh .
-RUN chmod +x docker-entrypoint.sh
+RUN chmod +x docker-entrypoint.sh vault_admin_cli.py
 
-RUN mkdir -p /app/vault_keys /app/certs /secure/backups /var/log/rune-vault \
-    && chown -R vault:vault /app /secure /var/log/rune-vault
+RUN mkdir -p /app/vault_keys /app/certs /app/config /secure/backups /var/log/rune-vault \
+    && chown -R vault:vault /app /secure /var/log/rune-vault /var/run
 
 EXPOSE 50051 9090
 

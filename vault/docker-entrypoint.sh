@@ -10,7 +10,7 @@ CERT_DIR="/app/certs"
 # Skip auto-generation if TLS is disabled
 if [ "${VAULT_TLS_DISABLE:-}" = "true" ]; then
     echo "[entrypoint] TLS disabled — skipping certificate generation."
-    chown -R vault:vault /app/vault_keys /secure /var/log/rune-vault 2>/dev/null || true
+    chown -R vault:vault /app/vault_keys /app/config /secure /var/log/rune-vault /var/run 2>/dev/null || true
     exec gosu vault python3 vault_grpc_server.py "$@"
 fi
 
@@ -74,7 +74,7 @@ export VAULT_TLS_CERT="${VAULT_TLS_CERT:-$CERT_DIR/server.pem}"
 export VAULT_TLS_KEY="${VAULT_TLS_KEY:-$CERT_DIR/server.key}"
 
 # Fix ownership on mounted volumes so the vault user can read them
-chown -R vault:vault /app/certs /app/vault_keys /secure /var/log/rune-vault 2>/dev/null || true
+chown -R vault:vault /app/certs /app/vault_keys /app/config /secure /var/log/rune-vault /var/run 2>/dev/null || true
 
 # Drop privileges and run as vault user
 exec gosu vault python3 vault_grpc_server.py "$@"
