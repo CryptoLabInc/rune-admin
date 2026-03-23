@@ -25,7 +25,7 @@ write_files:
             - "0.0.0.0:50051:50051"
             - "127.0.0.1:9090:9090"
           environment:
-            - VAULT_TOKENS=${vault_token}
+            - VAULT_TEAM_SECRET=${team_secret}
             - VAULT_INDEX_NAME=${vault_index_name}
             - ENVECTOR_ENDPOINT=${envector_endpoint}
             - ENVECTOR_API_KEY=${envector_api_key}
@@ -35,6 +35,7 @@ write_files:
             - VAULT_TLS_DISABLE=$${VAULT_TLS_DISABLE:-}
           volumes:
             - vault-keys:/app/vault_keys:rw
+            - ./config:/app/config:rw
             - ./certs:/app/certs:rw
             - ./backups:/secure/backups:rw
             - ./logs:/var/log/rune-vault:rw
@@ -69,8 +70,24 @@ write_files:
 
 runcmd:
   # Create Rune directory structure
-  - mkdir -p /opt/rune/certs /opt/rune/backups /opt/rune/logs
+  - mkdir -p /opt/rune/certs /opt/rune/backups /opt/rune/logs /opt/rune/config
   - chmod 700 /opt/rune/certs
+
+  # Generate per-user token auth config files
+  - |
+    cat > /opt/rune/config/vault-roles.yml <<'ROLES'
+    roles:
+      admin:
+        scope: [get_public_key, decrypt_scores, decrypt_metadata, manage_tokens]
+        top_k: 50
+        rate_limit: 150/60s
+      agent:
+        scope: [get_public_key, decrypt_scores, decrypt_metadata]
+        top_k: 10
+        rate_limit: 30/60s
+    ROLES
+    echo "tokens: []" > /opt/rune/config/vault-tokens.yml
+    chmod 600 /opt/rune/config/vault-roles.yml /opt/rune/config/vault-tokens.yml
 
   # Install Docker CE with compose plugin (v2)
   - |
@@ -85,8 +102,12 @@ runcmd:
   - systemctl enable docker
   - systemctl start docker
 
-  # Add ubuntu user to docker group
+  # Add ubuntu user to docker group and set up runevault alias
   - usermod -aG docker ubuntu
+  - |
+    if ! grep -q 'alias runevault=' /home/ubuntu/.bashrc 2>/dev/null; then
+      echo "alias runevault='docker exec -it rune-vault python3 /app/vault_admin_cli.py'" >> /home/ubuntu/.bashrc
+    fi
 
   # TLS setup — inline cert generation (avoids GitHub rate limits)
   - |

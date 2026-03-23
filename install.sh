@@ -634,7 +634,7 @@ deploy_csp() {
     print_step "Generating terraform.tfvars..."
     escape_tf() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
     {
-        printf 'vault_token        = "%s"\n' "$(escape_tf "$VAULT_TEAM_SECRET_VALUE")"
+        printf 'team_secret        = "%s"\n' "$(escape_tf "$VAULT_TEAM_SECRET_VALUE")"
         printf 'team_name          = "%s"\n' "$(escape_tf "$TEAM_NAME")"
         printf 'region             = "%s"\n' "$(escape_tf "$CSP_REGION")"
         printf 'tls_mode           = "%s"\n' "$(escape_tf "$TLS_MODE")"
