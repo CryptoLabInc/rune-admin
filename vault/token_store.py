@@ -289,6 +289,12 @@ class TokenStore:
 
         return tok.user, role
 
+    def get_username(self, token_str: str) -> str | None:
+        """Look up username for a token without side effects."""
+        with self._lock:
+            tok = self._tokens.get(token_str)
+            return tok.user if tok else None
+
     def check_scope(self, role: Role, method_name: str):
         """Check if a method is permitted for the given role."""
         if method_name not in role.scope:
@@ -367,10 +373,20 @@ class TokenStore:
 
     # ── Role CRUD ────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _validate_rate_limit(rate_limit: str):
+        """Validate rate_limit format (e.g. '30/60s')."""
+        import re
+        if not re.fullmatch(r"\d+/\d+s", rate_limit):
+            raise ValueError(
+                f"Invalid rate_limit format '{rate_limit}'. Expected '<max>/<window>s' (e.g. '30/60s')"
+            )
+
     def add_role(
         self, name: str, scope: list[str], top_k: int, rate_limit: str
     ) -> Role:
         """Create a new role."""
+        self._validate_rate_limit(rate_limit)
         with self._lock:
             if name in self._roles:
                 raise ValueError(f"Role '{name}' already exists")
@@ -382,6 +398,8 @@ class TokenStore:
 
     def update_role(self, name: str, **kwargs) -> Role:
         """Update an existing role. Accepts scope, top_k, rate_limit kwargs."""
+        if "rate_limit" in kwargs:
+            self._validate_rate_limit(kwargs["rate_limit"])
         with self._lock:
             role = self._roles.get(name)
             if role is None:

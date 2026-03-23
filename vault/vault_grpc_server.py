@@ -49,7 +49,7 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
     def GetPublicKey(self, request, context):
         start_time = time.time()
         status = "success"
-        user = "unknown"
+        user = token_store.get_username(request.token) or "unknown"
         try:
             result_json = _get_public_key_impl(request.token)
             parsed = json.loads(result_json)
@@ -95,7 +95,7 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
     def DecryptScores(self, request, context):
         start_time = time.time()
         status = "success"
-        user = "unknown"
+        user = token_store.get_username(request.token) or "unknown"
         try:
             result_json = _decrypt_scores_impl(
                 request.token,
@@ -159,7 +159,7 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
     def DecryptMetadata(self, request, context):
         start_time = time.time()
         status = "success"
-        user = "unknown"
+        user = token_store.get_username(request.token) or "unknown"
         try:
             result_json = _decrypt_metadata_impl(
                 request.token,

@@ -3,7 +3,7 @@
 Vault Admin CLI — manages per-user tokens and roles.
 
 Usage (via docker exec or runevault alias):
-    runevault token issue --user alice --role agent --expires-days 90
+    runevault token issue --user alice --role agent --expires 90d
     runevault token revoke --user alice
     runevault token list
     runevault role list
@@ -15,6 +15,7 @@ Usage (via docker exec or runevault alias):
 import argparse
 import http.client
 import json
+import re
 import socket
 import sys
 
@@ -55,10 +56,24 @@ def _request(method: str, path: str, body: dict | None = None) -> dict:
 
 # ── Token commands ───────────────────────────────────────────────────────
 
+def _parse_duration(value: str) -> int:
+    """Parse duration string like '90d', '12w', '6m' into days."""
+    m = re.fullmatch(r"(\d+)([dwm])", value)
+    if not m:
+        print(f"Error: Invalid duration '{value}'. Use <number><d|w|m> (e.g. 90d, 12w, 6m)", file=sys.stderr)
+        sys.exit(1)
+    n, unit = int(m.group(1)), m.group(2)
+    if unit == "d":
+        return n
+    if unit == "w":
+        return n * 7
+    return n * 30  # 'm' approximation
+
+
 def cmd_token_issue(args):
     body = {"user": args.user, "role": args.role}
-    if args.expires_days is not None:
-        body["expires_days"] = args.expires_days
+    if args.expires is not None:
+        body["expires_days"] = _parse_duration(args.expires)
     result = _request("POST", "/tokens", body)
     print(f"\nToken issued for '{result['user']}':")
     print(f"  Role:    {result['role']}")
@@ -133,7 +148,6 @@ def cmd_role_update(args):
 def cmd_role_delete(args):
     _request("DELETE", f"/roles/{args.name}")
     print(f"Role '{args.name}' deleted.")
-    print("WARNING: Tokens assigned to this role will fail validation until reassigned.")
 
 
 # ── Argument parsing ─────────────────────────────────────────────────────
@@ -152,7 +166,7 @@ def build_parser() -> argparse.ArgumentParser:
     issue_p = token_sub.add_parser("issue", help="Issue a new token")
     issue_p.add_argument("--user", required=True, help="Username")
     issue_p.add_argument("--role", required=True, help="Role name")
-    issue_p.add_argument("--expires-days", type=int, default=None, help="Days until expiry")
+    issue_p.add_argument("--expires", default=None, help="Duration until expiry (e.g. 90d, 12w, 6m)")
     issue_p.set_defaults(func=cmd_token_issue)
 
     revoke_p = token_sub.add_parser("revoke", help="Revoke a user's token")

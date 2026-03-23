@@ -769,7 +769,7 @@ show_summary() {
     fi
     echo ""
     echo "  Issue per-user tokens with:"
-    echo "    runevault token issue --user <name> --role agent --expires-days 90"
+    echo "    runevault token issue --user <name> --role agent --expires 90d"
     echo ""
     echo "  Each team member uses their individual token for authentication."
     echo "  Team Secret (above) is only needed for DEK derivation — keep it secure."
