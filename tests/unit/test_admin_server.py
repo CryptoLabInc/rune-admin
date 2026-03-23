@@ -44,16 +44,16 @@ class TestAdminServer:
 
     def test_issue_token(self):
         status, data = _request(self.port, "POST", "/tokens", {
-            "user": "alice", "role": "agent", "expires_days": 90
+            "user": "alice", "role": "member", "expires_days": 90
         })
         assert status == 201
         assert data["user"] == "alice"
         assert data["token"].startswith("evt_")
-        assert data["role"] == "agent"
+        assert data["role"] == "member"
 
     def test_list_tokens(self):
         _request(self.port, "POST", "/tokens", {
-            "user": "alice", "role": "agent"
+            "user": "alice", "role": "member"
         })
         status, data = _request(self.port, "GET", "/tokens")
         assert status == 200
@@ -62,7 +62,7 @@ class TestAdminServer:
 
     def test_revoke_token(self):
         _request(self.port, "POST", "/tokens", {
-            "user": "alice", "role": "agent"
+            "user": "alice", "role": "member"
         })
         status, data = _request(self.port, "DELETE", "/tokens/alice")
         assert status == 200
@@ -78,10 +78,10 @@ class TestAdminServer:
 
     def test_issue_duplicate_user(self):
         _request(self.port, "POST", "/tokens", {
-            "user": "alice", "role": "agent"
+            "user": "alice", "role": "member"
         })
         status, data = _request(self.port, "POST", "/tokens", {
-            "user": "alice", "role": "agent"
+            "user": "alice", "role": "member"
         })
         assert status == 400
         assert "already exists" in data["error"]
@@ -99,7 +99,7 @@ class TestAdminServer:
         assert status == 200
         names = [r["name"] for r in data["roles"]]
         assert "admin" in names
-        assert "agent" in names
+        assert "member" in names
 
     def test_create_role(self):
         status, data = _request(self.port, "POST", "/roles", {
@@ -112,7 +112,7 @@ class TestAdminServer:
         assert data["name"] == "researcher"
 
     def test_update_role(self):
-        status, data = _request(self.port, "PUT", "/roles/agent", {
+        status, data = _request(self.port, "PUT", "/roles/member", {
             "top_k": 8,
         })
         assert status == 200

@@ -73,22 +73,6 @@ runcmd:
   - mkdir -p /opt/rune/certs /opt/rune/backups /opt/rune/logs /opt/rune/config
   - chmod 700 /opt/rune/certs
 
-  # Generate per-user token auth config files
-  - |
-    cat > /opt/rune/config/vault-roles.yml <<'ROLES'
-    roles:
-      admin:
-        scope: [get_public_key, decrypt_scores, decrypt_metadata, manage_tokens]
-        top_k: 50
-        rate_limit: 150/60s
-      agent:
-        scope: [get_public_key, decrypt_scores, decrypt_metadata]
-        top_k: 10
-        rate_limit: 30/60s
-    ROLES
-    echo "tokens: []" > /opt/rune/config/vault-tokens.yml
-    chmod 600 /opt/rune/config/vault-roles.yml /opt/rune/config/vault-tokens.yml
-
   # Install Docker CE with compose plugin (v2)
   - |
     install -m 0755 -d /etc/apt/keyrings

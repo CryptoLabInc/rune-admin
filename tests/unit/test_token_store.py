@@ -25,28 +25,28 @@ class TestTokenStore:
         self.store._roles = dict(DEFAULT_ROLES)
 
     def test_add_and_validate_token(self):
-        tok = self.store.add_token("alice", "agent", expires_days=90)
+        tok = self.store.add_token("alice", "member", expires_days=90)
         assert tok.user == "alice"
         assert tok.token.startswith("evt_")
-        assert tok.role == "agent"
+        assert tok.role == "member"
 
         username, role = self.store.validate(tok.token)
         assert username == "alice"
-        assert role.name == "agent"
+        assert role.name == "member"
 
     def test_invalid_token_raises(self):
         with pytest.raises(TokenNotFoundError):
             self.store.validate("nonexistent_token")
 
     def test_expired_token_raises(self):
-        tok = self.store.add_token("bob", "agent", expires_days=1)
+        tok = self.store.add_token("bob", "member", expires_days=1)
         # Manually expire the token
         tok.expires = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
         with pytest.raises(TokenExpiredError, match="bob"):
             self.store.validate(tok.token)
 
     def test_revoke_token(self):
-        tok = self.store.add_token("charlie", "agent")
+        tok = self.store.add_token("charlie", "member")
         assert self.store.revoke_token("charlie") is True
         with pytest.raises(TokenNotFoundError):
             self.store.validate(tok.token)
@@ -55,16 +55,16 @@ class TestTokenStore:
         assert self.store.revoke_token("nobody") is False
 
     def test_duplicate_user_rejected(self):
-        self.store.add_token("alice", "agent")
+        self.store.add_token("alice", "member")
         with pytest.raises(ValueError, match="already exists"):
-            self.store.add_token("alice", "agent")
+            self.store.add_token("alice", "member")
 
     def test_invalid_role_rejected(self):
         with pytest.raises(ValueError, match="does not exist"):
             self.store.add_token("alice", "nonexistent_role")
 
     def test_list_tokens_hides_values(self):
-        self.store.add_token("alice", "agent", expires_days=30)
+        self.store.add_token("alice", "member", expires_days=30)
         result = self.store.list_tokens()
         assert len(result) == 1
         assert result[0]["user"] == "alice"
@@ -73,7 +73,7 @@ class TestTokenStore:
 
     def test_rate_limiting_per_user(self):
         """Rate limiting should use per-role limits keyed by username."""
-        # Agent role: 30/60s — use a custom role with low limit for test
+        # Member role: 30/60s — use a custom role with low limit for test
         self.store.add_role("limited", ["get_public_key"], 5, "2/60s")
         tok = self.store.add_token("ratelimited_user", "limited")
 
@@ -83,9 +83,9 @@ class TestTokenStore:
             self.store.validate(tok.token)
 
     def test_top_k_from_role(self):
-        tok = self.store.add_token("alice", "agent")
+        tok = self.store.add_token("alice", "member")
         _, role = self.store.validate(tok.token)
-        assert role.top_k == 10  # agent default
+        assert role.top_k == 10  # member default
 
     def test_never_expires_token(self):
         tok = self.store.add_token("permanent_user", "admin")
@@ -115,7 +115,7 @@ class TestTokenStore:
             store1 = TokenStore()
             store1.load_from_files(roles_path, tokens_path)
             store1.add_role("researcher", ["get_public_key", "decrypt_scores"], 3, "10/60s")
-            tok = store1.add_token("alice", "agent", expires_days=90)
+            tok = store1.add_token("alice", "member", expires_days=90)
 
             # Wait for async persist
             store1._persist_executor.shutdown(wait=True)
@@ -127,7 +127,7 @@ class TestTokenStore:
             # Validate alice's token works
             username, role = store2.validate(tok.token)
             assert username == "alice"
-            assert role.name == "agent"
+            assert role.name == "member"
 
             # Validate custom role exists
             roles = store2.list_roles()
@@ -155,9 +155,9 @@ class TestRoleCRUD:
             self.store.add_role("admin", ["get_public_key"], 5, "30/60s")
 
     def test_update_role(self):
-        role = self.store.update_role("agent", top_k=8)
+        role = self.store.update_role("member", top_k=8)
         assert role.top_k == 8
-        assert role.name == "agent"
+        assert role.name == "member"
 
     def test_update_nonexistent_role_rejected(self):
         with pytest.raises(ValueError, match="does not exist"):
@@ -173,7 +173,7 @@ class TestRoleCRUD:
         with pytest.raises(ValueError, match="Cannot delete default"):
             self.store.delete_role("admin")
         with pytest.raises(ValueError, match="Cannot delete default"):
-            self.store.delete_role("agent")
+            self.store.delete_role("member")
 
     def test_delete_role_with_active_tokens_rejected(self):
         self.store.add_role("temp", ["get_public_key"], 1, "5/60s")
@@ -186,17 +186,17 @@ class TestRoleCRUD:
         assert len(roles) >= 2
         names = [r["name"] for r in roles]
         assert "admin" in names
-        assert "agent" in names
+        assert "member" in names
 
     def test_update_role_clears_rate_limiters(self):
         """Changing a role's rate_limit should reset affected rate limiters."""
-        tok = self.store.add_token("alice", "agent")
+        tok = self.store.add_token("alice", "member")
         # Validate to create rate limiter
         self.store.validate(tok.token)
         assert "alice" in self.store._rate_limiters
 
         # Update role
-        self.store.update_role("agent", rate_limit="100/60s")
+        self.store.update_role("member", rate_limit="100/60s")
         assert "alice" not in self.store._rate_limiters
 
     def test_role_rate_limit_parsed(self):
@@ -211,7 +211,7 @@ class TestScopeCheck:
 
     def test_scope_allows_valid_method(self):
         store = TokenStore()
-        role = Role("agent", ["get_public_key", "decrypt_scores"], 5, "30/60s")
+        role = Role("member", ["get_public_key", "decrypt_scores"], 5, "30/60s")
         store.check_scope(role, "get_public_key")  # Should not raise
 
     def test_scope_rejects_invalid_method(self):

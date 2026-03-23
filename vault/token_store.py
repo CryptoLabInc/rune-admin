@@ -148,8 +148,8 @@ DEFAULT_ROLES = {
         50,
         "150/60s",
     ),
-    "agent": Role(
-        "agent",
+    "member": Role(
+        "member",
         ["get_public_key", "decrypt_scores", "decrypt_metadata"],
         10,
         "30/60s",
@@ -224,6 +224,10 @@ class TokenStore:
                 logger.info(
                     "Loaded %d tokens from %s", len(self._tokens), tokens_path
                 )
+
+        # Auto-generate default config files if they don't exist
+        if not os.path.exists(roles_path) or not os.path.exists(tokens_path):
+            self._schedule_persist()
 
     def load_legacy_env(self, env_tokens: str):
         """Backward compat: load comma-separated VAULT_TOKENS as legacy tokens."""
