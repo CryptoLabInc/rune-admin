@@ -86,7 +86,7 @@ roles:
     scope: [get_public_key, decrypt_scores, decrypt_metadata, manage_tokens]
     top_k: 50
     rate_limit: 150/60s
-  agent:
+  member:
     scope: [get_public_key, decrypt_scores, decrypt_metadata]
     top_k: 10
     rate_limit: 30/60s

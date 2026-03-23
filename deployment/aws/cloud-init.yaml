@@ -93,6 +93,22 @@ runcmd:
       echo "alias runevault='docker exec -it rune-vault python3 /app/vault_admin_cli.py'" >> /home/ubuntu/.bashrc
     fi
 
+  # Generate per-user token auth config files
+  - |
+    cat > /opt/rune/config/vault-roles.yml <<'ROLES'
+    roles:
+      admin:
+        scope: [get_public_key, decrypt_scores, decrypt_metadata, manage_tokens]
+        top_k: 50
+        rate_limit: 150/60s
+      member:
+        scope: [get_public_key, decrypt_scores, decrypt_metadata]
+        top_k: 10
+        rate_limit: 30/60s
+    ROLES
+    echo "tokens: []" > /opt/rune/config/vault-tokens.yml
+    chmod 600 /opt/rune/config/vault-roles.yml /opt/rune/config/vault-tokens.yml
+
   # TLS setup — inline cert generation (avoids GitHub rate limits)
   - |
     if [ "${tls_mode}" = "self-signed" ]; then
