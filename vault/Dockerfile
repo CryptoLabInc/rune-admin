@@ -20,7 +20,7 @@ COPY docker-entrypoint.sh .
 RUN chmod +x docker-entrypoint.sh vault_admin_cli.py
 
 RUN mkdir -p /app/vault_keys /app/certs /app/config /secure/backups /var/log/rune-vault \
-    && chown -R vault:vault /app /secure /var/log/rune-vault /var/run
+    && chown -R vault:vault /app /secure /var/log/rune-vault
 
 EXPOSE 50051 9090
 

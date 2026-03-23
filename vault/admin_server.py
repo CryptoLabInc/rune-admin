@@ -1,37 +1,20 @@
 """
-Admin HTTP server on internal unix socket for token and role management.
+Admin HTTP server for token and role management.
 
-Listens on /var/run/vault-admin.sock (container-internal only).
+Listens on 127.0.0.1:8081 (container-internal only, not exposed via Docker).
 No authentication required — access is protected by:
   SSH → docker group → docker exec → container isolation.
 """
 
 import json
 import logging
-import os
-import socket
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 logger = logging.getLogger("vault.admin")
 
-DEFAULT_SOCKET_PATH = "/var/run/vault-admin.sock"
-
-
-class UnixHTTPServer(HTTPServer):
-    """HTTPServer that binds to a Unix domain socket."""
-    address_family = socket.AF_UNIX
-
-    def server_bind(self):
-        if os.path.exists(self.server_address):
-            os.unlink(self.server_address)
-        super().server_bind()
-        os.chmod(self.server_address, 0o660)
-
-    def server_close(self):
-        super().server_close()
-        if os.path.exists(self.server_address):
-            os.unlink(self.server_address)
+DEFAULT_ADMIN_HOST = "127.0.0.1"
+DEFAULT_ADMIN_PORT = 8081
 
 
 class AdminHandler(BaseHTTPRequestHandler):
@@ -191,11 +174,11 @@ class AdminHandler(BaseHTTPRequestHandler):
         self._send_json({"message": f"Deleted role '{name}'"})
 
 
-def start_admin_server(store, socket_path: str = DEFAULT_SOCKET_PATH):
-    """Start the admin HTTP server on a unix socket in a daemon thread."""
+def start_admin_server(store, host: str = DEFAULT_ADMIN_HOST, port: int = DEFAULT_ADMIN_PORT):
+    """Start the admin HTTP server in a daemon thread."""
     AdminHandler.token_store = store
-    server = UnixHTTPServer(socket_path, AdminHandler)
+    server = HTTPServer((host, port), AdminHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True, name="admin-server")
     thread.start()
-    logger.info("Admin server started on %s", socket_path)
+    logger.info("Admin server started on %s:%d", host, port)
     return server

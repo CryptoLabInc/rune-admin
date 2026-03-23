@@ -311,7 +311,7 @@ if __name__ == "__main__":
         monitoring.start_monitoring(port=args.metrics_port)
         logger.info(f"Monitoring HTTP server started on :{args.metrics_port}")
 
-    # Start admin HTTP server (internal unix socket for token/role management)
+    # Start admin HTTP server (internal HTTP, not exposed via Docker)
     admin_srv = start_admin_server(token_store)
 
     # Start gRPC server (non-blocking)

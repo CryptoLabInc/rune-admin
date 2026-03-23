@@ -16,27 +16,15 @@ import argparse
 import http.client
 import json
 import re
-import socket
 import sys
 
-SOCKET_PATH = "/var/run/vault-admin.sock"
-
-
-class UnixHTTPConnection(http.client.HTTPConnection):
-    """HTTP connection over a Unix domain socket."""
-
-    def __init__(self, socket_path: str):
-        super().__init__("localhost")
-        self.socket_path = socket_path
-
-    def connect(self):
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.connect(self.socket_path)
+ADMIN_HOST = "127.0.0.1"
+ADMIN_PORT = 8081
 
 
 def _request(method: str, path: str, body: dict | None = None) -> dict:
     """Send an HTTP request to the admin server and return parsed JSON."""
-    conn = UnixHTTPConnection(SOCKET_PATH)
+    conn = http.client.HTTPConnection(ADMIN_HOST, ADMIN_PORT)
     headers = {"Content-Type": "application/json"} if body else {}
     data = json.dumps(body).encode() if body else None
     try:
