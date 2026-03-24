@@ -18,7 +18,8 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../vault'))
 
 # Import the implementation function (not the MCP-decorated version)
-from vault_core import _decrypt_scores_impl as decrypt_scores, rate_limiter
+from vault_core import _decrypt_scores_impl as decrypt_scores
+from token_store import token_store
 
 
 def _make_fake_blob() -> str:
@@ -40,8 +41,8 @@ class TestDecryptScores:
 
     @pytest.fixture(autouse=True)
     def reset_rate_limiter(self):
-        """Reset rate limiter before each test."""
-        rate_limiter._requests.clear()
+        """Reset rate limiters before each test."""
+        token_store._rate_limiters.clear()
 
     def _patch_cipher_and_proto(self, monkeypatch, scores_return):
         """Helper to mock cipher, CiphertextScore, and CipherBlock."""
@@ -119,20 +120,24 @@ class TestDecryptScores:
         assert returned_scores[1] == pytest.approx(0.8)
 
     def test_top_k_limit_enforced(self):
-        """Top-K > 10 should be rejected (policy)."""
+        """Top-K exceeding role limit should be rejected."""
+        from token_store import TopKExceededError, token_store as ts
+
+        # Issue a member token (top_k=10) to test limit enforcement
+        tok = ts.add_token("topk-test-user", "member")
         blob = _make_fake_blob()
 
-        result = decrypt_scores("TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION", blob, top_k=15)
-        data = json.loads(result)
+        with pytest.raises(TopKExceededError):
+            decrypt_scores(tok.token, blob, top_k=15)
 
-        assert "error" in data
-        assert "Rate Limit" in data["error"] or "Max top_k" in data["error"]
+        ts.revoke_token("topk-test-user")
 
     def test_invalid_token_rejected(self):
-        """Invalid token should raise ValueError."""
+        """Invalid token should raise an authentication error."""
+        from token_store import TokenNotFoundError
         blob = _make_fake_blob()
 
-        with pytest.raises(ValueError, match="Access Denied"):
+        with pytest.raises(TokenNotFoundError):
             decrypt_scores("invalid-token", blob, top_k=5)
 
     def test_malformed_blob_returns_error(self):

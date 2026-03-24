@@ -11,6 +11,9 @@ psutil>=5.9.0
 # Token Management
 PyYAML>=6.0
 
+# Cryptography (HKDF key derivation)
+cryptography>=41.0.0
+
 # gRPC
 grpcio>=1.60.2,<=1.74.0
 grpcio-tools>=1.60.2,<=1.74.0

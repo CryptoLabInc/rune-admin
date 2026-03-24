@@ -366,7 +366,7 @@ prompt_csp_config() {
 }
 
 generate_team_secret() {
-    VAULT_TEAM_SECRET_VALUE="evt_$(openssl rand -hex 16)"
+    VAULT_TEAM_SECRET_VALUE="evt_$(openssl rand -hex 32)"
     print_info "Team secret generated."
 }
 
