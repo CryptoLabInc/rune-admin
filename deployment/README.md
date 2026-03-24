@@ -59,7 +59,7 @@ terraform apply
 
 # Output:
 # vault_endpoint = "vault-myteam.us-ashburn-1.oci.envector.io:50051"
-# vault_token = "evt_myteam_xxx" (sensitive)
+# team_secret = "evt_myteam_xxx" (sensitive)
 # vault_public_ip = "xxx.xxx.xxx.xxx"
 ```
 
@@ -95,11 +95,11 @@ curl https://vault-myteam.us-ashburn-1.oci.envector.io/health
 ```bash
 # Get credentials
 terraform output vault_url
-terraform output vault_token
+terraform output team_secret
 
 # Share with team (use secure channel)
 export RUNEVAULT_ENDPOINT=$(terraform output -raw vault_url)
-export RUNEVAULT_TOKEN=$(terraform output -raw vault_token)
+export RUNEVAULT_TOKEN=$(terraform output -raw team_secret)
 ```
 
 ## Architecture

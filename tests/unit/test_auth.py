@@ -1,5 +1,6 @@
 """
 Unit tests for authentication and token validation.
+Updated for per-user token auth (issue #18).
 """
 import pytest
 import sys
@@ -9,90 +10,66 @@ import time
 # Add vault to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../vault'))
 
-from vault_core import validate_token, VALID_TOKENS, rate_limiter, RateLimiter
+from token_store import (
+    TokenStore, RateLimiter, Role,
+    TokenNotFoundError, TokenExpiredError, RateLimitError, ScopeError,
+)
+from vault_core import validate_token, token_store
 
-# Demo tokens used when VAULT_TOKENS env var is not set
+# Demo token used when no config files or env var set
 DEMO_TOKEN = "TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION"
-DEMO_ADMIN_TOKEN = "TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION"
 
 
 class TestTokenValidation:
-    """Test token validation logic."""
+    """Test token validation with per-user token store."""
+
+    def setup_method(self):
+        """Reset token store to demo mode for each test."""
+        token_store._tokens.clear()
+        token_store._tokens_by_user.clear()
+        token_store._roles.clear()
+        token_store._rate_limiters.clear()
+        token_store.load_defaults_with_demo_token()
 
     def test_valid_demo_token(self):
-        """Demo token should not raise exception."""
-        # Reset rate limiter for clean test
-        rate_limiter._requests.clear()
-        try:
-            validate_token(DEMO_TOKEN)
-        except ValueError:
-            pytest.fail("Valid demo token raised ValueError")
-
-    def test_valid_demo_admin_token(self):
-        """Demo admin token should be accepted."""
-        rate_limiter._requests.clear()
-        try:
-            validate_token(DEMO_ADMIN_TOKEN)
-        except ValueError:
-            pytest.fail("Valid demo admin token raised ValueError")
+        """Demo token should return (username, role) tuple."""
+        username, role = validate_token(DEMO_TOKEN)
+        assert username == "demo"
+        assert role.name == "admin"
 
     def test_invalid_token_raises_error(self):
-        """Invalid token should raise ValueError."""
-        rate_limiter._requests.clear()
-        with pytest.raises(ValueError, match="Access Denied"):
+        """Invalid token should raise TokenNotFoundError."""
+        with pytest.raises(TokenNotFoundError):
             validate_token("invalid-token-123")
 
     def test_empty_token_raises_error(self):
-        """Empty token should raise ValueError."""
-        rate_limiter._requests.clear()
-        with pytest.raises(ValueError, match="Access Denied"):
+        """Empty token should raise TokenNotFoundError."""
+        with pytest.raises(TokenNotFoundError):
             validate_token("")
-
-    def test_none_token_raises_error(self):
-        """None token should raise ValueError."""
-        rate_limiter._requests.clear()
-        with pytest.raises(ValueError, match="Access Denied"):
-            validate_token(None)
 
     def test_token_case_sensitive(self):
         """Token validation should be case-sensitive."""
-        rate_limiter._requests.clear()
-        with pytest.raises(ValueError):
-            validate_token("demo-token-get-your-own-at-envector-io")
+        with pytest.raises(TokenNotFoundError):
+            validate_token(DEMO_TOKEN.lower())
 
     def test_token_no_whitespace_tolerance(self):
         """Tokens with whitespace should fail."""
-        rate_limiter._requests.clear()
-        with pytest.raises(ValueError):
+        with pytest.raises(TokenNotFoundError):
             validate_token(f" {DEMO_TOKEN} ")
 
-    def test_valid_tokens_set_contains_demo_tokens(self):
-        """VALID_TOKENS should contain demo tokens when env var not set."""
-        # This test assumes VAULT_TOKENS env var is not set
-        if not os.getenv("VAULT_TOKENS"):
-            assert DEMO_TOKEN in VALID_TOKENS
-        assert len(VALID_TOKENS) >= 1
-
     def test_old_tokens_not_valid(self):
-        """Old hardcoded tokens should no longer work."""
-        rate_limiter._requests.clear()
-        with pytest.raises(ValueError, match="Access Denied"):
+        """Old hardcoded tokens should not work."""
+        with pytest.raises(TokenNotFoundError):
             validate_token("envector-team-alpha")
-        with pytest.raises(ValueError, match="Access Denied"):
-            validate_token("envector-admin-001")
 
-    @pytest.mark.skipif(
-        os.getenv("VAULT_TOKENS") is not None,
-        reason="Test only applies when VAULT_TOKENS env var is not set (demo mode)"
-    )
-    def test_demo_tokens_work_when_env_var_not_set(self):
-        """Demo tokens should pass validation when VAULT_TOKENS env var is not set."""
-        # This test verifies the inverse case of test_old_tokens_not_valid:
-        # While old tokens are rejected, new demo tokens should be accepted
-        # when running in demo mode (VAULT_TOKENS not set)
-        rate_limiter._requests.clear()
-        validate_token(DEMO_TOKEN)
-        validate_token(DEMO_ADMIN_TOKEN)
+    def test_validate_returns_tuple(self):
+        """validate_token should return (username, Role) tuple."""
+        result = validate_token(DEMO_TOKEN)
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        username, role = result
+        assert isinstance(username, str)
+        assert isinstance(role, Role)
 
 
 class TestRateLimiter:
@@ -116,9 +93,7 @@ class TestRateLimiter:
         limiter = RateLimiter(max_requests=2, window_seconds=60)
         limiter.is_allowed("client-a")
         limiter.is_allowed("client-a")
-        # client-a is at limit
         assert limiter.is_allowed("client-a") is False
-        # client-b should still be allowed
         assert limiter.is_allowed("client-b") is True
 
     def test_window_expiration(self):
@@ -127,7 +102,6 @@ class TestRateLimiter:
         limiter.is_allowed("test-client")
         limiter.is_allowed("test-client")
         assert limiter.is_allowed("test-client") is False
-        # Wait for window to expire
         time.sleep(1.1)
         assert limiter.is_allowed("test-client") is True
 
@@ -138,18 +112,36 @@ class TestRateLimiter:
         retry_after = limiter.get_retry_after("test-client")
         assert 55 <= retry_after <= 60
 
-    def test_validate_token_rate_limited(self):
-        """validate_token should enforce rate limiting."""
-        # Create a fresh rate limiter with low limit for testing
-        test_limiter = RateLimiter(max_requests=2, window_seconds=60)
-        import vault_core
-        original_limiter = vault_core.rate_limiter
-        vault_core.rate_limiter = test_limiter
+    def test_remove_client(self):
+        """remove() should clear a client's tracking data."""
+        limiter = RateLimiter(max_requests=1, window_seconds=60)
+        limiter.is_allowed("test-client")
+        assert limiter.is_allowed("test-client") is False
+        limiter.remove("test-client")
+        assert limiter.is_allowed("test-client") is True
 
-        try:
-            validate_token(DEMO_TOKEN)
-            validate_token(DEMO_TOKEN)
-            with pytest.raises(ValueError, match="Rate limit exceeded"):
-                validate_token(DEMO_TOKEN)
-        finally:
-            vault_core.rate_limiter = original_limiter
+
+class TestScopeEnforcement:
+    """Test scope enforcement for roles."""
+
+    def setup_method(self):
+        token_store._tokens.clear()
+        token_store._tokens_by_user.clear()
+        token_store._roles.clear()
+        token_store._rate_limiters.clear()
+        token_store.load_defaults_with_demo_token()
+
+    def test_admin_scope_allows_all_methods(self):
+        """Admin role should allow all standard methods."""
+        _, role = validate_token(DEMO_TOKEN)
+        # Should not raise
+        token_store.check_scope(role, "get_public_key")
+        token_store.check_scope(role, "decrypt_scores")
+        token_store.check_scope(role, "decrypt_metadata")
+        token_store.check_scope(role, "manage_tokens")
+
+    def test_scope_rejects_unauthorized_method(self):
+        """Methods not in scope should raise ScopeError."""
+        role = Role("limited", ["get_public_key"], 5, "30/60s")
+        with pytest.raises(ScopeError, match="decrypt_scores"):
+            token_store.check_scope(role, "decrypt_scores")

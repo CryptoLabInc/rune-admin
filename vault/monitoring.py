@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 vault_requests_total = Counter(
     'vault_requests_total',
     'Total number of requests',
-    ['method', 'endpoint', 'status']
+    ['method', 'endpoint', 'status', 'user']
 )
 
 vault_request_duration = Histogram(

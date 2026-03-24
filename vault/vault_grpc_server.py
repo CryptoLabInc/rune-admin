@@ -21,7 +21,13 @@ from vault_core import (
     _get_public_key_impl,
     _decrypt_scores_impl,
     _decrypt_metadata_impl,
+    token_store,
 )
+from token_store import (
+    TokenNotFoundError, TokenExpiredError,
+    RateLimitError, TopKExceededError, ScopeError,
+)
+from admin_server import start_admin_server
 
 from proto import vault_service_pb2 as pb2
 from proto import vault_service_pb2_grpc as pb2_grpc
@@ -43,6 +49,7 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
     def GetPublicKey(self, request, context):
         start_time = time.time()
         status = "success"
+        user = token_store.get_username(request.token) or "unknown"
         try:
             result_json = _get_public_key_impl(request.token)
             parsed = json.loads(result_json)
@@ -50,8 +57,22 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
                 status = "error"
                 return pb2.GetPublicKeyResponse(error=parsed["error"])
             return pb2.GetPublicKeyResponse(key_bundle_json=result_json)
+        except (TokenNotFoundError, TokenExpiredError) as e:
+            status = "error"
+            context.set_code(grpc.StatusCode.UNAUTHENTICATED)
+            context.set_details(str(e))
+            return pb2.GetPublicKeyResponse(error=str(e))
+        except RateLimitError as e:
+            status = "error"
+            context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            context.set_details(str(e))
+            return pb2.GetPublicKeyResponse(error=str(e))
+        except ScopeError as e:
+            status = "error"
+            context.set_code(grpc.StatusCode.PERMISSION_DENIED)
+            context.set_details(str(e))
+            return pb2.GetPublicKeyResponse(error=str(e))
         except ValueError as e:
-            # Auth / rate-limit errors from validate_token()
             status = "error"
             context.set_code(grpc.StatusCode.UNAUTHENTICATED)
             context.set_details(str(e))
@@ -65,7 +86,7 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
             if MONITORING_AVAILABLE:
                 duration = time.time() - start_time
                 monitoring.vault_requests_total.labels(
-                    method="get_public_key", endpoint="grpc", status=status
+                    method="get_public_key", endpoint="grpc", status=status, user=user
                 ).inc()
                 monitoring.vault_request_duration.labels(
                     method="get_public_key", endpoint="grpc"
@@ -74,6 +95,7 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
     def DecryptScores(self, request, context):
         start_time = time.time()
         status = "success"
+        user = token_store.get_username(request.token) or "unknown"
         try:
             result_json = _decrypt_scores_impl(
                 request.token,
@@ -94,6 +116,26 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
                 for item in parsed
             ]
             return pb2.DecryptScoresResponse(results=entries)
+        except TopKExceededError as e:
+            status = "error"
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(e))
+            return pb2.DecryptScoresResponse(error=str(e))
+        except (TokenNotFoundError, TokenExpiredError) as e:
+            status = "error"
+            context.set_code(grpc.StatusCode.UNAUTHENTICATED)
+            context.set_details(str(e))
+            return pb2.DecryptScoresResponse(error=str(e))
+        except RateLimitError as e:
+            status = "error"
+            context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            context.set_details(str(e))
+            return pb2.DecryptScoresResponse(error=str(e))
+        except ScopeError as e:
+            status = "error"
+            context.set_code(grpc.StatusCode.PERMISSION_DENIED)
+            context.set_details(str(e))
+            return pb2.DecryptScoresResponse(error=str(e))
         except ValueError as e:
             status = "error"
             context.set_code(grpc.StatusCode.UNAUTHENTICATED)
@@ -108,7 +150,7 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
             if MONITORING_AVAILABLE:
                 duration = time.time() - start_time
                 monitoring.vault_requests_total.labels(
-                    method="decrypt_scores", endpoint="grpc", status=status
+                    method="decrypt_scores", endpoint="grpc", status=status, user=user
                 ).inc()
                 monitoring.vault_request_duration.labels(
                     method="decrypt_scores", endpoint="grpc"
@@ -117,6 +159,7 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
     def DecryptMetadata(self, request, context):
         start_time = time.time()
         status = "success"
+        user = token_store.get_username(request.token) or "unknown"
         try:
             result_json = _decrypt_metadata_impl(
                 request.token,
@@ -134,6 +177,21 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
                 for item in parsed
             ]
             return pb2.DecryptMetadataResponse(decrypted_metadata=decrypted_strings)
+        except (TokenNotFoundError, TokenExpiredError) as e:
+            status = "error"
+            context.set_code(grpc.StatusCode.UNAUTHENTICATED)
+            context.set_details(str(e))
+            return pb2.DecryptMetadataResponse(error=str(e))
+        except RateLimitError as e:
+            status = "error"
+            context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            context.set_details(str(e))
+            return pb2.DecryptMetadataResponse(error=str(e))
+        except ScopeError as e:
+            status = "error"
+            context.set_code(grpc.StatusCode.PERMISSION_DENIED)
+            context.set_details(str(e))
+            return pb2.DecryptMetadataResponse(error=str(e))
         except ValueError as e:
             status = "error"
             context.set_code(grpc.StatusCode.UNAUTHENTICATED)
@@ -148,7 +206,7 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
             if MONITORING_AVAILABLE:
                 duration = time.time() - start_time
                 monitoring.vault_requests_total.labels(
-                    method="decrypt_metadata", endpoint="grpc", status=status
+                    method="decrypt_metadata", endpoint="grpc", status=status, user=user
                 ).inc()
                 monitoring.vault_request_duration.labels(
                     method="decrypt_metadata", endpoint="grpc"
@@ -253,12 +311,16 @@ if __name__ == "__main__":
         monitoring.start_monitoring(port=args.metrics_port)
         logger.info(f"Monitoring HTTP server started on :{args.metrics_port}")
 
+    # Start admin HTTP server (internal HTTP, not exposed via Docker)
+    admin_srv = start_admin_server(token_store)
+
     # Start gRPC server (non-blocking)
     grpc_server = serve_grpc(host=args.host, port=args.grpc_port)
 
     # Graceful shutdown on SIGTERM / SIGINT
     def _shutdown(signum, frame):
         logger.info("Received shutdown signal, stopping...")
+        admin_srv.shutdown()
         grpc_server.stop(grace=5)
 
     signal.signal(signal.SIGTERM, _shutdown)

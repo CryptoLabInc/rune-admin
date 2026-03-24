@@ -12,7 +12,7 @@ apt-get update
 apt-get install -y ca-certificates curl gnupg jq openssl
 
 # Create Rune directory structure
-mkdir -p /opt/rune/certs /opt/rune/backups /opt/rune/logs
+mkdir -p /opt/rune/certs /opt/rune/backups /opt/rune/logs /opt/rune/config
 chmod 700 /opt/rune/certs
 
 # Write docker-compose.yml
@@ -28,13 +28,14 @@ services:
     env_file:
       - .env
     environment:
-      - VAULT_TOKENS=${vault_token}
+      - VAULT_TEAM_SECRET=${team_secret}
       - VAULT_INDEX_NAME=${vault_index_name}
       - ENVECTOR_ENDPOINT=${envector_endpoint}
       - ENVECTOR_API_KEY=${envector_api_key}
       - EMBEDDING_DIM=384
     volumes:
       - vault-keys:/app/vault_keys:rw
+      - ./config:/app/config:rw
       - ./certs:/app/certs:rw
       - ./backups:/secure/backups:rw
       - ./logs:/var/log/rune-vault:rw
@@ -77,6 +78,27 @@ apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 # Start Docker
 systemctl enable docker
 systemctl start docker
+
+# Generate per-user token auth config files
+cat > /opt/rune/config/vault-roles.yml <<'ROLES'
+roles:
+  admin:
+    scope: [get_public_key, decrypt_scores, decrypt_metadata, manage_tokens]
+    top_k: 50
+    rate_limit: 150/60s
+  member:
+    scope: [get_public_key, decrypt_scores, decrypt_metadata]
+    top_k: 10
+    rate_limit: 30/60s
+ROLES
+echo "tokens: []" > /opt/rune/config/vault-tokens.yml
+chmod 600 /opt/rune/config/vault-roles.yml /opt/rune/config/vault-tokens.yml
+
+# Set up runevault CLI alias for ubuntu user
+if ! grep -q 'alias runevault=' /home/ubuntu/.bashrc 2>/dev/null; then
+  echo "alias runevault='docker exec -it rune-vault python3 /app/vault_admin_cli.py'" >> /home/ubuntu/.bashrc
+fi
+usermod -aG docker ubuntu 2>/dev/null || true
 
 # TLS setup
 if [ "${tls_mode}" = "self-signed" ]; then

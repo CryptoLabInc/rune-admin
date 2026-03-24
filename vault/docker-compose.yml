@@ -8,9 +8,13 @@ services:
       - ./certs:/app/certs:rw
       - ./backups:/secure/backups:rw
       - ./logs:/var/log/rune-vault:rw
+      - ./vault-roles.yml:/app/config/vault-roles.yml:rw
+      - ./vault-tokens.yml:/app/config/vault-tokens.yml:rw
 
     environment:
-      - VAULT_TOKENS=${VAULT_TOKENS:-}
+      - VAULT_TEAM_SECRET=${VAULT_TEAM_SECRET:-}
+      # Migrating from VAULT_TOKENS? Copy the value to VAULT_TEAM_SECRET in .env.
+      # See .env.example for details.
       - VAULT_TLS_CERT=${VAULT_TLS_CERT:-}
       - VAULT_TLS_KEY=${VAULT_TLS_KEY:-}
       - VAULT_TLS_DISABLE=${VAULT_TLS_DISABLE:-}
