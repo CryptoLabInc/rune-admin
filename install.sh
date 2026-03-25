@@ -555,6 +555,11 @@ deploy_local() {
     generate_env_file
     generate_config_files "$INSTALL_DIR"
 
+    # Restore ownership to the invoking user (files were created as root via sudo)
+    if [ -n "${SUDO_USER:-}" ]; then
+        chown -R "$SUDO_USER" "$INSTALL_DIR"
+    fi
+
     # Pull image
     print_step "Pulling Docker image..."
     (cd "$INSTALL_DIR" && docker compose pull)
