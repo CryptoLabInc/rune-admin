@@ -6,15 +6,15 @@ No transport layer (MCP, gRPC) — consumed by vault_grpc_server.py.
 """
 
 import base64
-import functools
 import hashlib
 import heapq
-import hmac
 import logging
 import os
 import json
 
 logger = logging.getLogger("rune.vault")
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives import hashes
 from pyenvector.crypto import KeyGenerator, Cipher
 from pyenvector.crypto.block import CipherBlock, Query
 from pyenvector.utils.aes import decrypt_metadata as aes_decrypt_metadata
@@ -64,7 +64,7 @@ def ensure_vault():
     if not os.path.exists(enc_key):
         logger.info(f"Generating keys in {KEY_SUBDIR}...")
         os.makedirs(KEY_SUBDIR, exist_ok=True)
-        keygen = KeyGenerator(key_path=KEY_SUBDIR, key_id=KEY_ID, dim_list=[DIM])
+        keygen = KeyGenerator(key_path=KEY_SUBDIR, key_id=KEY_ID, dim_list=[DIM], metadata_encryption=False)
         keygen.generate_keys()
     else:
         logger.info(f"Keys found in {KEY_SUBDIR}")
@@ -131,23 +131,30 @@ def ensure_vault():
 ensure_vault()
 enc_key_path = os.path.join(KEY_SUBDIR, "EncKey.json")
 sec_key_path = os.path.join(KEY_SUBDIR, "SecKey.json")
-metadata_key_path = os.path.join(KEY_SUBDIR, "MetadataKey.json")
 
 # Initialize shared Cipher instance
 cipher = Cipher(enc_key_path=enc_key_path, dim=DIM)
 
 # =============================================================================
-# Per-Agent Metadata Key Derivation
+# Per-Agent Metadata Key Derivation (HKDF-SHA256)
 # =============================================================================
-@functools.lru_cache(maxsize=1)
-def _load_master_key() -> bytes:
-    """Load MetadataKey as master key for per-agent DEK derivation."""
-    from pyenvector.utils.utils import get_key_stream
-    return get_key_stream(metadata_key_path)
+def derive_agent_key(team_secret: str, agent_id: str) -> bytes:
+    """Derive a 32-byte AES-256 DEK for a specific agent via HKDF-SHA256.
 
-def derive_agent_key(master_key: bytes, agent_id: str) -> bytes:
-    """Derive a 32-byte AES-256 DEK for a specific agent via HMAC-SHA256."""
-    return hmac.new(master_key, agent_id.encode('utf-8'), hashlib.sha256).digest()
+    Args:
+        team_secret: Team-wide master secret (VAULT_TEAM_SECRET).
+        agent_id: Per-user agent identifier derived from token.
+
+    Returns:
+        32-byte AES-256 key.
+    """
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=None,
+        info=agent_id.encode('utf-8'),
+    )
+    return hkdf.derive(team_secret.encode('utf-8'))
 
 # =============================================================================
 # Authorization (per-user token auth via TokenStore)
@@ -213,12 +220,9 @@ def _get_public_key_impl(token: str) -> str:
         bundle["index_name"] = VAULT_INDEX_NAME
     bundle["key_id"] = KEY_ID
 
-    # Team-shared metadata DEK: derived from VAULT_TEAM_SECRET (not per-user token)
-    # All team members get the same DEK so they can decrypt each other's metadata
-    dek_source = VAULT_TEAM_SECRET or token
-    agent_id = hashlib.sha256(dek_source.encode('utf-8')).hexdigest()[:32]
-    master_key = _load_master_key()
-    agent_dek = derive_agent_key(master_key, agent_id)
+    # Per-user metadata DEK: derived from VAULT_TEAM_SECRET + token-based agent_id
+    agent_id = hashlib.sha256(token.encode('utf-8')).hexdigest()[:32]
+    agent_dek = derive_agent_key(VAULT_TEAM_SECRET, agent_id)
     bundle["agent_id"] = agent_id
     bundle["agent_dek"] = base64.b64encode(agent_dek).decode('ascii')
 
@@ -288,7 +292,7 @@ def _decrypt_metadata_impl(token: str, encrypted_metadata_list: list[str]) -> st
     Core implementation: Decrypts a list of per-agent AES-encrypted metadata.
 
     Each item is a JSON string: {"a": "<agent_id>", "c": "<base64_ciphertext>"}.
-    Vault derives the agent's DEK from master key + agent_id, then decrypts.
+    Vault derives the agent's DEK from VAULT_TEAM_SECRET + agent_id via HKDF.
 
     Args:
         token: Authentication token issued by Vault Admin.
@@ -300,22 +304,17 @@ def _decrypt_metadata_impl(token: str, encrypted_metadata_list: list[str]) -> st
     username, role = validate_token(token)
     token_store.check_scope(role, "decrypt_metadata")
 
-    if not os.path.exists(metadata_key_path):
-        return json.dumps({"error": "MetadataKey not found in Vault"})
+    if not VAULT_TEAM_SECRET:
+        return json.dumps({"error": "VAULT_TEAM_SECRET not configured"})
 
     try:
-        master_key = _load_master_key()
         results = []
         for blob_str in encrypted_metadata_list:
-            try:
-                blob = json.loads(blob_str)
-                agent_id = blob["a"]
-                ct_b64 = blob["c"]
-                agent_dek = derive_agent_key(master_key, agent_id)
-                decrypted = aes_decrypt_metadata(ct_b64, agent_dek)
-            except (json.JSONDecodeError, KeyError):
-                # Legacy format: plain base64, decrypt with master metadata key
-                decrypted = aes_decrypt_metadata(blob_str, metadata_key_path)
+            blob = json.loads(blob_str)
+            agent_id = blob["a"]
+            ct_b64 = blob["c"]
+            agent_dek = derive_agent_key(VAULT_TEAM_SECRET, agent_id)
+            decrypted = aes_decrypt_metadata(ct_b64, agent_dek)
             if isinstance(decrypted, bytes):
                 decrypted = decrypted.decode('utf-8')
             results.append(decrypted)

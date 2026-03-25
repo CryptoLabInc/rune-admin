@@ -29,56 +29,59 @@ class TestKeyGeneration:
     
     def test_ensure_vault_creates_directory(self, temp_key_dir, monkeypatch):
         """ensure_vault should create key directory if not exists."""
+        key_subdir = os.path.join(temp_key_dir, KEY_ID)
         monkeypatch.setattr('vault_core.KEY_DIR', temp_key_dir)
-        
+        monkeypatch.setattr('vault_core.KEY_SUBDIR', key_subdir)
+
         # Remove directory to test creation
         if os.path.exists(temp_key_dir):
             shutil.rmtree(temp_key_dir)
-        
+
         # Mock KeyGenerator to avoid actual key generation
         class MockKeyGenerator:
-            def __init__(self, key_path, key_id, dim_list):
+            def __init__(self, key_path, key_id, dim_list, metadata_encryption=None):
                 self.key_path = key_path
                 os.makedirs(key_path, exist_ok=True)
-            
+
             def generate_keys(self):
-                # Create dummy key files
-                for key_name in ["EncKey.json", "SecKey.json", "EvalKey.json", "MetadataKey.json"]:
+                # Create dummy key files (no MetadataKey — metadata_encryption=False)
+                for key_name in ["EncKey.json", "SecKey.json", "EvalKey.json"]:
                     with open(os.path.join(self.key_path, key_name), "w") as f:
                         f.write('{"test": "key"}')
-        
+
         monkeypatch.setattr('vault_core.KeyGenerator', MockKeyGenerator)
-        
-        # Import with mocked KeyGenerator
+
         from vault_core import ensure_vault as ensure_vault_test
         ensure_vault_test()
-        
-        assert os.path.exists(temp_key_dir)
+
+        assert os.path.exists(key_subdir)
     
     def test_ensure_vault_finds_existing_keys(self, temp_key_dir, monkeypatch):
         """ensure_vault should detect existing keys."""
+        key_subdir = os.path.join(temp_key_dir, KEY_ID)
         monkeypatch.setattr('vault_core.KEY_DIR', temp_key_dir)
+        monkeypatch.setattr('vault_core.KEY_SUBDIR', key_subdir)
 
-        # Create directory and dummy keys
-        os.makedirs(temp_key_dir, exist_ok=True)
+        # Create directory and dummy keys in KEY_SUBDIR
+        os.makedirs(key_subdir, exist_ok=True)
         for key_name in ["EncKey.json", "SecKey.json"]:
-            Path(os.path.join(temp_key_dir, key_name)).touch()
+            Path(os.path.join(key_subdir, key_name)).touch()
 
         # Should log "Keys found" via logger.info (not print)
         import logging
         from vault_core import ensure_vault as ensure_vault_test
         with patch('vault_core.logger') as mock_logger:
             ensure_vault_test()
-            mock_logger.info.assert_any_call(f"Keys found in {temp_key_dir}")
+            mock_logger.info.assert_any_call(f"Keys found in {key_subdir}")
     
     def test_key_files_have_correct_names(self, temp_key_dir):
         """Generated keys should have standard names."""
-        expected_keys = ["EncKey.json", "SecKey.json", "EvalKey.json", "MetadataKey.json"]
-        
-        # Generate real keys (dimension 1024)
-        keygen = KeyGenerator(key_path=temp_key_dir, key_id="test-key", dim_list=[1024])
+        expected_keys = ["EncKey.json", "SecKey.json", "EvalKey.json"]
+
+        # Generate real keys (dimension 1024, no MetadataKey)
+        keygen = KeyGenerator(key_path=temp_key_dir, key_id="test-key", dim_list=[1024], metadata_encryption=False)
         keygen.generate_keys()
-        
+
         for key_file in expected_keys:
             assert os.path.exists(os.path.join(temp_key_dir, key_file)), f"{key_file} not generated"
 

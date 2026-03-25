@@ -1,6 +1,7 @@
 """
 Unit tests for TokenStore: per-user token management, role CRUD, persistence.
 """
+import copy
 import datetime
 import os
 import sys
@@ -13,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../vault'))
 from token_store import (
     TokenStore, Role, Token, RateLimiter,
     TokenNotFoundError, TokenExpiredError, RateLimitError,
-    TopKExceededError, ScopeError, DEFAULT_ROLES,
+    TopKExceededError, ScopeError,
 )
 
 
@@ -22,7 +23,10 @@ class TestTokenStore:
 
     def setup_method(self):
         self.store = TokenStore()
-        self.store._roles = dict(DEFAULT_ROLES)
+        self.store._roles = {
+            "admin": Role("admin", ["get_public_key", "decrypt_scores", "decrypt_metadata", "manage_tokens"], 50, "150/60s"),
+            "member": Role("member", ["get_public_key", "decrypt_scores", "decrypt_metadata"], 10, "30/60s"),
+        }
 
     def test_add_and_validate_token(self):
         tok = self.store.add_token("alice", "member", expires_days=90)
@@ -140,7 +144,10 @@ class TestRoleCRUD:
 
     def setup_method(self):
         self.store = TokenStore()
-        self.store._roles = dict(DEFAULT_ROLES)
+        self.store._roles = {
+            "admin": Role("admin", ["get_public_key", "decrypt_scores", "decrypt_metadata", "manage_tokens"], 50, "150/60s"),
+            "member": Role("member", ["get_public_key", "decrypt_scores", "decrypt_metadata"], 10, "30/60s"),
+        }
 
     def test_create_role(self):
         role = self.store.add_role(
