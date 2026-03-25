@@ -123,6 +123,7 @@ def ensure_vault():
                 index_params={"index_type": "FLAT"},
                 query_encryption="plain",
                 metadata_encryption=False,
+                metadata_key=b"",  # workaround: skip deepcopy metadata_key property access (pyenvector#247)
             )
             logger.info(f"Created team index '{VAULT_INDEX_NAME}' (dim={EMBEDDING_DIM}).")
     except Exception as e:
