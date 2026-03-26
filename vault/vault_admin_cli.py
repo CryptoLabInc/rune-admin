@@ -75,6 +75,26 @@ def cmd_token_revoke(args):
     print(result["message"])
 
 
+def cmd_token_rotate(args):
+    if args.rotate_all:
+        result = _request("POST", "/tokens/_rotate_all", {})
+        count = result["rotated"]
+        if count == 0:
+            print("No tokens to rotate.")
+            return
+        print(f"Rotated {count} token(s):\n")
+        for t in result["tokens"]:
+            print(f"  {t['user']}: {t['token']}")
+        print(f"\n  WARNING: These tokens will NOT be shown again. Share them securely.")
+    else:
+        result = _request("POST", f"/tokens/{args.user}/rotate", {})
+        print(f"\nToken rotated for '{result['user']}':")
+        print(f"  Role:    {result['role']}")
+        print(f"  Expires: {result['expires']}")
+        print(f"\n  Token: {result['token']}")
+        print(f"\n  WARNING: This token will NOT be shown again. Share it securely.")
+
+
 def cmd_token_list(args):
     result = _request("GET", "/tokens")
     tokens = result.get("tokens", [])
@@ -160,6 +180,12 @@ def build_parser() -> argparse.ArgumentParser:
     revoke_p = token_sub.add_parser("revoke", help="Revoke a user's token")
     revoke_p.add_argument("--user", required=True, help="Username")
     revoke_p.set_defaults(func=cmd_token_revoke)
+
+    rotate_p = token_sub.add_parser("rotate", help="Rotate a token (revoke + reissue)")
+    rotate_group = rotate_p.add_mutually_exclusive_group(required=True)
+    rotate_group.add_argument("--user", help="Username to rotate")
+    rotate_group.add_argument("--all", action="store_true", dest="rotate_all", help="Rotate all tokens")
+    rotate_p.set_defaults(func=cmd_token_rotate)
 
     list_p = token_sub.add_parser("list", help="List all tokens")
     list_p.set_defaults(func=cmd_token_list)
