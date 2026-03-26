@@ -8,6 +8,7 @@ No authentication required — access is protected by:
 
 import json
 import logging
+import re
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -15,6 +16,30 @@ logger = logging.getLogger("vault.admin")
 
 DEFAULT_ADMIN_HOST = "127.0.0.1"
 DEFAULT_ADMIN_PORT = 8081
+
+
+# =============================================================================
+# Route table: (method, pattern) → handler name
+# Patterns use {name} for path parameters, compiled to regex at import time.
+# =============================================================================
+
+_ROUTE_DEFS = [
+    ("GET",    "/tokens",               "_handle_list_tokens"),
+    ("GET",    "/roles",                "_handle_list_roles"),
+    ("POST",   "/tokens",               "_handle_issue_token"),
+    ("POST",   "/tokens/{user}/rotate", "_handle_rotate_token"),
+    ("POST",   "/tokens/_rotate_all",   "_handle_rotate_all"),
+    ("POST",   "/roles",                "_handle_create_role"),
+    ("PUT",    "/roles/{name}",         "_handle_update_role"),
+    ("DELETE", "/tokens/{user}",        "_handle_revoke_token"),
+    ("DELETE", "/roles/{name}",         "_handle_delete_role"),
+]
+
+_ROUTES: list[tuple[str, re.Pattern, list[str], str]] = []
+for _method, _pattern, _handler in _ROUTE_DEFS:
+    _param_names = re.findall(r"\{(\w+)\}", _pattern)
+    _regex = re.compile("^" + re.sub(r"\{(\w+)\}", r"(?P<\1>[^/]+)", _pattern) + "$")
+    _ROUTES.append((_method, _regex, _param_names, _handler))
 
 
 class AdminHandler(BaseHTTPRequestHandler):
@@ -46,72 +71,42 @@ class AdminHandler(BaseHTTPRequestHandler):
 
     # ── Routing ──────────────────────────────────────────────────────────
 
-    def _parse_path(self) -> tuple[str, str | None]:
-        """Parse path into (resource, identifier). e.g. /tokens/alice -> ('tokens', 'alice')"""
-        parts = self.path.strip("/").split("/", 1)
-        resource = parts[0] if parts else ""
-        identifier = parts[1] if len(parts) > 1 else None
-        return resource, identifier
+    def _dispatch(self, method: str):
+        path = self.path.rstrip("/") or "/"
+        for route_method, regex, _, handler_name in _ROUTES:
+            if route_method != method:
+                continue
+            m = regex.match(path)
+            if m:
+                handler = getattr(self, handler_name)
+                try:
+                    kwargs = m.groupdict()
+                    if method in ("POST", "PUT"):
+                        kwargs["body"] = self._read_json()
+                    handler(**kwargs)
+                except (ValueError, KeyError) as e:
+                    self._send_error(400, str(e))
+                except Exception as e:
+                    self._send_error(500, str(e))
+                return
+        self._send_error(404, f"No route for {method} {self.path}")
 
     def do_GET(self):
-        resource, _ = self._parse_path()
-        try:
-            if resource == "tokens":
-                self._send_json({"tokens": self.token_store.list_tokens()})
-            elif resource == "roles":
-                self._send_json({"roles": self.token_store.list_roles()})
-            else:
-                self._send_error(404, f"Unknown resource: {resource}")
-        except Exception as e:
-            self._send_error(500, str(e))
+        self._dispatch("GET")
 
     def do_POST(self):
-        parts = self.path.strip("/").split("/")
-        try:
-            body = self._read_json()
-            if parts == ["tokens"]:
-                self._handle_issue_token(body)
-            elif len(parts) == 3 and parts[0] == "tokens" and parts[2] == "rotate":
-                self._handle_rotate_token(parts[1])
-            elif parts == ["tokens", "_rotate_all"]:
-                self._handle_rotate_all()
-            elif parts == ["roles"]:
-                self._handle_create_role(body)
-            else:
-                self._send_error(404, f"Unknown path: {self.path}")
-        except (ValueError, KeyError) as e:
-            self._send_error(400, str(e))
-        except Exception as e:
-            self._send_error(500, str(e))
+        self._dispatch("POST")
 
     def do_PUT(self):
-        resource, identifier = self._parse_path()
-        try:
-            body = self._read_json()
-            if resource == "roles" and identifier:
-                self._handle_update_role(identifier, body)
-            else:
-                self._send_error(404, f"Unknown resource: {resource}/{identifier}")
-        except (ValueError, KeyError) as e:
-            self._send_error(400, str(e))
-        except Exception as e:
-            self._send_error(500, str(e))
+        self._dispatch("PUT")
 
     def do_DELETE(self):
-        resource, identifier = self._parse_path()
-        try:
-            if resource == "tokens" and identifier:
-                self._handle_revoke_token(identifier)
-            elif resource == "roles" and identifier:
-                self._handle_delete_role(identifier)
-            else:
-                self._send_error(404, f"Unknown resource: {resource}/{identifier}")
-        except ValueError as e:
-            self._send_error(400, str(e))
-        except Exception as e:
-            self._send_error(500, str(e))
+        self._dispatch("DELETE")
 
     # ── Token handlers ───────────────────────────────────────────────────
+
+    def _handle_list_tokens(self):
+        self._send_json({"tokens": self.token_store.list_tokens()})
 
     def _handle_issue_token(self, body: dict):
         user = body.get("user")
@@ -136,7 +131,7 @@ class AdminHandler(BaseHTTPRequestHandler):
         else:
             self._send_error(404, f"No token found for user '{user}'")
 
-    def _handle_rotate_token(self, user: str):
+    def _handle_rotate_token(self, user: str, body: dict):
         tok = self.token_store.rotate_token(user)
         self._send_json({
             "user": tok.user,
@@ -146,7 +141,7 @@ class AdminHandler(BaseHTTPRequestHandler):
             "expires": tok.expires or "never",
         })
 
-    def _handle_rotate_all(self):
+    def _handle_rotate_all(self, body: dict):
         tokens = self.token_store.rotate_all_tokens()
         self._send_json({
             "rotated": len(tokens),
@@ -157,6 +152,9 @@ class AdminHandler(BaseHTTPRequestHandler):
         })
 
     # ── Role handlers ────────────────────────────────────────────────────
+
+    def _handle_list_roles(self):
+        self._send_json({"roles": self.token_store.list_roles()})
 
     def _handle_create_role(self, body: dict):
         name = body.get("name")
