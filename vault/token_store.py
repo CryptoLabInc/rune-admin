@@ -46,7 +46,7 @@ class Token:
     user: str
     token: str
     role: str
-    created: str  # ISO date, e.g. "2026-03-20"
+    issued_at: str  # ISO date, e.g. "2026-03-20"
     expires: str | None = None  # ISO date or None (never expires)
 
     @property
@@ -216,7 +216,7 @@ class TokenStore:
                         user=entry["user"],
                         token=entry["token"],
                         role=entry["role"],
-                        created=entry.get("created", ""),
+                        issued_at=entry.get("issued_at") or entry.get("created", ""),
                         expires=entry.get("expires"),
                     )
                     self._tokens[tok.token] = tok
@@ -240,7 +240,7 @@ class TokenStore:
                     user=user,
                     token=token_str,
                     role="admin",
-                    created=datetime.date.today().isoformat(),
+                    issued_at=datetime.date.today().isoformat(),
                     expires=None,
                 )
                 self._tokens[tok.token] = tok
@@ -336,7 +336,7 @@ class TokenStore:
                 user=user,
                 token=token_str,
                 role=role,
-                created=today.isoformat(),
+                issued_at=today.isoformat(),
                 expires=expires,
             )
             self._tokens[tok.token] = tok
@@ -359,6 +359,58 @@ class TokenStore:
 
         self._schedule_persist()
         return True
+
+    def rotate_token(self, user: str) -> Token:
+        """Atomically revoke old token and issue a new one for the same user/role."""
+        with self._lock:
+            old_tok = self._tokens_by_user.get(user)
+            if old_tok is None:
+                raise ValueError(f"No token found for user '{user}'")
+
+            old_role = old_tok.role
+            # Preserve original expiry duration
+            expires_days = None
+            if old_tok.expires:
+                issued_date = datetime.date.fromisoformat(old_tok.issued_at)
+                expires_date = datetime.date.fromisoformat(old_tok.expires)
+                expires_days = (expires_date - issued_date).days
+
+            # Revoke old (inline, within same lock)
+            self._tokens.pop(old_tok.token, None)
+            del self._tokens_by_user[user]
+            limiter = self._rate_limiters.pop(user, None)
+            if limiter:
+                limiter.remove(user)
+
+            # Issue new
+            token_str = f"evt_{secrets.token_hex(16)}"
+            today = datetime.date.today()
+            expires = None
+            if expires_days is not None:
+                expires = (today + datetime.timedelta(days=expires_days)).isoformat()
+
+            new_tok = Token(
+                user=user,
+                token=token_str,
+                role=old_role,
+                issued_at=today.isoformat(),
+                expires=expires,
+            )
+            self._tokens[new_tok.token] = new_tok
+            self._tokens_by_user[user] = new_tok
+
+        self._schedule_persist()
+        logger.info("Rotated token for user '%s'", user)
+        return new_tok
+
+    def rotate_all_tokens(self) -> list[Token]:
+        """Rotate all tokens. Each rotation is individually atomic."""
+        with self._lock:
+            users = list(self._tokens_by_user.keys())
+        results = []
+        for user in users:
+            results.append(self.rotate_token(user))
+        return results
 
     def list_tokens(self) -> list[dict]:
         """List all tokens (token values truncated for security)."""
@@ -486,7 +538,7 @@ class TokenStore:
                             "user": t.user,
                             "token": t.token,
                             "role": t.role,
-                            "created": t.created,
+                            "issued_at": t.issued_at,
                             **({"expires": t.expires} if t.expires else {}),
                         }
                         for t in self._tokens_by_user.values()

@@ -139,6 +139,82 @@ class TestTokenStore:
             assert "researcher" in role_names
 
 
+class TestTokenRotation:
+    """Test token rotation: single user and batch."""
+
+    def setup_method(self):
+        self.store = TokenStore()
+        self.store._roles = {
+            "admin": Role("admin", ["get_public_key", "decrypt_scores", "decrypt_metadata", "manage_tokens"], 50, "150/60s"),
+            "member": Role("member", ["get_public_key", "decrypt_scores", "decrypt_metadata"], 10, "30/60s"),
+        }
+
+    def test_rotate_token(self):
+        old_tok = self.store.add_token("alice", "member")
+        new_tok = self.store.rotate_token("alice")
+        assert new_tok.user == "alice"
+        assert new_tok.role == "member"
+        assert new_tok.token.startswith("evt_")
+        assert new_tok.token != old_tok.token
+
+    def test_rotate_preserves_expiry(self):
+        old_tok = self.store.add_token("alice", "member", expires_days=90)
+        new_tok = self.store.rotate_token("alice")
+        assert new_tok.expires is not None
+        # New expiry should be ~90 days from today
+        new_expires = datetime.date.fromisoformat(new_tok.expires)
+        expected = datetime.date.today() + datetime.timedelta(days=90)
+        assert new_expires == expected
+
+    def test_rotate_invalidates_old_token(self):
+        old_tok = self.store.add_token("alice", "member")
+        self.store.rotate_token("alice")
+        with pytest.raises(TokenNotFoundError):
+            self.store.validate(old_tok.token)
+
+    def test_rotate_new_token_validates(self):
+        self.store.add_token("alice", "member")
+        new_tok = self.store.rotate_token("alice")
+        username, role = self.store.validate(new_tok.token)
+        assert username == "alice"
+        assert role.name == "member"
+
+    def test_rotate_nonexistent_user_raises(self):
+        with pytest.raises(ValueError, match="No token found"):
+            self.store.rotate_token("nobody")
+
+    def test_rotate_all(self):
+        tok_a = self.store.add_token("alice", "member")
+        tok_b = self.store.add_token("bob", "admin")
+        results = self.store.rotate_all_tokens()
+        assert len(results) == 2
+        users = {t.user for t in results}
+        assert users == {"alice", "bob"}
+        # Old tokens should be invalid
+        with pytest.raises(TokenNotFoundError):
+            self.store.validate(tok_a.token)
+        with pytest.raises(TokenNotFoundError):
+            self.store.validate(tok_b.token)
+
+    def test_rotate_persists(self):
+        """Rotated token should survive persist → reload cycle."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            roles_path = os.path.join(tmpdir, "roles.yml")
+            tokens_path = os.path.join(tmpdir, "tokens.yml")
+
+            store1 = TokenStore()
+            store1.load_from_files(roles_path, tokens_path)
+            store1.add_token("alice", "member", expires_days=30)
+            new_tok = store1.rotate_token("alice")
+            store1._persist_executor.shutdown(wait=True)
+
+            store2 = TokenStore()
+            store2.load_from_files(roles_path, tokens_path)
+            username, role = store2.validate(new_tok.token)
+            assert username == "alice"
+            assert role.name == "member"
+
+
 class TestRoleCRUD:
     """Test role create, update, delete, list operations."""
 

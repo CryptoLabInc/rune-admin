@@ -66,15 +66,19 @@ class AdminHandler(BaseHTTPRequestHandler):
             self._send_error(500, str(e))
 
     def do_POST(self):
-        resource, _ = self._parse_path()
+        parts = self.path.strip("/").split("/")
         try:
             body = self._read_json()
-            if resource == "tokens":
+            if parts == ["tokens"]:
                 self._handle_issue_token(body)
-            elif resource == "roles":
+            elif len(parts) == 3 and parts[0] == "tokens" and parts[2] == "rotate":
+                self._handle_rotate_token(parts[1])
+            elif parts == ["tokens", "_rotate_all"]:
+                self._handle_rotate_all()
+            elif parts == ["roles"]:
                 self._handle_create_role(body)
             else:
-                self._send_error(404, f"Unknown resource: {resource}")
+                self._send_error(404, f"Unknown path: {self.path}")
         except (ValueError, KeyError) as e:
             self._send_error(400, str(e))
         except Exception as e:
@@ -121,7 +125,7 @@ class AdminHandler(BaseHTTPRequestHandler):
             "user": tok.user,
             "token": tok.token,
             "role": tok.role,
-            "created": tok.created,
+            "issued_at": tok.issued_at,
             "expires": tok.expires or "never",
         }, 201)
 
@@ -131,6 +135,26 @@ class AdminHandler(BaseHTTPRequestHandler):
             self._send_json({"message": f"Revoked token for '{user}'"})
         else:
             self._send_error(404, f"No token found for user '{user}'")
+
+    def _handle_rotate_token(self, user: str):
+        tok = self.token_store.rotate_token(user)
+        self._send_json({
+            "user": tok.user,
+            "token": tok.token,
+            "role": tok.role,
+            "issued_at": tok.issued_at,
+            "expires": tok.expires or "never",
+        })
+
+    def _handle_rotate_all(self):
+        tokens = self.token_store.rotate_all_tokens()
+        self._send_json({
+            "rotated": len(tokens),
+            "tokens": [
+                {"user": t.user, "token": t.token, "role": t.role}
+                for t in tokens
+            ],
+        })
 
     # ── Role handlers ────────────────────────────────────────────────────
 

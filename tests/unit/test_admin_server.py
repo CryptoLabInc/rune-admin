@@ -92,6 +92,32 @@ class TestAdminServer:
         })
         assert status == 400
 
+    # ── Rotate endpoints ──────────────────────────────────────────────
+
+    def test_rotate_token(self):
+        _, issue_data = _request(self.port, "POST", "/tokens", {
+            "user": "alice", "role": "member"
+        })
+        status, data = _request(self.port, "POST", "/tokens/alice/rotate", {})
+        assert status == 200
+        assert data["user"] == "alice"
+        assert data["token"].startswith("evt_")
+        assert data["token"] != issue_data["token"]
+        assert data["role"] == "member"
+
+    def test_rotate_nonexistent_user(self):
+        status, data = _request(self.port, "POST", "/tokens/nobody/rotate", {})
+        assert status == 400
+        assert "No token found" in data["error"]
+
+    def test_rotate_all(self):
+        _request(self.port, "POST", "/tokens", {"user": "alice", "role": "member"})
+        _request(self.port, "POST", "/tokens", {"user": "bob", "role": "admin"})
+        status, data = _request(self.port, "POST", "/tokens/_rotate_all", {})
+        assert status == 200
+        assert data["rotated"] == 2
+        assert len(data["tokens"]) == 2
+
     # ── Role endpoints ───────────────────────────────────────────────
 
     def test_list_roles(self):
