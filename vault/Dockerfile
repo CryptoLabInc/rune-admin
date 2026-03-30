@@ -34,7 +34,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY vault_core.py vault_grpc_server.py monitoring.py token_store.py admin_server.py vault_admin_cli.py request_validator.py validation_interceptor.py ./
+COPY vault_core.py vault_grpc_server.py monitoring.py token_store.py admin_server.py vault_admin_cli.py request_validator.py validation_interceptor.py audit.py ./
 COPY --from=proto-builder /build/proto/ proto/
 COPY --from=proto-builder /build/buf/ buf/
 COPY docker-entrypoint.sh .
