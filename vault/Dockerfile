@@ -10,7 +10,7 @@ RUN curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-Linu
         -o /usr/local/bin/buf \
     && chmod +x /usr/local/bin/buf
 
-RUN pip install --no-cache-dir grpcio-tools
+RUN pip install --no-cache-dir "grpcio-tools>=1.60.2,<=1.71.2" "protobuf>=5.29.0,<6"
 
 WORKDIR /build
 COPY buf.yaml buf.lock ./
@@ -43,6 +43,8 @@ RUN chmod +x docker-entrypoint.sh vault_admin_cli.py
 
 RUN mkdir -p /app/vault_keys /app/certs /app/config /secure/backups /var/log/rune-vault \
     && chown -R vault:vault /app /secure /var/log/rune-vault
+
+ENV PYTHONPATH=/app/proto
 
 EXPOSE 50051 9090
 

@@ -128,8 +128,8 @@ class TestValidationInterceptor:
         context = _make_context()
 
         violation = MagicMock()
-        violation.field_path = "top_k"
-        violation.message = "value must be >= 1"
+        violation.proto.field = "top_k"
+        violation.proto.message = "value must be >= 1"
         exc = _ProtoValidationError(violations=[violation])
 
         with patch("validation_interceptor.validate_proto", side_effect=exc):
@@ -183,8 +183,8 @@ class TestValidationInterceptor:
         context = _make_context()
 
         violation = MagicMock()
-        violation.field_path = "token"
-        violation.message = "too short"
+        violation.proto.field = "token"
+        violation.proto.message = "too short"
         exc = _ProtoValidationError(violations=[violation])
 
         with patch("validation_interceptor.validate_proto", side_effect=exc):
@@ -212,8 +212,8 @@ class TestValidationInterceptor:
         context = _make_context()
 
         violation = MagicMock()
-        violation.field_path = "encrypted_blob_b64"
-        violation.message = "value length must be at least 1"
+        violation.proto.field = "encrypted_blob_b64"
+        violation.proto.message = "value length must be at least 1"
         exc = _ProtoValidationError(violations=[violation])
 
         with patch("validation_interceptor.validate_proto", side_effect=exc):

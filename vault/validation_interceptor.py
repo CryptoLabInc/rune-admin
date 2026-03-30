@@ -62,7 +62,8 @@ class ValidationInterceptor(grpc.ServerInterceptor):
                 runtime_check(request)
             except protovalidate.ValidationError as exc:
                 msg = "; ".join(
-                    f"{v.field_path}: {v.message}" for v in exc.violations
+                    f"{v.proto.field}: {v.proto.message}"
+                    for v in exc.violations
                 )
                 logger.warning("Validation rejected %s: %s", method, msg)
                 self._record_metric(method)
