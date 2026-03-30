@@ -54,6 +54,10 @@ class TestTokenSafety:
         with pytest.raises(RuntimeValidationError, match="control characters"):
             check_token_safety("token\n")
 
+    def test_del_char_rejected(self):
+        with pytest.raises(RuntimeValidationError, match="control characters"):
+            check_token_safety("token\x7f")
+
     def test_leading_whitespace_rejected(self):
         with pytest.raises(RuntimeValidationError, match="whitespace"):
             check_token_safety(" token")

@@ -5,7 +5,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install buf CLI
-ARG TARGETARCH
 RUN curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-Linux-$(uname -m)" \
         -o /usr/local/bin/buf \
     && chmod +x /usr/local/bin/buf
@@ -44,7 +43,7 @@ RUN chmod +x docker-entrypoint.sh vault_admin_cli.py
 RUN mkdir -p /app/vault_keys /app/certs /app/config /secure/backups /var/log/rune-vault \
     && chown -R vault:vault /app /secure /var/log/rune-vault
 
-ENV PYTHONPATH=/app/proto
+ENV PYTHONPATH=/app/proto:/app
 
 EXPOSE 50051 9090
 

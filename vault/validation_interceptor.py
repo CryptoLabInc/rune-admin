@@ -68,10 +68,12 @@ class ValidationInterceptor(grpc.ServerInterceptor):
                 logger.warning("Validation rejected %s: %s", method, msg)
                 self._record_metric(method)
                 context.abort(grpc.StatusCode.INVALID_ARGUMENT, msg)
+                return None
             except RuntimeValidationError as exc:
                 logger.warning("Validation rejected %s: %s", method, exc)
                 self._record_metric(method)
                 context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+                return None
             return original_handler(request, context)
 
         return grpc.unary_unary_rpc_method_handler(

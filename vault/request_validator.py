@@ -22,7 +22,7 @@ import protovalidate
 MAX_INDEX_NAME_LENGTH = 128
 INDEX_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 
-_CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f]")
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 # Cached validator instance (compiles CEL rules once per descriptor).
 _validator = protovalidate.Validator()
