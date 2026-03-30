@@ -14,8 +14,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY vault_core.py vault_grpc_server.py monitoring.py token_store.py admin_server.py vault_admin_cli.py ./
+COPY vault_core.py vault_grpc_server.py monitoring.py token_store.py admin_server.py vault_admin_cli.py request_validator.py validation_interceptor.py ./
 COPY proto/ proto/
+COPY buf/ buf/
 COPY docker-entrypoint.sh .
 RUN chmod +x docker-entrypoint.sh vault_admin_cli.py
 

@@ -3,9 +3,9 @@
 import grpc
 import warnings
 
-from . import vault_service_pb2 as vault__service__pb2
+import vault_service_pb2 as vault__service__pb2
 
-GRPC_GENERATED_VERSION = '1.71.2'
+GRPC_GENERATED_VERSION = '1.78.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,7 +18,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in vault_service_pb2_grpc.py depends on'
+        + ' but the generated code in vault_service_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
@@ -28,7 +28,6 @@ if _version_not_supported:
 class VaultServiceStub(object):
     """Rune-Vault gRPC service.
     Holds the FHE secret key and performs all decryption operations.
-    gRPC-only transport on port 50051.
     """
 
     def __init__(self, channel):
@@ -57,7 +56,6 @@ class VaultServiceStub(object):
 class VaultServiceServicer(object):
     """Rune-Vault gRPC service.
     Holds the FHE secret key and performs all decryption operations.
-    gRPC-only transport on port 50051.
     """
 
     def GetPublicKey(self, request, context):
@@ -110,7 +108,6 @@ def add_VaultServiceServicer_to_server(servicer, server):
 class VaultService(object):
     """Rune-Vault gRPC service.
     Holds the FHE secret key and performs all decryption operations.
-    gRPC-only transport on port 50051.
     """
 
     @staticmethod

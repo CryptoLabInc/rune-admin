@@ -19,3 +19,6 @@ grpcio>=1.60.2,<=1.74.0
 grpcio-tools>=1.60.2,<=1.74.0
 grpcio-health-checking>=1.60.2,<=1.74.0
 grpcio-reflection>=1.60.2,<=1.74.0
+
+# gRPC input validation (protovalidate)
+protovalidate>=1.1.0

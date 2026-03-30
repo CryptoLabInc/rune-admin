@@ -28,6 +28,7 @@ from token_store import (
     RateLimitError, TopKExceededError, ScopeError,
 )
 from admin_server import start_admin_server
+from validation_interceptor import ValidationInterceptor
 
 from proto import vault_service_pb2 as pb2
 from proto import vault_service_pb2_grpc as pb2_grpc
@@ -258,6 +259,7 @@ def serve_grpc(host: str = "0.0.0.0", port: int = 50051) -> grpc.Server:
             ("grpc.max_send_message_length", MAX_MESSAGE_LENGTH),
             ("grpc.max_receive_message_length", MAX_MESSAGE_LENGTH),
         ],
+        interceptors=[ValidationInterceptor()],
     )
 
     # Register VaultService

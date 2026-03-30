@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package rune.vault.v1;
 
+import "buf/validate/validate.proto";
+
 // Rune-Vault gRPC service.
 // Holds the FHE secret key and performs all decryption operations.
 service VaultService {
@@ -18,7 +20,8 @@ service VaultService {
 // ─── GetPublicKey ──────────────────────────────────────────────────
 
 message GetPublicKeyRequest {
-  string token = 1;  // Auth token
+  // Auth token. Required, max 512 chars, ASCII printable only.
+  string token = 1 [(buf.validate.field).string = {min_len: 1, max_len: 512}];
 }
 
 message GetPublicKeyResponse {
@@ -30,9 +33,13 @@ message GetPublicKeyResponse {
 // ─── DecryptScores ─────────────────────────────────────────────────
 
 message DecryptScoresRequest {
-  string token = 1;
-  string encrypted_blob_b64 = 2;  // Base64-encoded CiphertextScore protobuf
-  int32  top_k = 3;               // Max 10, enforced by Vault policy
+  // Auth token. Required, max 512 chars, ASCII printable only.
+  string token = 1 [(buf.validate.field).string = {min_len: 1, max_len: 512}];
+  // Base64-encoded CiphertextScore protobuf. Required.
+  string encrypted_blob_b64 = 2 [(buf.validate.field).string.min_len = 1];
+  // Number of top results to return.
+  // Per-role limits (e.g., admin=50, member=10) enforced at the business logic layer.
+  int32  top_k = 3 [(buf.validate.field).int32 = {gte: 1, lte: 300}];
 }
 
 message ScoreEntry {
@@ -49,8 +56,14 @@ message DecryptScoresResponse {
 // ─── DecryptMetadata ───────────────────────────────────────────────
 
 message DecryptMetadataRequest {
-  string token = 1;
-  repeated string encrypted_metadata_list = 2;  // Base64-encoded AES blobs
+  // Auth token. Required, max 512 chars, ASCII printable only.
+  string token = 1 [(buf.validate.field).string = {min_len: 1, max_len: 512}];
+  // Base64-encoded AES blobs. Required, max 1000 items, each non-empty.
+  repeated string encrypted_metadata_list = 2 [(buf.validate.field).repeated = {
+    min_items: 1,
+    max_items: 1000,
+    items: {string: {min_len: 1}}
+  }];
 }
 
 message DecryptMetadataResponse {
