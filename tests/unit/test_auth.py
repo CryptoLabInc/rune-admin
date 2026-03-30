@@ -17,7 +17,7 @@ from token_store import (
 from vault_core import validate_token, token_store
 
 # Demo token used when no config files or env var set
-DEMO_TOKEN = "TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION"
+DEMO_TOKEN = "evt_00000000000000000000000000demo"
 
 
 class TestTokenValidation:

@@ -61,7 +61,7 @@ class TestVaultCoreAPI:
         """Test get_public_key returns valid bundle."""
         from vault_core import _get_public_key_impl
 
-        result = _get_public_key_impl("TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION")
+        result = _get_public_key_impl("evt_00000000000000000000000000demo")
 
         bundle = json.loads(result)
         assert "EncKey.json" in bundle
@@ -79,7 +79,7 @@ class TestVaultCoreAPI:
         blob = base64.b64encode(serialized).decode('utf-8')
 
         # Call decrypt_scores
-        result = _decrypt_scores_impl("TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION", blob, top_k=5)
+        result = _decrypt_scores_impl("evt_00000000000000000000000000demo", blob, top_k=5)
 
         data = json.loads(result)
         assert isinstance(data, list)
@@ -95,7 +95,7 @@ class TestVaultCoreAPI:
         from vault_core import _get_public_key_impl, _decrypt_scores_impl, cipher
 
         # 1. Get public keys
-        key_bundle = _get_public_key_impl("TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION")
+        key_bundle = _get_public_key_impl("evt_00000000000000000000000000demo")
         assert key_bundle is not None
 
         # 2. Encrypt data (simulating agent) - padded to 1024
@@ -104,7 +104,7 @@ class TestVaultCoreAPI:
         blob = base64.b64encode(encrypted.serialize()).decode('utf-8')
 
         # 3. Decrypt and get top-K
-        result = _decrypt_scores_impl("TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION", blob, top_k=3)
+        result = _decrypt_scores_impl("evt_00000000000000000000000000demo", blob, top_k=3)
         data = json.loads(result)
 
         # 4. Verify top-3 are highest scores
@@ -130,7 +130,7 @@ class TestVaultCoreAPI:
 
         # Decrypt concurrently
         def decrypt_one(blob):
-            return _decrypt_scores_impl("TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION", blob, top_k=5)
+            return _decrypt_scores_impl("evt_00000000000000000000000000demo", blob, top_k=5)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(decrypt_one, blob) for blob in blobs]
@@ -165,12 +165,12 @@ class TestVaultCoreAPI:
         blob = base64.b64encode(encrypted.serialize()).decode('utf-8')
 
         # top_k=10 should work
-        result_10 = _decrypt_scores_impl("TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION", blob, top_k=10)
+        result_10 = _decrypt_scores_impl("evt_00000000000000000000000000demo", blob, top_k=10)
         data_10 = json.loads(result_10)
         assert "error" not in data_10 or data_10.get("error") is None
 
         # top_k=11 should fail
-        result_11 = _decrypt_scores_impl("TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION", blob, top_k=11)
+        result_11 = _decrypt_scores_impl("evt_00000000000000000000000000demo", blob, top_k=11)
         data_11 = json.loads(result_11)
         assert "error" in data_11
         assert "Rate Limit" in data_11["error"]

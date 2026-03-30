@@ -3,7 +3,10 @@ TAG         ?= latest
 PLATFORMS   := linux/amd64,linux/arm64
 BUILDER     := rune-vault-builder
 
-.PHONY: build push login builder clean
+.PHONY: build push login builder clean proto-gen
+
+proto-gen:
+	@bash scripts/proto-gen.sh
 
 builder:
 	@docker buildx inspect $(BUILDER) >/dev/null 2>&1 || \
