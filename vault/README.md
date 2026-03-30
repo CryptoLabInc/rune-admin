@@ -84,11 +84,33 @@ docker compose build         # rebuild after code changes
 <details>
 <summary>Click to expand</summary>
 
+### Prerequisites
+
 ```bash
+# Python virtual environment
 python3.12 -m venv ../.vault_venv
 source ../.vault_venv/bin/activate
 pip install -r requirements.txt
 
+# Buf CLI (for proto generation)
+brew install bufbuild/buf/buf        # macOS
+# or: https://buf.build/docs/installation
+```
+
+### Proto Generation
+
+Proto stubs (`*_pb2.py`) are **not committed to git** — generate them after cloning or after `.proto` changes:
+
+```bash
+make proto-gen
+# or: bash scripts/proto-gen.sh
+```
+
+This uses [buf](https://buf.build) to resolve the `protovalidate` dependency and `grpcio-tools` to compile Python stubs.
+
+### Run
+
+```bash
 python3 vault_grpc_server.py --host 0.0.0.0 --grpc-port 50051 --metrics-port 9090
 ```
 

@@ -1,0 +1,4 @@
+# Generated proto stubs (regenerate with: make proto-gen)
+proto/*_pb2.py
+proto/*_pb2_grpc.py
+buf/
