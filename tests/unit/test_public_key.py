@@ -46,7 +46,7 @@ class TestGetPublicKey:
 
     def test_valid_token_returns_bundle(self, test_keys):
         """Valid token should return public key bundle."""
-        result = get_public_key("TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION")
+        result = get_public_key("evt_00000000000000000000000000demo")
 
         # Should be valid JSON
         bundle = json.loads(result)
@@ -67,7 +67,7 @@ class TestGetPublicKey:
 
     def test_returned_keys_are_valid_json(self, test_keys):
         """Each key file in bundle should be valid JSON."""
-        result = get_public_key("TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION")
+        result = get_public_key("evt_00000000000000000000000000demo")
         bundle = json.loads(result)
 
         # Only validate actual key file fields; skip non-file fields
@@ -89,7 +89,7 @@ class TestGetPublicKey:
         with open(os.path.join(temp_dir, "EncKey.json"), "w") as f:
             f.write('{"test": "key"}')
 
-        result = get_public_key("TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION")
+        result = get_public_key("evt_00000000000000000000000000demo")
         bundle = json.loads(result)
 
         # Should have EncKey but not others
@@ -100,7 +100,7 @@ class TestGetPublicKey:
 
     def test_bundle_size_reasonable(self, test_keys):
         """Bundle size should be reasonable (not empty, not too large)."""
-        result = get_public_key("TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION")
+        result = get_public_key("evt_00000000000000000000000000demo")
 
         # Should have some content
         assert len(result) > 100
@@ -110,15 +110,15 @@ class TestGetPublicKey:
 
     def test_multiple_calls_return_same_keys(self, test_keys):
         """Multiple calls should return consistent keys."""
-        result1 = get_public_key("TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION")
-        result2 = get_public_key("TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION")
+        result1 = get_public_key("evt_00000000000000000000000000demo")
+        result2 = get_public_key("evt_00000000000000000000000000demo")
 
         # Should be identical
         assert result1 == result2
 
     def test_bundle_contains_agent_id_and_dek(self, test_keys):
         """Bundle should contain per-user agent_id and agent_dek."""
-        result = get_public_key("TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION")
+        result = get_public_key("evt_00000000000000000000000000demo")
         bundle = json.loads(result)
 
         assert "agent_id" in bundle

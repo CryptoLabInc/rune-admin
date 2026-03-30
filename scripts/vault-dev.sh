@@ -25,7 +25,7 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-DEMO_TOKEN="TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION"
+DEMO_TOKEN="evt_00000000000000000000000000demo"
 
 # enVector Cloud settings for auto-creating team index
 export VAULT_INDEX_NAME="${VAULT_INDEX_NAME:-runecontext}"

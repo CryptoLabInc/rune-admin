@@ -158,7 +158,7 @@ DEFAULT_ROLES = {
 
 DEFAULT_ROLE_NAMES = frozenset(DEFAULT_ROLES.keys())
 
-DEMO_TOKEN = "TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION"
+DEMO_TOKEN = "evt_00000000000000000000000000demo"
 
 
 # =============================================================================

@@ -22,7 +22,7 @@ def run_demo():
     # 1. Agent: Request Public Key Bundle
     print("\n[Agent] Requesting Public Key Bundle (EncKey, EvalKey)...")
     # Using a valid token issued by Admin
-    token = "TOKEN-FOR-DEMONSTRATION-PURPOSES-ONLY-DO-NOT-USE-IN-PRODUCTION"
+    token = "evt_00000000000000000000000000demo"
     bundle_json = vault_core.get_public_key(token=token)
     key_bundle = json.loads(bundle_json)
     

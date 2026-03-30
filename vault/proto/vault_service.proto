@@ -20,8 +20,8 @@ service VaultService {
 // ─── GetPublicKey ──────────────────────────────────────────────────
 
 message GetPublicKeyRequest {
-  // Auth token. Required, max 512 chars, ASCII printable only.
-  string token = 1 [(buf.validate.field).string = {min_len: 1, max_len: 512}];
+  // Auth token. Required, Fixed 36 chars (evt_ + 32 hex).
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
 }
 
 message GetPublicKeyResponse {
@@ -33,8 +33,8 @@ message GetPublicKeyResponse {
 // ─── DecryptScores ─────────────────────────────────────────────────
 
 message DecryptScoresRequest {
-  // Auth token. Required, max 512 chars, ASCII printable only.
-  string token = 1 [(buf.validate.field).string = {min_len: 1, max_len: 512}];
+  // Auth token. Required, Fixed 36 chars (evt_ + 32 hex).
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
   // Base64-encoded CiphertextScore protobuf. Required.
   string encrypted_blob_b64 = 2 [(buf.validate.field).string.min_len = 1];
   // Number of top results to return.
@@ -56,8 +56,8 @@ message DecryptScoresResponse {
 // ─── DecryptMetadata ───────────────────────────────────────────────
 
 message DecryptMetadataRequest {
-  // Auth token. Required, max 512 chars, ASCII printable only.
-  string token = 1 [(buf.validate.field).string = {min_len: 1, max_len: 512}];
+  // Auth token. Required, Fixed 36 chars (evt_ + 32 hex).
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
   // Base64-encoded AES blobs. Required, max 1000 items, each non-empty.
   repeated string encrypted_metadata_list = 2 [(buf.validate.field).repeated = {
     min_items: 1,
