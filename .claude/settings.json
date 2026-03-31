@@ -30,6 +30,9 @@
       "Bash(terraform apply:*)",
       "Bash(terraform destroy:*)",
       "Bash(docker push:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push --force-with-lease:*)",
+      "Bash(git push -f:*)",
       "Bash(rm -rf:*)"
     ]
   }
