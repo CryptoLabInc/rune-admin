@@ -9,7 +9,8 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 1. **Key Management**: Generate, store, and protect FHE keys (secret key isolation)
 2. **Decryption Service**: Decrypt search results from enVector Cloud
 3. **Authentication**: Validate team member access via tokens
-4. **Monitoring**: Track usage, performance, and security metrics
+4. **Access Control**: Per-user RBAC with role-based top_k limits, scope enforcement, and rate limiting
+5. **Monitoring**: Track usage, performance, and security metrics
 
 ## High-Level Architecture
 
@@ -70,6 +71,14 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 `remember` tool orchestrates the Vault decryption call as part of its
 3-step pipeline. Secret key never leaves Vault.
 
+## Port Summary
+
+| Port | Protocol | Purpose | Exposure |
+|------|----------|---------|----------|
+| 50051 | gRPC + TLS | Vault service, health check, reflection | Public (team members) |
+| 9090 | HTTP | Health, metrics, status | Host-only (127.0.0.1 in Docker) |
+| 8081 | HTTP | Admin token/role CRUD | Container-internal only |
+
 ## Component Details
 
 ### 1. Rune-Vault Server
@@ -86,17 +95,19 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 - Python 3.12 gRPC server
 - gRPC server on port 50051 (used by envector-mcp-server)
 - HTTP health/metrics endpoint on port 9090
+- Internal admin HTTP API on port 8081 (container-local only)
 - Prometheus metrics exporter
 - System monitoring (psutil)
 
-**Key Storage**:
+**Key Storage** (`vault_keys/vault-key/`):
 ```
-/vault_keys/
-├── EncKey.json      # Public encryption key (distributed to team members)
+vault_keys/vault-key/
+├── EncKey.json      # Public encryption key (distributed to agents)
 ├── EvalKey.json     # Public evaluation key (for FHE operations)
-├── MetadataKey.json # Secret metadata key (NEVER leaves Vault)
 └── SecKey.json      # Secret decryption key (NEVER leaves Vault)
 ```
+
+Keys are auto-generated on first startup via `ensure_vault()`.
 
 **Security Properties**:
 - Secret key stored encrypted at rest (filesystem encryption)
@@ -107,85 +118,171 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 
 ### 2. gRPC Service (API)
 
-Defined in `proto/vault_service.proto` (`rune.vault.v1.VaultService`):
+Defined in `proto/vault_service.proto` (`rune.vault.v1.VaultService`).
+
+**Server Configuration**:
+- Max message size: 256 MB (for EvalKey transfer)
+- Thread pool: 4 workers
+- Interceptor chain: `ValidationInterceptor` (protovalidate + runtime checks)
+- gRPC reflection enabled (for grpcurl discovery)
+- gRPC health checking (`grpc.health.v1`) enabled
+- TLS required by default (disable via `VAULT_TLS_DISABLE=true`)
 
 **`GetPublicKey()`**
-- Returns: EncKey, EvalKey, optional team index name (JSON bundle)
+- Returns: JSON bundle containing EncKey, EvalKey, index_name, key_id, agent_id, agent_dek (per-user derived encryption key)
 - Used by: envector-mcp-server at startup
-- Auth: Required (validates token)
+- Auth: Required (validates token + scope check)
 
 **`DecryptScores()`**
 - Input: Result ciphertext from encrypted similarity search (base64-serialized)
 - Returns: Top-K typed `ScoreEntry` messages (shard_idx, row_idx, score)
 - Used by: envector-mcp-server's `remember` pipeline (per search query)
-- Auth: Required (validates token)
-- Policy: Max 10 results per call
+- Auth: Required (validates token + scope check)
+- Policy: Per-role top_k limit (admin: 50, member: 10). Proto constraint: 1-300 range.
 
 **`DecryptMetadata()`**
-- Input: List of AES-encrypted metadata blobs
+- Input: List of AES-encrypted metadata blobs. Each blob is JSON `{"a": "<agent_id>", "c": "<base64_ciphertext>"}`.
 - Returns: Decrypted metadata (JSON strings)
 - Used by: envector-mcp-server's `remember` pipeline
-- Auth: Required (validates token)
+- Auth: Required (validates token + scope check)
+- Vault derives the agent's DEK via HKDF-SHA256 from team secret + agent_id.
 
-### 3. Authentication System
+### 3. Authentication & Access Control
 
-**Token Format**: `evt_{team}_{random}`
-- Example: `evt_yourteam_abc123xyz`
-- Generated during Terraform deployment
-- Shared with all team members (same token for whole team)
+**Token Format**: `evt_` prefix + 32 hex characters (total 36 chars), generated via `secrets.token_hex(16)`.
+- Example: `evt_a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6`
+- Proto-level validation enforces exactly 36 characters.
 
-**Token Validation**:
-```python
-VALID_TOKENS = {
-    "evt_yourteam_abc123xyz",  # Team token
-    "evt_admin_master",        # Admin token (optional)
-}
+**Per-User RBAC** (managed by `TokenStore`):
+- Each user gets their own token assigned to a role.
+- `validate()` returns `(username, Role)` tuple.
+- Checks: token existence, expiration, rate limit (per-user sliding window).
+- Scope checked separately per gRPC method.
 
-def validate_token(token: str) -> bool:
-    return token in VALID_TOKENS
+**Default Roles:**
+
+| Role | Scope | top_k | Rate Limit |
+|------|-------|-------|------------|
+| admin | get_public_key, decrypt_scores, decrypt_metadata, manage_tokens | 50 | 150/60s |
+| member | get_public_key, decrypt_scores, decrypt_metadata | 10 | 30/60s |
+
+Custom roles can be created via the Admin API or CLI.
+
+**Token Lifecycle:**
+- Issue: `runevault token issue --user alice --role member --expires 90d`
+- Rotate: `runevault token rotate --user alice` (atomic revoke + reissue)
+- Revoke: `runevault token revoke --user alice`
+- Persistence: async YAML writes to `vault-tokens.yml` / `vault-roles.yml` (atomic via temp file + `os.replace`)
+
+**Configuration Priority** (at startup):
+1. YAML config files (`vault-roles.yml`, `vault-tokens.yml`)
+2. Legacy env var (`VAULT_TOKENS`)
+3. Demo mode (auto-generated demo token)
+
+### 4. Admin Server & CLI
+
+**Admin Server** (`admin_server.py`):
+- HTTP on `127.0.0.1:8081` (not exposed via Docker; access via `docker exec`)
+- No authentication (protected by container isolation)
+- REST API for token and role CRUD operations
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | /tokens | List all tokens |
+| POST | /tokens | Issue new token |
+| DELETE | /tokens/{user} | Revoke token |
+| POST | /tokens/{user}/rotate | Rotate single token |
+| POST | /tokens/_rotate_all | Rotate all tokens |
+| GET | /roles | List all roles |
+| POST | /roles | Create role |
+| PUT | /roles/{name} | Update role |
+| DELETE | /roles/{name} | Delete role |
+
+**CLI** (`vault_admin_cli.py` / `runevault`):
+- Wraps the Admin HTTP API for operator convenience
+- Available inside the container
+
+### 5. Input Validation
+
+Two-layer validation runs as a gRPC interceptor before requests reach business logic:
+
+- **Layer 1: protovalidate** -- Enforces `.proto` annotation constraints (field length, int range, repeated item rules)
+- **Layer 2: Runtime checks** -- Control character rejection, whitespace validation (not expressible in proto annotations)
+
+Non-Vault methods (health check, reflection) pass through untouched.
+
+### 6. Per-Agent Metadata Encryption
+
+Each agent gets a unique 32-byte AES-256 DEK (Data Encryption Key):
+
+```
+DEK = HKDF-SHA256(key=VAULT_TEAM_SECRET, info=agent_id)
+agent_id = SHA256(token)[:32]
 ```
 
-**Token Rotation**:
-```bash
-# Generate new token via Terraform
-terraform apply -var="rotate_token=true"
+- DEK is distributed to the agent via the `GetPublicKey()` response (`agent_dek` field)
+- Metadata is encrypted client-side with the agent-specific DEK
+- Vault re-derives the DEK from team secret + agent_id to decrypt
+- Ensures one agent cannot decrypt another agent's metadata even if both are on the same team
 
-# Distribute new token to team
-# Old token invalidated immediately
+### 7. Monitoring & Observability
+
+**Prometheus Metrics** (exposed at `:9090/metrics`):
 ```
+# Request tracking (all gRPC methods)
+vault_requests_total{method, endpoint, status, user}
+vault_request_duration_seconds{method, endpoint}
 
-### 4. Monitoring & Observability
-
-**Prometheus Metrics** (exposed at `/metrics`):
-```
 # Decryption operations
-vault_decryption_requests_total
-vault_decryption_latency_seconds{quantile="0.5|0.95|0.99"}
-vault_decryption_errors_total
+vault_decryption_operations_total{status}
+vault_decryption_duration_seconds
 
-# Authentication
-vault_auth_attempts_total
-vault_auth_failures_total
+# Key access
+vault_key_access_total{key_type, status}
 
-# System health
-vault_uptime_seconds
-vault_memory_usage_bytes
+# System gauges
+vault_health_status          (1=healthy, 0=unhealthy)
 vault_cpu_usage_percent
+vault_memory_usage_bytes
+vault_uptime_seconds
 ```
+
+**HTTP Endpoints** (port 9090):
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/health` | Full health check (sub-checks: keys, memory, cpu, disk) |
+| `/health/ready` | Readiness probe (keys accessible?) |
+| `/health/live` | Liveness probe (always 200 if process running) |
+| `/metrics` | Prometheus metrics (text format) |
+| `/status` | Service status with version, uptime, resource usage |
 
 **Health Check** (`/health`):
-```json
-{
-  "status": "healthy",
-  "vault_version": "0.1.0",
-  "fhe_keys_loaded": true,
-  "uptime_seconds": 3600
-}
-```
+- Runs sub-checks for keys, memory, cpu, disk
+- Each check returns: `{status: healthy|degraded|unhealthy, message}`
+- Overall status: unhealthy if any check is unhealthy, degraded if any degraded
+- Thresholds: >80% = degraded, >90% = unhealthy (memory, cpu, disk)
 
 **Grafana Dashboards**:
 - See `deployment/monitoring/grafana-dashboard.json` for templates
-- Pre-configured alerts for high error rates, latency spikes
+- Pre-configured alerts in `deployment/monitoring/prometheus-alerts.yml`
+
+### 8. Audit Logging
+
+Structured JSON logging for all gRPC operations (`audit.py`):
+
+- One JSON line per request: timestamp, user_id, method, top_k, result_count, status, source_ip, latency_ms, error
+- Source IP extracted from gRPC `context.peer()`
+
+**Configuration** (via `VAULT_AUDIT_LOG` env var):
+
+| Value | Behavior |
+|-------|----------|
+| *(empty)* | Disabled |
+| `file` | `/var/log/rune-vault/audit.log` (daily rotation, 30-day retention) |
+| `file:/path` | Custom file path |
+| `stdout` | JSON lines to stdout (for cloud log aggregators) |
+| `file+stdout` | Both |
 
 ## Data Flow
 
@@ -205,14 +302,15 @@ Rune Startup
     ▼
 Vault (gRPC)
     │
-    ├── 4. Validate token
-    ├── 5. Read /vault_keys/EncKey.json, EvalKey.json
-    ├── 6. Return public keys bundle
+    ├── 4. Validate token (returns username + role)
+    ├── 5. Read EncKey.json, EvalKey.json
+    ├── 6. Derive agent DEK via HKDF
+    ├── 7. Return key bundle (EncKey, EvalKey, index_name, key_id, agent_id, agent_dek)
     │
     ▼
 Rune Client
     │
-    └── 7. Store keys locally, use for encryption
+    └── 8. Store keys and agent DEK locally; use EncKey for encryption, agent DEK for metadata encryption
 ```
 
 ### Recall Query via `remember` (Runtime)
@@ -237,9 +335,9 @@ envector-mcp-server (`remember` orchestration)
     ▼
 Vault (gRPC — secret key holder)
     │
-    ├── 5. Validate token
+    ├── 5. Validate token (returns username + role)
     ├── 6. Decrypt result ciphertext with secret key → similarity values
-    ├── 7. Select top-k (max 10, enforced by Vault policy)
+    ├── 7. Select top-k (per-role limit; admin: 50, member: 10)
     ├── 8. Return [{index: 42, score: 0.95}, ...]
     │
     ▼
@@ -301,18 +399,19 @@ EvalKey: Distributed to all team members (safe to share, FHE operations)
 
 **Layer 1: Network**
 - TLS 1.3 for all Vault communications
-- Firewall rules (allow HTTPS 443, gRPC 50051)
+- Firewall rules (allow gRPC 50051; monitoring 9090 host-only)
 - Optional: VPN for extra isolation
 
 **Layer 2: Authentication**
 - Token validation on every request
-- Rate limiting (prevent abuse)
+- Rate limiting (per-user sliding window)
 - Audit logging (track who accesses what)
 
 **Layer 3: Cryptography**
 - FHE encryption (data encrypted at source)
 - Keys encrypted at rest (filesystem encryption)
 - Secure key generation (crypto-safe randomness)
+- Per-agent metadata DEKs (agent isolation)
 
 **Layer 4: Monitoring**
 - Prometheus alerts (unusual access patterns)
@@ -343,7 +442,7 @@ Cloud Resources Created
     │
     ├── Networking
     │   ├── Public IP address
-    │   ├── Security group (allow 443/HTTPS, 50051/gRPC)
+    │   ├── Security group (allow 50051/gRPC; 9090 host-only)
     │   └── DNS: vault-{team}.oci.envector.io
     │
     ├── Storage
@@ -385,19 +484,14 @@ terraform apply -var="ha_enabled=true" \
 ### Backup & Recovery
 
 **Critical Assets**:
-- `/vault_keys/SecKey.json` - **MUST backup** (cannot regenerate)
-- `/vault_keys/EncKey.json` - Regenerable from secret key
-- Vault token - Rotatable via Terraform
+- `/vault_keys/vault-key/SecKey.json` - **MUST backup** (cannot regenerate)
+- `VAULT_TEAM_SECRET` - **MUST backup** (needed for DEK re-derivation)
+- Vault token - Rotatable via CLI
 
 **Backup Strategy**:
 ```bash
-# Automated backup (run daily via cron)
 # Manually back up vault keys
 tar czf vault_keys_backup_$(date +%Y-%m-%d).tar.gz vault/vault_keys/
-
-# Output:
-# vault_keys_backup_2026-02-04.tar.gz.enc
-# (encrypted with team password)
 
 # Store in:
 # 1. Offline (USB drive in safe)
@@ -414,6 +508,18 @@ terraform apply -var="restore_from_backup=true" \
 
 # Vault restarts with same keys
 # Team members continue without reconfiguration
+```
+
+### Token Rotation
+
+```bash
+# Rotate a single user's token
+runevault token rotate --user alice
+
+# Rotate all tokens
+runevault token rotate --all
+
+# Distribute new tokens to team members via secure channel
 ```
 
 ### Scaling Strategies
@@ -453,6 +559,21 @@ terraform apply -var="ha_enabled=true" \
 - Real-time: Grafana (`deployment/monitoring/grafana-dashboard.json`)
 - Historical: Prometheus (`deployment/monitoring/prometheus-alerts.yml`)
 
+## Module Reference
+
+| Module | Purpose |
+|--------|---------|
+| `vault_core.py` | Core business logic: key management, decryption, DEK derivation |
+| `vault_grpc_server.py` | gRPC server, TLS, entrypoint, orchestrates all subsystems |
+| `token_store.py` | Per-user RBAC: Token/Role dataclasses, validation, rate limiting, YAML persistence |
+| `admin_server.py` | Internal HTTP admin API for token/role CRUD |
+| `validation_interceptor.py` | gRPC interceptor: protovalidate + runtime input checks |
+| `request_validator.py` | Runtime validation rules (control chars, whitespace) |
+| `audit.py` | Structured JSON audit logging with file rotation |
+| `monitoring.py` | Health checks, Prometheus metrics, /status endpoint |
+| `vault_admin_cli.py` | CLI for token/role management (`runevault` command) |
+| `verify_crypto_flow.py` | Crypto pipeline verification script |
+
 ## Troubleshooting
 
 ### Issue: High Latency
@@ -471,12 +592,12 @@ cat /vault_keys/SecKey.json | jq '.dim'
 
 **Solutions**:
 - CPU bottleneck → Scale up (add OCPU)
-- Large Top-K → Reduce max results (10 → 5)
-- High dimension → Acceptable (dim=2048 is standard)
+- Large Top-K → Reduce max results
+- High dimension → Acceptable (dim=1024 is standard)
 
 ### Issue: Authentication Failures
 
-**Symptoms**: Clients can't connect, 401 Unauthorized
+**Symptoms**: Clients can't connect, UNAUTHENTICATED error
 
 **Diagnosis**:
 ```bash
@@ -485,13 +606,15 @@ echo $RUNEVAULT_TOKEN
 
 # Verify Vault sees requests
 ssh admin@vault-yourteam.oci.envector.io
-sudo journalctl -u vault | grep "401"
+sudo journalctl -u vault | grep "denied"
 ```
 
 **Solutions**:
 - Wrong token → Re-share correct token
 - Token rotated → Distribute new token to all team members
-- Firewall → Check security group allows 443 from team IPs
+- Token expired → Issue new token via `runevault token issue`
+- Rate limited → Wait for window reset or adjust role rate_limit
+- Firewall → Check security group allows 50051 from team IPs
 
 ### Issue: Vault Crashed
 

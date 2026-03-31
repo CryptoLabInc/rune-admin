@@ -60,7 +60,7 @@ class TestDecryptScores:
 
         self._patch_cipher_and_proto(monkeypatch, _mock_decrypt_score_flat(scores))
 
-        result = decrypt_scores("evt_00000000000000000000000000demo", blob, top_k=5)
+        result = decrypt_scores("evt_0000000000000000000000000000demo", blob, top_k=5)
         data = json.loads(result)
 
         assert isinstance(data, list)
@@ -80,7 +80,7 @@ class TestDecryptScores:
             [shard0, shard1], [5, 12]
         ))
 
-        result = decrypt_scores("evt_00000000000000000000000000demo", blob, top_k=3)
+        result = decrypt_scores("evt_0000000000000000000000000000demo", blob, top_k=3)
         data = json.loads(result)
 
         assert isinstance(data, list)
@@ -98,7 +98,7 @@ class TestDecryptScores:
         self._patch_cipher_and_proto(monkeypatch, _mock_decrypt_score_flat(scores))
 
         for k in [1, 2, 3, 5]:
-            result = decrypt_scores("evt_00000000000000000000000000demo", blob, top_k=k)
+            result = decrypt_scores("evt_0000000000000000000000000000demo", blob, top_k=k)
             data = json.loads(result)
             assert isinstance(data, list)
             assert len(data) == k, f"Expected {k} results, got {len(data)}"
@@ -110,7 +110,7 @@ class TestDecryptScores:
 
         self._patch_cipher_and_proto(monkeypatch, _mock_decrypt_score_flat(scores))
 
-        result = decrypt_scores("evt_00000000000000000000000000demo", blob, top_k=2)
+        result = decrypt_scores("evt_0000000000000000000000000000demo", blob, top_k=2)
         data = json.loads(result)
 
         assert isinstance(data, list)
@@ -143,14 +143,14 @@ class TestDecryptScores:
     def test_malformed_blob_returns_error(self):
         """Malformed encrypted blob should return error."""
 
-        result = decrypt_scores("evt_00000000000000000000000000demo", "not-valid-base64!!!", top_k=5)
+        result = decrypt_scores("evt_0000000000000000000000000000demo", "not-valid-base64!!!", top_k=5)
         data = json.loads(result)
 
         assert "error" in data
 
     def test_empty_blob_returns_empty_or_error(self):
         """Empty blob should return error or empty result list."""
-        result = decrypt_scores("evt_00000000000000000000000000demo", "", top_k=5)
+        result = decrypt_scores("evt_0000000000000000000000000000demo", "", top_k=5)
         data = json.loads(result)
 
         # Empty base64 decodes to b"", which produces an empty protobuf
@@ -164,7 +164,7 @@ class TestDecryptScores:
 
         self._patch_cipher_and_proto(monkeypatch, _mock_decrypt_score_flat(scores))
 
-        result = decrypt_scores("evt_00000000000000000000000000demo", blob, top_k=5)
+        result = decrypt_scores("evt_0000000000000000000000000000demo", blob, top_k=5)
         data = json.loads(result)
 
         assert isinstance(data, list)
@@ -183,7 +183,7 @@ class TestDecryptScores:
 
         self._patch_cipher_and_proto(monkeypatch, _mock_decrypt_score_flat(scores))
 
-        result = decrypt_scores("evt_00000000000000000000000000demo", blob, top_k=5)
+        result = decrypt_scores("evt_0000000000000000000000000000demo", blob, top_k=5)
         data = json.loads(result)
 
         assert isinstance(data, list) and len(data) > 1
@@ -198,7 +198,7 @@ class TestDecryptScores:
 
         self._patch_cipher_and_proto(monkeypatch, _mock_decrypt_score_flat(scores))
 
-        result = decrypt_scores("evt_00000000000000000000000000demo", blob)
+        result = decrypt_scores("evt_0000000000000000000000000000demo", blob)
         data = json.loads(result)
 
         assert isinstance(data, list)
@@ -215,7 +215,7 @@ class TestDecryptScores:
             [shard0, shard1, shard2], [10, 20, 30]
         ))
 
-        result = decrypt_scores("evt_00000000000000000000000000demo", blob, top_k=4)
+        result = decrypt_scores("evt_0000000000000000000000000000demo", blob, top_k=4)
         data = json.loads(result)
 
         assert len(data) == 4

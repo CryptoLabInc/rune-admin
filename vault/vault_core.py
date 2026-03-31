@@ -8,20 +8,22 @@ No transport layer (MCP, gRPC) — consumed by vault_grpc_server.py.
 import base64
 import hashlib
 import heapq
+import json
 import logging
 import os
-import json
 
-logger = logging.getLogger("rune.vault")
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
-from pyenvector.crypto import KeyGenerator, Cipher
-from pyenvector.crypto.block import CipherBlock, Query
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from pyenvector.crypto import Cipher, KeyGenerator
+from pyenvector.crypto.block import CipherBlock
 from pyenvector.utils.aes import decrypt_metadata as aes_decrypt_metadata
+
 try:
     from pyenvector.proto_gen.v2.common.type_pb2 import CiphertextScore
 except ModuleNotFoundError:
     from pyenvector.proto_gen.type_pb2 import CiphertextScore
+
+logger = logging.getLogger("rune.vault")
 
 # Configuration
 KEY_DIR = "vault_keys"
@@ -39,6 +41,7 @@ EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "384"))
 # Team index name (set by admin, distributed to all team members via get_public_key)
 VAULT_INDEX_NAME = os.getenv("VAULT_INDEX_NAME", "").strip() or None
 
+
 def ensure_vault():
     """
     One-shot startup:
@@ -54,7 +57,9 @@ def ensure_vault():
     if not os.path.exists(enc_key):
         logger.info(f"Generating keys in {KEY_SUBDIR}...")
         os.makedirs(KEY_SUBDIR, exist_ok=True)
-        keygen = KeyGenerator(key_path=KEY_SUBDIR, key_id=KEY_ID, dim_list=[DIM], metadata_encryption=False)
+        keygen = KeyGenerator(
+            key_path=KEY_SUBDIR, key_id=KEY_ID, dim_list=[DIM], metadata_encryption=False
+        )
         keygen.generate_keys()
     else:
         logger.info(f"Keys found in {KEY_SUBDIR}")
@@ -113,11 +118,13 @@ def ensure_vault():
                 index_params={"index_type": "FLAT"},
                 query_encryption="plain",
                 metadata_encryption=False,
-                metadata_key=b"",  # workaround: skip deepcopy metadata_key property access (pyenvector#247)
+                # workaround: skip deepcopy metadata_key property access (pyenvector#247)
+                metadata_key=b"",
             )
             logger.info(f"Created team index '{VAULT_INDEX_NAME}' (dim={EMBEDDING_DIM}).")
     except Exception as e:
         logger.error(f"Failed to ensure team index: {e}", exc_info=True)
+
 
 ensure_vault()
 enc_key_path = os.path.join(KEY_SUBDIR, "EncKey.json")
@@ -125,6 +132,7 @@ sec_key_path = os.path.join(KEY_SUBDIR, "SecKey.json")
 
 # Initialize shared Cipher instance
 cipher = Cipher(enc_key_path=enc_key_path, dim=DIM)
+
 
 # =============================================================================
 # Per-Agent Metadata Key Derivation (HKDF-SHA256)
@@ -143,22 +151,22 @@ def derive_agent_key(team_secret: str, agent_id: str) -> bytes:
         algorithm=hashes.SHA256(),
         length=32,
         salt=None,
-        info=agent_id.encode('utf-8'),
+        info=agent_id.encode("utf-8"),
     )
-    return hkdf.derive(team_secret.encode('utf-8'))
+    return hkdf.derive(team_secret.encode("utf-8"))
+
 
 # =============================================================================
 # Authorization (per-user token auth via TokenStore)
 # =============================================================================
-from token_store import (
-    token_store, TokenNotFoundError, TokenExpiredError,
-    RateLimitError, TopKExceededError, ScopeError,
+from token_store import (  # noqa: E402 — must import after ensure_vault()
+    TopKExceededError,
+    token_store,
 )
 
 # Team secret for DEK derivation (shared across all users)
 VAULT_TEAM_SECRET = (
-    os.getenv("VAULT_TEAM_SECRET", "").strip()
-    or os.getenv("VAULT_TOKENS", "").strip()
+    os.getenv("VAULT_TEAM_SECRET", "").strip() or os.getenv("VAULT_TOKENS", "").strip()
 )
 
 # Load token/role configuration (priority: files > env var > demo)
@@ -179,6 +187,7 @@ else:
 def validate_token(token: str) -> tuple[str, object]:
     """Validate per-user token. Returns (username, Role)."""
     return token_store.validate(token)
+
 
 # =============================================================================
 # Core Business Logic
@@ -212,12 +221,13 @@ def _get_public_key_impl(token: str) -> str:
     bundle["key_id"] = KEY_ID
 
     # Per-user metadata DEK: derived from VAULT_TEAM_SECRET + token-based agent_id
-    agent_id = hashlib.sha256(token.encode('utf-8')).hexdigest()[:32]
+    agent_id = hashlib.sha256(token.encode("utf-8")).hexdigest()[:32]
     agent_dek = derive_agent_key(VAULT_TEAM_SECRET, agent_id)
     bundle["agent_id"] = agent_id
-    bundle["agent_dek"] = base64.b64encode(agent_dek).decode('ascii')
+    bundle["agent_dek"] = base64.b64encode(agent_dek).decode("ascii")
 
     return json.dumps(bundle)
+
 
 def _decrypt_scores_impl(token: str, encrypted_blob_b64: str, top_k: int = 5) -> str:
     """
@@ -268,15 +278,13 @@ def _decrypt_scores_impl(token: str, encrypted_blob_b64: str, top_k: int = 5) ->
         )
         topk_results = heapq.nlargest(top_k, all_scores, key=lambda x: x[2])
 
-        params = [
-            {"shard_idx": s, "row_idx": r, "score": sc}
-            for s, r, sc in topk_results
-        ]
+        params = [{"shard_idx": s, "row_idx": r, "score": sc} for s, r, sc in topk_results]
 
         return json.dumps(params)
 
     except Exception as e:
         return json.dumps({"error": str(e)})
+
 
 def _decrypt_metadata_impl(token: str, encrypted_metadata_list: list[str]) -> str:
     """
@@ -307,7 +315,7 @@ def _decrypt_metadata_impl(token: str, encrypted_metadata_list: list[str]) -> st
             agent_dek = derive_agent_key(VAULT_TEAM_SECRET, agent_id)
             decrypted = aes_decrypt_metadata(ct_b64, agent_dek)
             if isinstance(decrypted, bytes):
-                decrypted = decrypted.decode('utf-8')
+                decrypted = decrypted.decode("utf-8")
             results.append(decrypted)
         return json.dumps(results)
     except Exception as e:

@@ -14,7 +14,7 @@ import threading
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import yaml
 
@@ -25,9 +25,11 @@ logger = logging.getLogger("vault.token_store")
 # Data Classes
 # =============================================================================
 
+
 @dataclass
 class Role:
     """Role definition with scope, top_k, and rate limit."""
+
     name: str
     scope: list[str]
     top_k: int
@@ -43,6 +45,7 @@ class Role:
 @dataclass
 class Token:
     """Per-user token with role assignment and expiry."""
+
     user: str
     token: str
     role: str
@@ -60,14 +63,17 @@ class Token:
 # Custom Exceptions (inherit ValueError for backward compat with gRPC handlers)
 # =============================================================================
 
+
 class TokenNotFoundError(ValueError):
     """Token not found in store."""
+
     def __init__(self):
         super().__init__("Invalid authentication token")
 
 
 class TokenExpiredError(ValueError):
     """Token has expired."""
+
     def __init__(self, username: str):
         self.username = username
         super().__init__(f"Token expired for user '{username}'")
@@ -75,6 +81,7 @@ class TokenExpiredError(ValueError):
 
 class RateLimitError(ValueError):
     """Rate limit exceeded."""
+
     def __init__(self, retry_after: int):
         self.retry_after = retry_after
         super().__init__(f"Rate limit exceeded. Retry after {retry_after}s")
@@ -82,16 +89,16 @@ class RateLimitError(ValueError):
 
 class TopKExceededError(ValueError):
     """Requested top_k exceeds role limit."""
+
     def __init__(self, requested: int, max_top_k: int, role_name: str):
         self.requested = requested
         self.max_top_k = max_top_k
-        super().__init__(
-            f"top_k {requested} exceeds limit {max_top_k} for role '{role_name}'"
-        )
+        super().__init__(f"top_k {requested} exceeds limit {max_top_k} for role '{role_name}'")
 
 
 class ScopeError(ValueError):
     """Method not permitted for role."""
+
     def __init__(self, method: str, role_name: str):
         self.method = method
         super().__init__(f"Method '{method}' not permitted for role '{role_name}'")
@@ -100,6 +107,7 @@ class ScopeError(ValueError):
 # =============================================================================
 # Rate Limiter (moved from vault_core.py)
 # =============================================================================
+
 
 class RateLimiter:
     """Simple sliding window rate limiter."""
@@ -115,8 +123,7 @@ class RateLimiter:
         now = time.time()
         with self._lock:
             self._requests[client_id] = [
-                t for t in self._requests[client_id]
-                if now - t < self.window_seconds
+                t for t in self._requests[client_id] if now - t < self.window_seconds
             ]
             if len(self._requests[client_id]) >= self.max_requests:
                 return False
@@ -164,6 +171,7 @@ DEMO_TOKEN = "evt_0000000000000000000000000000demo"
 # =============================================================================
 # Token Store
 # =============================================================================
+
 
 class TokenStore:
     """Thread-safe in-memory store for tokens and roles with async YAML persistence."""
@@ -221,9 +229,7 @@ class TokenStore:
                     )
                     self._tokens[tok.token] = tok
                     self._tokens_by_user[tok.user] = tok
-                logger.info(
-                    "Loaded %d tokens from %s", len(self._tokens), tokens_path
-                )
+                logger.info("Loaded %d tokens from %s", len(self._tokens), tokens_path)
 
         # Auto-generate default config files if they don't exist
         if not os.path.exists(roles_path) or not os.path.exists(tokens_path):
@@ -316,9 +322,7 @@ class TokenStore:
 
     # ── Token CRUD ───────────────────────────────────────────────────────
 
-    def add_token(
-        self, user: str, role: str, expires_days: int | None = None
-    ) -> Token:
+    def add_token(self, user: str, role: str, expires_days: int | None = None) -> Token:
         """Issue a new token for a user."""
         with self._lock:
             if role not in self._roles:
@@ -418,13 +422,15 @@ class TokenStore:
             result = []
             for tok in self._tokens_by_user.values():
                 role = self._roles.get(tok.role)
-                result.append({
-                    "user": tok.user,
-                    "role": tok.role,
-                    "top_k": role.top_k if role else "?",
-                    "rate_limit": role.rate_limit if role else "?",
-                    "expires": tok.expires or "never",
-                })
+                result.append(
+                    {
+                        "user": tok.user,
+                        "role": tok.role,
+                        "top_k": role.top_k if role else "?",
+                        "rate_limit": role.rate_limit if role else "?",
+                        "expires": tok.expires or "never",
+                    }
+                )
             return result
 
     # ── Role CRUD ────────────────────────────────────────────────────────
@@ -433,14 +439,14 @@ class TokenStore:
     def _validate_rate_limit(rate_limit: str):
         """Validate rate_limit format (e.g. '30/60s')."""
         import re
+
         if not re.fullmatch(r"\d+/\d+s", rate_limit):
             raise ValueError(
-                f"Invalid rate_limit format '{rate_limit}'. Expected '<max>/<window>s' (e.g. '30/60s')"
+                f"Invalid rate_limit format '{rate_limit}'."
+                " Expected '<max>/<window>s' (e.g. '30/60s')"
             )
 
-    def add_role(
-        self, name: str, scope: list[str], top_k: int, rate_limit: str
-    ) -> Role:
+    def add_role(self, name: str, scope: list[str], top_k: int, rate_limit: str) -> Role:
         """Create a new role."""
         self._validate_rate_limit(rate_limit)
         with self._lock:

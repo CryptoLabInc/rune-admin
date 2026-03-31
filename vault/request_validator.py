@@ -32,6 +32,7 @@ _validator = protovalidate.Validator()
 # Proto-level validation (protovalidate)
 # ---------------------------------------------------------------------------
 
+
 def validate_proto(request) -> None:
     """Run protovalidate against the request message.
 
@@ -44,6 +45,7 @@ def validate_proto(request) -> None:
 # Supplementary runtime checks
 # ---------------------------------------------------------------------------
 
+
 class RuntimeValidationError(Exception):
     """Raised for checks that proto annotations cannot express."""
 
@@ -51,13 +53,9 @@ class RuntimeValidationError(Exception):
 def check_token_safety(token: str) -> None:
     """Reject tokens with control characters or surrounding whitespace."""
     if _CONTROL_CHAR_RE.search(token):
-        raise RuntimeValidationError(
-            "token: must not contain control characters"
-        )
+        raise RuntimeValidationError("token: must not contain control characters")
     if token != token.strip():
-        raise RuntimeValidationError(
-            "token: must not have leading or trailing whitespace"
-        )
+        raise RuntimeValidationError("token: must not have leading or trailing whitespace")
 
 
 def validate_index_name(name: str) -> None:
@@ -66,19 +64,18 @@ def validate_index_name(name: str) -> None:
         raise RuntimeValidationError("index_name: must not be empty")
     if len(name) > MAX_INDEX_NAME_LENGTH:
         raise RuntimeValidationError(
-            f"index_name: length {len(name)} exceeds maximum "
-            f"{MAX_INDEX_NAME_LENGTH}"
+            f"index_name: length {len(name)} exceeds maximum {MAX_INDEX_NAME_LENGTH}"
         )
     if not INDEX_NAME_PATTERN.match(name):
         raise RuntimeValidationError(
-            "index_name: must contain only alphanumeric characters, "
-            "underscores, or hyphens"
+            "index_name: must contain only alphanumeric characters, underscores, or hyphens"
         )
 
 
 # ---------------------------------------------------------------------------
 # Vault-method supplementary checks (keyed by gRPC method path)
 # ---------------------------------------------------------------------------
+
 
 def _check_get_public_key(request) -> None:
     check_token_safety(request.token)

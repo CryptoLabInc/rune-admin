@@ -7,7 +7,8 @@ Usage (via docker exec or runevault alias):
     runevault token revoke --user alice
     runevault token list
     runevault role list
-    runevault role create --name researcher --scope get_public_key,decrypt_scores --top-k 3 --rate-limit 10/60s
+    runevault role create --name researcher \\
+        --scope get_public_key,decrypt_scores --top-k 3 --rate-limit 10/60s
     runevault role update --name agent --top-k 8
     runevault role delete --name researcher
 """
@@ -44,11 +45,15 @@ def _request(method: str, path: str, body: dict | None = None) -> dict:
 
 # ── Token commands ───────────────────────────────────────────────────────
 
+
 def _parse_duration(value: str) -> int:
     """Parse duration string like '90d', '12w', '6m' into days."""
     m = re.fullmatch(r"(\d+)([dwm])", value)
     if not m:
-        print(f"Error: Invalid duration '{value}'. Use <number><d|w|m> (e.g. 90d, 12w, 6m)", file=sys.stderr)
+        print(
+            f"Error: Invalid duration '{value}'. Use <number><d|w|m> (e.g. 90d, 12w, 6m)",
+            file=sys.stderr,
+        )
         sys.exit(1)
     n, unit = int(m.group(1)), m.group(2)
     if unit == "d":
@@ -67,7 +72,7 @@ def cmd_token_issue(args):
     print(f"  Role:    {result['role']}")
     print(f"  Expires: {result['expires']}")
     print(f"\n  Token: {result['token']}")
-    print(f"\n  WARNING: This token will NOT be shown again. Share it securely.")
+    print("\n  WARNING: This token will NOT be shown again. Share it securely.")
 
 
 def cmd_token_revoke(args):
@@ -85,14 +90,14 @@ def cmd_token_rotate(args):
         print(f"Rotated {count} token(s):\n")
         for t in result["tokens"]:
             print(f"  {t['user']}: {t['token']}")
-        print(f"\n  WARNING: These tokens will NOT be shown again. Share them securely.")
+        print("\n  WARNING: These tokens will NOT be shown again. Share them securely.")
     else:
         result = _request("POST", f"/tokens/{args.user}/rotate", {})
         print(f"\nToken rotated for '{result['user']}':")
         print(f"  Role:    {result['role']}")
         print(f"  Expires: {result['expires']}")
         print(f"\n  Token: {result['token']}")
-        print(f"\n  WARNING: This token will NOT be shown again. Share it securely.")
+        print("\n  WARNING: This token will NOT be shown again. Share it securely.")
 
 
 def cmd_token_list(args):
@@ -105,13 +110,19 @@ def cmd_token_list(args):
     fmt = "{:<16} {:<10} {:>6} {:>10}  {:<12}"
     print(fmt.format("USER", "ROLE", "TOP_K", "RATE", "EXPIRES"))
     for t in tokens:
-        print(fmt.format(
-            t["user"], t["role"], str(t["top_k"]),
-            str(t["rate_limit"]), t["expires"],
-        ))
+        print(
+            fmt.format(
+                t["user"],
+                t["role"],
+                str(t["top_k"]),
+                str(t["rate_limit"]),
+                t["expires"],
+            )
+        )
 
 
 # ── Role commands ────────────────────────────────────────────────────────
+
 
 def cmd_role_list(args):
     result = _request("GET", "/roles")
@@ -150,7 +161,10 @@ def cmd_role_update(args):
         print("Error: No fields to update.", file=sys.stderr)
         sys.exit(1)
     _request("PUT", f"/roles/{args.name}", body)
-    print(f"Role '{args.name}' updated. Changes take effect immediately for all tokens with this role.")
+    print(
+        f"Role '{args.name}' updated."
+        " Changes take effect immediately for all tokens with this role."
+    )
 
 
 def cmd_role_delete(args):
@@ -159,6 +173,7 @@ def cmd_role_delete(args):
 
 
 # ── Argument parsing ─────────────────────────────────────────────────────
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -174,7 +189,9 @@ def build_parser() -> argparse.ArgumentParser:
     issue_p = token_sub.add_parser("issue", help="Issue a new token")
     issue_p.add_argument("--user", required=True, help="Username")
     issue_p.add_argument("--role", required=True, help="Role name")
-    issue_p.add_argument("--expires", default=None, help="Duration until expiry (e.g. 90d, 12w, 6m)")
+    issue_p.add_argument(
+        "--expires", default=None, help="Duration until expiry (e.g. 90d, 12w, 6m)"
+    )
     issue_p.set_defaults(func=cmd_token_issue)
 
     revoke_p = token_sub.add_parser("revoke", help="Revoke a user's token")
@@ -184,7 +201,9 @@ def build_parser() -> argparse.ArgumentParser:
     rotate_p = token_sub.add_parser("rotate", help="Rotate a token (revoke + reissue)")
     rotate_group = rotate_p.add_mutually_exclusive_group(required=True)
     rotate_group.add_argument("--user", help="Username to rotate")
-    rotate_group.add_argument("--all", action="store_true", dest="rotate_all", help="Rotate all tokens")
+    rotate_group.add_argument(
+        "--all", action="store_true", dest="rotate_all", help="Rotate all tokens"
+    )
     rotate_p.set_defaults(func=cmd_token_rotate)
 
     list_p = token_sub.add_parser("list", help="List all tokens")
