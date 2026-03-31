@@ -245,7 +245,6 @@ rune-admin/
 ├── vault/                  # Rune-Vault gRPC server
 │   ├── vault_core.py       # Core business logic
 │   ├── vault_grpc_server.py  # gRPC entry point
-│   ├── monitoring.py       # Health & metrics endpoints
 │   ├── demo_local.py       # Local testing demo
 │   └── verify_crypto_flow.py  # Crypto verification
 ├── deployment/

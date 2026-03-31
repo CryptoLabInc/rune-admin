@@ -4,10 +4,6 @@
 pyenvector>=1.2.0
 numpy>=1.24.0
 
-# Monitoring
-prometheus-client>=0.17.0
-psutil>=5.9.0
-
 # Token Management
 PyYAML>=6.0
 

@@ -37,9 +37,6 @@ if "protovalidate" not in sys.modules or sys.modules["protovalidate"] is None:
     _protovalidate_mock.Validator = MagicMock
     sys.modules["protovalidate"] = _protovalidate_mock
 
-# Ensure monitoring import fails so MONITORING_AVAILABLE = False
-sys.modules["monitoring"] = None
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../vault'))
 
 from request_validator import RuntimeValidationError
@@ -168,36 +165,6 @@ class TestValidationInterceptor:
 
         result = self.interceptor.intercept_service(continuation, details)
         assert result is next_handler
-
-    @patch("validation_interceptor.MONITORING_AVAILABLE", True)
-    @patch("validation_interceptor.monitoring", create=True)
-    def test_monitoring_incremented_on_proto_validation_error(self, mock_monitoring):
-        details = _make_handler_call_details("/rune.vault.v1.VaultService/GetPublicKey")
-        next_handler = _make_next_handler()
-        continuation = MagicMock(return_value=next_handler)
-
-        wrapped = self.interceptor.intercept_service(continuation, details)
-
-        request = MagicMock()
-        request.token = "valid"
-        context = _make_context()
-
-        violation = MagicMock()
-        violation.proto.field = "token"
-        violation.proto.message = "too short"
-        exc = _ProtoValidationError(violations=[violation])
-
-        with patch("validation_interceptor.validate_proto", side_effect=exc):
-            with pytest.raises(Exception, match="aborted"):
-                wrapped.unary_unary(request, context)
-
-        mock_monitoring.vault_requests_total.labels.assert_called_once_with(
-            method="get_public_key",
-            endpoint="grpc",
-            status="validation_error",
-            user="unknown",
-        )
-        mock_monitoring.vault_requests_total.labels().inc.assert_called_once()
 
     def test_error_detail_is_human_readable(self):
         """Validation errors include field path and message."""

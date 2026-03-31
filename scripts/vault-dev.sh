@@ -120,7 +120,7 @@ VAULT_INDEX_NAME="$VAULT_INDEX_NAME" \
 ENVECTOR_ENDPOINT="$ENVECTOR_ENDPOINT" \
 ENVECTOR_API_KEY="$ENVECTOR_API_KEY" \
 EMBEDDING_DIM="$EMBEDDING_DIM" \
-python3 vault_grpc_server.py --host 127.0.0.1 --grpc-port 50051 --metrics-port 9090 &
+python3 vault_grpc_server.py --host 127.0.0.1 --grpc-port 50051 &
 VAULT_PID=$!
 
 sleep 3

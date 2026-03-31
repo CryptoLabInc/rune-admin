@@ -21,8 +21,8 @@ class TestVaultCoreAPI:
     @pytest.fixture(autouse=True)
     def reset_rate_limiter(self):
         """Reset rate limiter before each test."""
-        import vault_core
-        vault_core.rate_limiter._requests.clear()
+        from vault_core import token_store
+        token_store._rate_limiters.clear()
 
     @pytest.fixture(scope="class")
     def vault_setup(self):

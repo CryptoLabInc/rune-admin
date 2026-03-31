@@ -158,7 +158,7 @@ DEFAULT_ROLES = {
 
 DEFAULT_ROLE_NAMES = frozenset(DEFAULT_ROLES.keys())
 
-DEMO_TOKEN = "evt_00000000000000000000000000demo"
+DEMO_TOKEN = "evt_0000000000000000000000000000demo"
 
 
 # =============================================================================
@@ -255,7 +255,7 @@ class TokenStore:
                 user="demo",
                 token=DEMO_TOKEN,
                 role="admin",
-                created=datetime.date.today().isoformat(),
+                issued_at=datetime.date.today().isoformat(),
                 expires=None,
             )
             self._tokens[tok.token] = tok
