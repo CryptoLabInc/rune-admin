@@ -22,6 +22,7 @@ from request_validator import (
 
 logger = logging.getLogger("rune.vault.validation")
 
+
 class ValidationInterceptor(grpc.ServerInterceptor):
     """Intercepts unary-unary gRPC calls to validate request fields."""
 
@@ -62,4 +63,3 @@ class ValidationInterceptor(grpc.ServerInterceptor):
             request_deserializer=next_handler.request_deserializer,
             response_serializer=next_handler.response_serializer,
         )
-
