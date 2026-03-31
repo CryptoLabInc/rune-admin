@@ -45,10 +45,10 @@ Do NOT run python, pytest, or ruff directly.
 
 ## Worktree setup
 
-Each worktree needs its own venv and proto stubs. After creating a worktree, run:
+After entering a worktree, you MUST run before any work:
 
 ```bash
-mise run setup
+mise trust && mise run setup
 ```
 
 ## PR format
