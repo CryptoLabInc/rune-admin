@@ -14,7 +14,6 @@ import logging
 
 import grpc
 import protovalidate
-
 from request_validator import (
     RUNTIME_CHECKS,
     RuntimeValidationError,
@@ -48,10 +47,7 @@ class ValidationInterceptor(grpc.ServerInterceptor):
                 # Layer 2: supplementary runtime checks
                 runtime_check(request)
             except protovalidate.ValidationError as exc:
-                msg = "; ".join(
-                    f"{v.proto.field}: {v.proto.message}"
-                    for v in exc.violations
-                )
+                msg = "; ".join(f"{v.proto.field}: {v.proto.message}" for v in exc.violations)
                 logger.warning("Validation rejected %s: %s", method, msg)
                 context.abort(grpc.StatusCode.INVALID_ARGUMENT, msg)
                 return None

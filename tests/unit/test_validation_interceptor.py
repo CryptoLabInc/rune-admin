@@ -24,18 +24,20 @@ _grpc_mock.unary_unary_rpc_method_handler = lambda handler, **kw: MagicMock(
 )
 sys.modules.setdefault("grpc", _grpc_mock)
 
-# Mock protovalidate if not already loaded
-if "protovalidate" not in sys.modules or sys.modules["protovalidate"] is None:
-    _protovalidate_mock = ModuleType("protovalidate")
+# Force-mock protovalidate regardless of prior imports — prevents test
+# isolation failures when the full suite loads the real module first.
+_protovalidate_mock = ModuleType("protovalidate")
 
-    class _ValidationError(Exception):
-        def __init__(self, violations=None):
-            self.violations = violations or []
-            super().__init__("validation error")
 
-    _protovalidate_mock.ValidationError = _ValidationError
-    _protovalidate_mock.Validator = MagicMock
-    sys.modules["protovalidate"] = _protovalidate_mock
+class _ValidationError(Exception):
+    def __init__(self, msg="validation error", violations=None):
+        self.violations = violations or []
+        super().__init__(msg)
+
+
+_protovalidate_mock.ValidationError = _ValidationError
+_protovalidate_mock.Validator = MagicMock
+sys.modules["protovalidate"] = _protovalidate_mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../vault'))
 
@@ -134,7 +136,8 @@ class TestValidationInterceptor:
                 wrapped.unary_unary(request, context)
 
         context.abort.assert_called_once()
-        assert context.abort.call_args[0][0] == "INVALID_ARGUMENT"
+        status_code = context.abort.call_args[0][0]
+        assert "INVALID_ARGUMENT" in str(status_code)
         assert "top_k" in context.abort.call_args[0][1]
 
     def test_runtime_validation_error_aborts(self):
@@ -154,7 +157,8 @@ class TestValidationInterceptor:
                 wrapped.unary_unary(request, context)
 
         context.abort.assert_called_once()
-        assert context.abort.call_args[0][0] == "INVALID_ARGUMENT"
+        status_code = context.abort.call_args[0][0]
+        assert "INVALID_ARGUMENT" in str(status_code)
         assert "control characters" in context.abort.call_args[0][1]
 
     def test_handler_without_unary_unary_passes_through(self):

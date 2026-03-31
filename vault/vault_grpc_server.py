@@ -6,37 +6,38 @@ Delegates to _*_impl() pure functions in vault_core.py.
 """
 
 import json
+import logging
 import os
 import signal
 import time
-import logging
+from concurrent import futures
 from datetime import datetime, timezone
 
 import grpc
-from concurrent import futures
-
+from admin_server import start_admin_server
 from grpc_health.v1 import health_pb2, health_pb2_grpc
 from grpc_health.v1.health import HealthServicer
 from grpc_reflection.v1alpha import reflection
-
-from vault_core import (
-    _get_public_key_impl,
-    _decrypt_scores_impl,
-    _decrypt_metadata_impl,
-    token_store,
-)
-from token_store import (
-    TokenNotFoundError, TokenExpiredError,
-    RateLimitError, TopKExceededError, ScopeError,
-)
-from admin_server import start_admin_server
-from validation_interceptor import ValidationInterceptor
-
 from proto import vault_service_pb2 as pb2
 from proto import vault_service_pb2_grpc as pb2_grpc
+from token_store import (
+    RateLimitError,
+    ScopeError,
+    TokenExpiredError,
+    TokenNotFoundError,
+    TopKExceededError,
+)
+from validation_interceptor import ValidationInterceptor
+from vault_core import (
+    _decrypt_metadata_impl,
+    _decrypt_scores_impl,
+    _get_public_key_impl,
+    token_store,
+)
 
 try:
     from audit import audit_logger, extract_source_ip
+
     AUDIT_AVAILABLE = True
 except ImportError:
     AUDIT_AVAILABLE = False
@@ -46,8 +47,7 @@ logger = logging.getLogger("rune.vault.grpc")
 MAX_MESSAGE_LENGTH = 256 * 1024 * 1024  # 256 MB (EvalKey can be tens of MB)
 
 
-def _emit_audit(method, user, top_k, result_count, status, error_detail,
-                 duration, context):
+def _emit_audit(method, user, top_k, result_count, status, error_detail, duration, context):
     """Emit audit log entry."""
     if not (AUDIT_AVAILABLE and audit_logger.enabled):
         return
@@ -115,8 +115,9 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
             return pb2.GetPublicKeyResponse(error=str(e))
         finally:
             duration = time.time() - start_time
-            _emit_audit("get_public_key", user, None, result_count,
-                        status, error_detail, duration, context)
+            _emit_audit(
+                "get_public_key", user, None, result_count, status, error_detail, duration, context
+            )
 
     def DecryptScores(self, request, context):
         start_time = time.time()
@@ -185,8 +186,16 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
             return pb2.DecryptScoresResponse(error=str(e))
         finally:
             duration = time.time() - start_time
-            _emit_audit("decrypt_scores", user, request.top_k, result_count,
-                        status, error_detail, duration, context)
+            _emit_audit(
+                "decrypt_scores",
+                user,
+                request.top_k,
+                result_count,
+                status,
+                error_detail,
+                duration,
+                context,
+            )
 
     def DecryptMetadata(self, request, context):
         start_time = time.time()
@@ -209,8 +218,7 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
             # Each element is a decrypted metadata object.
             # Serialize non-string items back to JSON string for the proto field.
             decrypted_strings = [
-                json.dumps(item) if not isinstance(item, str) else item
-                for item in parsed
+                json.dumps(item) if not isinstance(item, str) else item for item in parsed
             ]
             result_count = len(decrypted_strings)
             return pb2.DecryptMetadataResponse(decrypted_metadata=decrypted_strings)
@@ -246,8 +254,16 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
             return pb2.DecryptMetadataResponse(error=str(e))
         finally:
             duration = time.time() - start_time
-            _emit_audit("decrypt_metadata", user, None, result_count,
-                        status, error_detail, duration, context)
+            _emit_audit(
+                "decrypt_metadata",
+                user,
+                None,
+                result_count,
+                status,
+                error_detail,
+                duration,
+                context,
+            )
 
 
 def _load_tls_credentials():
@@ -258,10 +274,7 @@ def _load_tls_credentials():
     Raises SystemExit if TLS is required but cert/key not provided.
     """
     if os.environ.get("VAULT_TLS_DISABLE", "").lower() == "true":
-        logger.warning(
-            "TLS DISABLED — gRPC traffic is unencrypted. "
-            "Do not use in production."
-        )
+        logger.warning("TLS DISABLED — gRPC traffic is unencrypted. Do not use in production.")
         return None
 
     cert_path = os.environ.get("VAULT_TLS_CERT")

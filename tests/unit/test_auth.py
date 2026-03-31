@@ -17,7 +17,7 @@ from token_store import (
 from vault_core import validate_token, token_store
 
 # Demo token used when no config files or env var set
-DEMO_TOKEN = "evt_00000000000000000000000000demo"
+DEMO_TOKEN = "evt_0000000000000000000000000000demo"
 
 
 class TestTokenValidation:
@@ -50,7 +50,7 @@ class TestTokenValidation:
     def test_token_case_sensitive(self):
         """Token validation should be case-sensitive."""
         with pytest.raises(TokenNotFoundError):
-            validate_token(DEMO_TOKEN.lower())
+            validate_token(DEMO_TOKEN.upper())
 
     def test_token_no_whitespace_tolerance(self):
         """Tokens with whitespace should fail."""

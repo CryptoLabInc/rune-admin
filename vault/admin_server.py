@@ -10,7 +10,7 @@ import json
 import logging
 import re
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 logger = logging.getLogger("vault.admin")
 
@@ -24,15 +24,15 @@ DEFAULT_ADMIN_PORT = 8081
 # =============================================================================
 
 _ROUTE_DEFS = [
-    ("GET",    "/tokens",               "_handle_list_tokens"),
-    ("GET",    "/roles",                "_handle_list_roles"),
-    ("POST",   "/tokens",               "_handle_issue_token"),
-    ("POST",   "/tokens/{user}/rotate", "_handle_rotate_token"),
-    ("POST",   "/tokens/_rotate_all",   "_handle_rotate_all"),
-    ("POST",   "/roles",                "_handle_create_role"),
-    ("PUT",    "/roles/{name}",         "_handle_update_role"),
-    ("DELETE", "/tokens/{user}",        "_handle_revoke_token"),
-    ("DELETE", "/roles/{name}",         "_handle_delete_role"),
+    ("GET", "/tokens", "_handle_list_tokens"),
+    ("GET", "/roles", "_handle_list_roles"),
+    ("POST", "/tokens", "_handle_issue_token"),
+    ("POST", "/tokens/{user}/rotate", "_handle_rotate_token"),
+    ("POST", "/tokens/_rotate_all", "_handle_rotate_all"),
+    ("POST", "/roles", "_handle_create_role"),
+    ("PUT", "/roles/{name}", "_handle_update_role"),
+    ("DELETE", "/tokens/{user}", "_handle_revoke_token"),
+    ("DELETE", "/roles/{name}", "_handle_delete_role"),
 ]
 
 _ROUTES: list[tuple[str, re.Pattern, list[str], str]] = []
@@ -116,13 +116,16 @@ class AdminHandler(BaseHTTPRequestHandler):
             return
         expires_days = body.get("expires_days")
         tok = self.token_store.add_token(user, role, expires_days)
-        self._send_json({
-            "user": tok.user,
-            "token": tok.token,
-            "role": tok.role,
-            "issued_at": tok.issued_at,
-            "expires": tok.expires or "never",
-        }, 201)
+        self._send_json(
+            {
+                "user": tok.user,
+                "token": tok.token,
+                "role": tok.role,
+                "issued_at": tok.issued_at,
+                "expires": tok.expires or "never",
+            },
+            201,
+        )
 
     def _handle_revoke_token(self, user: str):
         revoked = self.token_store.revoke_token(user)
@@ -133,23 +136,24 @@ class AdminHandler(BaseHTTPRequestHandler):
 
     def _handle_rotate_token(self, user: str, body: dict):
         tok = self.token_store.rotate_token(user)
-        self._send_json({
-            "user": tok.user,
-            "token": tok.token,
-            "role": tok.role,
-            "issued_at": tok.issued_at,
-            "expires": tok.expires or "never",
-        })
+        self._send_json(
+            {
+                "user": tok.user,
+                "token": tok.token,
+                "role": tok.role,
+                "issued_at": tok.issued_at,
+                "expires": tok.expires or "never",
+            }
+        )
 
     def _handle_rotate_all(self, body: dict):
         tokens = self.token_store.rotate_all_tokens()
-        self._send_json({
-            "rotated": len(tokens),
-            "tokens": [
-                {"user": t.user, "token": t.token, "role": t.role}
-                for t in tokens
-            ],
-        })
+        self._send_json(
+            {
+                "rotated": len(tokens),
+                "tokens": [{"user": t.user, "token": t.token, "role": t.role} for t in tokens],
+            }
+        )
 
     # ── Role handlers ────────────────────────────────────────────────────
 
@@ -165,12 +169,15 @@ class AdminHandler(BaseHTTPRequestHandler):
             self._send_error(400, "Missing required fields: name, scope, top_k, rate_limit")
             return
         role = self.token_store.add_role(name, scope, top_k, rate_limit)
-        self._send_json({
-            "name": role.name,
-            "scope": role.scope,
-            "top_k": role.top_k,
-            "rate_limit": role.rate_limit,
-        }, 201)
+        self._send_json(
+            {
+                "name": role.name,
+                "scope": role.scope,
+                "top_k": role.top_k,
+                "rate_limit": role.rate_limit,
+            },
+            201,
+        )
 
     def _handle_update_role(self, name: str, body: dict):
         kwargs = {}
@@ -184,12 +191,14 @@ class AdminHandler(BaseHTTPRequestHandler):
             self._send_error(400, "No fields to update")
             return
         role = self.token_store.update_role(name, **kwargs)
-        self._send_json({
-            "name": role.name,
-            "scope": role.scope,
-            "top_k": role.top_k,
-            "rate_limit": role.rate_limit,
-        })
+        self._send_json(
+            {
+                "name": role.name,
+                "scope": role.scope,
+                "top_k": role.top_k,
+                "rate_limit": role.rate_limit,
+            }
+        )
 
     def _handle_delete_role(self, name: str):
         self.token_store.delete_role(name)

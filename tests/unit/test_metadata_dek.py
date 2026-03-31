@@ -21,7 +21,7 @@ from vault_core import (
 import vault_core
 from token_store import token_store
 
-VALID_TOKEN = "evt_00000000000000000000000000demo"
+VALID_TOKEN = "evt_0000000000000000000000000000demo"
 FAKE_TEAM_SECRET = "evt_fake-team-secret-for-testing-purposes-only"
 
 
