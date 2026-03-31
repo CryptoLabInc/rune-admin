@@ -1,0 +1,105 @@
+# Rune-Vault Development Environment
+# Run `mise install` to set up all tools, then `mise run setup` to bootstrap.
+# Prerequisites: mise (https://mise.jdx.dev), Docker (https://docs.docker.com/get-docker)
+
+# ── Core development tools ───────────────────────────────────────────
+[tools]
+python = "3.12"
+buf = "1.66"
+ruff = "0.15"
+
+# ── Deployment tools (install with: mise install) ────────────────────
+# These are needed only for cloud deployment, not for local development.
+terraform = "1.14"
+"aqua:aws/aws-cli" = "2"
+gcloud = "562"
+oci = "3"
+
+# ── Environment variables ────────────────────────────────────────────
+[env]
+_.python.venv = { path = ".venv", create = true }
+PYTHONPATH = "{{config_root}}/vault/proto:{{config_root}}/vault"
+
+# ── Tasks ────────────────────────────────────────────────────────────
+
+[tasks.setup]
+description = "Bootstrap development environment (venv + dependencies)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "==> Installing vault dependencies..."
+pip install -q -r vault/requirements.txt
+
+echo "==> Installing test dependencies..."
+pip install -q -r tests/requirements.txt
+
+echo "==> Generating proto stubs..."
+cd vault && bash scripts/proto-gen.sh && cd ..
+
+echo "==> Configuring git hooks..."
+git config core.hooksPath .githooks
+
+echo ""
+echo "Development environment ready."
+echo "Run 'mise run test' to verify."
+"""
+
+[tasks.test]
+description = "Run unit and integration tests"
+run = "python -m pytest tests/unit tests/integration -v"
+
+[tasks."test:unit"]
+description = "Run unit tests only"
+run = "python -m pytest tests/unit -v"
+
+[tasks."test:cov"]
+description = "Run tests with coverage report"
+run = "python -m pytest tests/unit tests/integration --cov=vault --cov-report=term-missing -v"
+
+[tasks.lint]
+description = "Run ruff linter"
+run = "ruff check vault/"
+
+[tasks."lint:fix"]
+description = "Run ruff linter with auto-fix"
+run = "ruff check vault/ --fix"
+
+[tasks.format]
+description = "Format code with ruff"
+run = "ruff format vault/"
+
+[tasks."format:check"]
+description = "Check code formatting without modifying"
+run = "ruff format --check vault/"
+
+[tasks.check]
+description = "Run all quality checks (format + lint + test)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+echo "==> Checking format..."
+ruff format --check vault/
+echo "==> Linting..."
+ruff check vault/
+echo "==> Running tests..."
+python -m pytest tests/unit -v
+echo ""
+echo "All checks passed."
+"""
+
+[tasks.proto]
+description = "Regenerate protobuf/gRPC stubs"
+run = "cd vault && bash scripts/proto-gen.sh"
+
+[tasks.build]
+description = "Build Docker image locally"
+run = "cd vault && make build"
+
+[tasks.dev]
+description = "Start local development Vault via Docker Compose"
+run = "bash scripts/vault-dev.sh"
+
+[tasks.certs]
+description = "Generate self-signed TLS certificates"
+run = "bash scripts/generate-certs.sh"
