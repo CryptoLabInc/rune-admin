@@ -3,12 +3,6 @@
 # FHE Encryption SDK
 pyenvector>=1.2.0
 
-# System Monitoring
-psutil>=5.9.0
-
-# Metrics and Observability
-prometheus-client>=0.16.0
-
 # HTTP Client
 httpx>=0.24.0
 

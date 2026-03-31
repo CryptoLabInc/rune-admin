@@ -21,20 +21,7 @@ from request_validator import (
     validate_proto,
 )
 
-try:
-    import monitoring
-    MONITORING_AVAILABLE = True
-except ImportError:
-    MONITORING_AVAILABLE = False
-
 logger = logging.getLogger("rune.vault.validation")
-
-_METHOD_SHORT_NAMES = {
-    "/rune.vault.v1.VaultService/GetPublicKey": "get_public_key",
-    "/rune.vault.v1.VaultService/DecryptScores": "decrypt_scores",
-    "/rune.vault.v1.VaultService/DecryptMetadata": "decrypt_metadata",
-}
-
 
 class ValidationInterceptor(grpc.ServerInterceptor):
     """Intercepts unary-unary gRPC calls to validate request fields."""
@@ -66,12 +53,10 @@ class ValidationInterceptor(grpc.ServerInterceptor):
                     for v in exc.violations
                 )
                 logger.warning("Validation rejected %s: %s", method, msg)
-                self._record_metric(method)
                 context.abort(grpc.StatusCode.INVALID_ARGUMENT, msg)
                 return None
             except RuntimeValidationError as exc:
                 logger.warning("Validation rejected %s: %s", method, exc)
-                self._record_metric(method)
                 context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
                 return None
             return original_handler(request, context)
@@ -82,13 +67,3 @@ class ValidationInterceptor(grpc.ServerInterceptor):
             response_serializer=next_handler.response_serializer,
         )
 
-    @staticmethod
-    def _record_metric(method: str) -> None:
-        if MONITORING_AVAILABLE:
-            short = _METHOD_SHORT_NAMES.get(method, method)
-            monitoring.vault_requests_total.labels(
-                method=short,
-                endpoint="grpc",
-                status="validation_error",
-                user="unknown",
-            ).inc()

@@ -36,12 +36,6 @@ from proto import vault_service_pb2 as pb2
 from proto import vault_service_pb2_grpc as pb2_grpc
 
 try:
-    import monitoring
-    MONITORING_AVAILABLE = True
-except ImportError:
-    MONITORING_AVAILABLE = False
-
-try:
     from audit import audit_logger, extract_source_ip
     AUDIT_AVAILABLE = True
 except ImportError:
@@ -121,13 +115,6 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
             return pb2.GetPublicKeyResponse(error=str(e))
         finally:
             duration = time.time() - start_time
-            if MONITORING_AVAILABLE:
-                monitoring.vault_requests_total.labels(
-                    method="get_public_key", endpoint="grpc", status=status, user=user
-                ).inc()
-                monitoring.vault_request_duration.labels(
-                    method="get_public_key", endpoint="grpc"
-                ).observe(duration)
             _emit_audit("get_public_key", user, None, result_count,
                         status, error_detail, duration, context)
 
@@ -198,13 +185,6 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
             return pb2.DecryptScoresResponse(error=str(e))
         finally:
             duration = time.time() - start_time
-            if MONITORING_AVAILABLE:
-                monitoring.vault_requests_total.labels(
-                    method="decrypt_scores", endpoint="grpc", status=status, user=user
-                ).inc()
-                monitoring.vault_request_duration.labels(
-                    method="decrypt_scores", endpoint="grpc"
-                ).observe(duration)
             _emit_audit("decrypt_scores", user, request.top_k, result_count,
                         status, error_detail, duration, context)
 
@@ -266,13 +246,6 @@ class VaultServiceServicer(pb2_grpc.VaultServiceServicer):
             return pb2.DecryptMetadataResponse(error=str(e))
         finally:
             duration = time.time() - start_time
-            if MONITORING_AVAILABLE:
-                monitoring.vault_requests_total.labels(
-                    method="decrypt_metadata", endpoint="grpc", status=status, user=user
-                ).inc()
-                monitoring.vault_request_duration.labels(
-                    method="decrypt_metadata", endpoint="grpc"
-                ).observe(duration)
             _emit_audit("decrypt_metadata", user, None, result_count,
                         status, error_detail, duration, context)
 
@@ -368,13 +341,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the Rune-Vault gRPC server.")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind")
     parser.add_argument("--grpc-port", type=int, default=50051, help="gRPC port")
-    parser.add_argument("--metrics-port", type=int, default=9090, help="Metrics/health HTTP port")
     args = parser.parse_args()
-
-    # Start monitoring HTTP server (metrics + health)
-    if MONITORING_AVAILABLE:
-        monitoring.start_monitoring(port=args.metrics_port)
-        logger.info(f"Monitoring HTTP server started on :{args.metrics_port}")
 
     # Start admin HTTP server (internal HTTP, not exposed via Docker)
     admin_srv = start_admin_server(token_store)

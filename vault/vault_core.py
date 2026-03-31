@@ -23,16 +23,6 @@ try:
 except ModuleNotFoundError:
     from pyenvector.proto_gen.type_pb2 import CiphertextScore
 
-try:
-    import monitoring
-    MONITORING_AVAILABLE = True
-except ImportError:
-    MONITORING_AVAILABLE = False
-    # Dummy interface to prevent NameErrors if used without checking flag
-    class DummyMonitoring:
-        pass
-    monitoring = DummyMonitoring()
-
 # Configuration
 KEY_DIR = "vault_keys"
 KEY_ID = "vault-key"

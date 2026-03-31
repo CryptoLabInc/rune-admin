@@ -150,7 +150,6 @@ rune-admin/
 ├── vault/             # Rune-Vault gRPC server
 │   ├── vault_core.py          # Core business logic
 │   ├── vault_grpc_server.py   # gRPC entry point
-│   ├── monitoring.py          # Health & metrics
 │   ├── Makefile               # Build & run commands
 │   └── vault_keys/            # Generated FHE keys
 ├── scripts/

@@ -111,7 +111,7 @@ This uses [buf](https://buf.build) to resolve the `protovalidate` dependency and
 ### Run
 
 ```bash
-python3 vault_grpc_server.py --host 0.0.0.0 --grpc-port 50051 --metrics-port 9090
+python3 vault_grpc_server.py --host 0.0.0.0 --grpc-port 50051
 ```
 
 </details>
