@@ -147,21 +147,12 @@ rune-admin/
 │   ├── aws/           # AWS deployment
 │   ├── gcp/           # GCP deployment
 │   └── monitoring/    # Grafana + Prometheus
-├── vault/             # Rune-Vault gRPC server
-│   ├── vault_core.py          # Core business logic
-│   ├── vault_grpc_server.py   # gRPC entry point
-│   ├── Makefile               # Build & run commands
-│   └── vault_keys/            # Generated FHE keys
+├── vault/             # Rune-Vault gRPC server (see [Architecture](docs/ARCHITECTURE.md))
 ├── scripts/
-│   ├── vault-dev.sh           # Local Vault for testing
-│   └── load-test.sh           # Load testing runner
-├── tests/
-│   ├── unit/          # Unit tests
-│   ├── integration/   # Integration tests
-│   └── load/          # Load testing scripts
-├── docs/
-│   ├── ARCHITECTURE.md        # System architecture
-│   └── TEAM-SETUP.md          # Team collaboration guide
+│   ├── vault-dev.sh   # Local development server
+│   └── load-test.sh   # Load testing runner
+├── tests/             # Unit, integration, e2e, load tests
+├── docs/              # Architecture, team setup guides
 └── install.sh         # Interactive installer
 ```
 
@@ -315,31 +306,7 @@ export RUNEVAULT_TOKEN="evt_xxx"
 
 ## Development
 
-### Local Vault (Testing)
-
-```bash
-# Start local Vault for development
-./scripts/vault-dev.sh
-
-# Output:
-# Vault gRPC:   localhost:50051
-# Vault Health:  http://localhost:9090/health
-# Token: demo_token_123 (INSECURE!)
-```
-
-### Run Tests
-
-```bash
-# Unit tests
-cd tests
-pytest unit/ -v
-
-# Integration tests
-pytest integration/ -v
-
-# Load tests
-../../scripts/load-test.sh
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, commands, and guidelines.
 
 ## Troubleshooting
 

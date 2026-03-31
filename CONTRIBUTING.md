@@ -33,8 +33,8 @@ Feature requests should include:
 
 ### Prerequisites
 
-- Python 3.12
-- Docker (for testing deployments)
+- [mise](https://mise.jdx.dev): `curl https://mise.jdx.dev/install.sh | sh`
+- [Docker](https://docs.docker.com/get-docker/) (for local Vault and image builds)
 - Access to cloud provider (OCI/AWS/GCP) for integration testing
 
 ### Local Setup
@@ -45,18 +45,42 @@ Feature requests should include:
    cd rune-admin
    ```
 
-2. **Install dependencies**
+2. **Install tools and bootstrap**
    ```bash
-   pip install -r requirements.txt
-   cd tests && pip install -r requirements.txt
+   mise install        # Install Python 3.12, buf, ruff, terraform, cloud CLIs
+   mise run setup      # Create venv, install deps, generate proto stubs
    ```
 
-3. **Run tests**
+3. **Verify setup**
    ```bash
-   cd tests
-   pytest unit/ -v
-   pytest integration/ -v
+   mise run test:unit  # Run unit tests to verify
    ```
+
+4. **(Optional) Activate mise in your shell**
+   ```bash
+   eval "$(mise activate zsh)"   # or bash
+   ```
+   This adds mise-managed tools (`terraform`, `oci`, `gcloud`, etc.) to your PATH for the current session.
+   To make it permanent, add the line to your `~/.zshrc` (or `~/.bashrc`).
+
+### Commands
+
+All commands **must** be run via `mise run` to ensure correct tool versions and venv activation.
+
+| Command | Description |
+|---------|-------------|
+| `mise run test` | Unit + integration tests |
+| `mise run test:unit` | Unit tests only |
+| `mise run test:cov` | Tests with coverage report |
+| `mise run lint` | Ruff linter |
+| `mise run lint:fix` | Ruff with auto-fix |
+| `mise run format` | Ruff formatter |
+| `mise run format:check` | Check formatting without modifying |
+| `mise run check` | All checks: format + lint + unit tests |
+| `mise run proto` | Regenerate protobuf/gRPC stubs |
+| `mise run build` | Build Docker image locally |
+| `mise run dev` | Start local Vault via Docker Compose |
+| `mise run certs` | Generate self-signed TLS certificates |
 
 ## Testing
 
@@ -64,31 +88,20 @@ Feature requests should include:
 
 ```
 tests/
-├── unit/               # Unit tests for core functionality
-│   ├── test_auth.py    # Token validation
-│   ├── test_crypto.py  # FHE key generation and encryption
-│   ├── test_public_key.py  # Public key bundle
-│   └── test_decrypt_scores.py  # Decryption and Top-K
-├── integration/        # Integration tests
-│   └── test_vault_api.py  # End-to-end Vault API
-└── load/              # Load testing
-    └── load_test.py
+├── unit/          # Fast, isolated tests per module
+├── integration/   # End-to-end Vault API tests
+├── e2e/           # Full system scenario tests
+└── load/          # Locust-based load testing
 ```
 
 ### Running Tests
 
+All test commands **must** be run via `mise run`:
+
 ```bash
-# All unit tests
-pytest tests/unit/ -v
-
-# Specific test file
-pytest tests/unit/test_crypto.py -v
-
-# With coverage
-pytest tests/unit/ --cov=vault --cov-report=html
-
-# Integration tests (requires Vault setup)
-pytest tests/integration/ -v
+mise run test         # Unit + integration tests
+mise run test:unit    # Unit tests only
+mise run test:cov     # Tests with coverage report
 ```
 
 ### Test Requirements
@@ -97,31 +110,18 @@ pytest tests/integration/ -v
 - Use fixtures for crypto setup to avoid repeated key generation
 - Mock external dependencies
 - Test both success and error paths
+- New gRPC methods need corresponding unit tests in `tests/unit/`
+- Token/auth changes must update `tests/unit/test_auth.py`
 
 ## Code Style
 
 ### Python
 
 - Follow PEP 8
-- Use type hints where appropriate
-- Document functions with docstrings
+- All public functions need type hints
 - Keep functions focused and testable
-
-Example:
-```python
-def validate_token(token: str) -> None:
-    """
-    Validates authentication token.
-    
-    Args:
-        token: Authentication token from admin
-        
-    Raises:
-        ValueError: If token is invalid or empty
-    """
-    if not token or token.strip() != token:
-        raise ValueError(f"Access Denied: Invalid Token")
-```
+- Format and lint with ruff: `mise run format` and `mise run lint`
+- Run `mise run check` before committing
 
 ### Shell Scripts
 
@@ -129,6 +129,10 @@ def validate_token(token: str) -> None:
 - Include error handling (`set -e`)
 - Add comments for complex logic
 - Test on multiple platforms (macOS, Linux)
+
+### General Rules
+
+- English only in code, commit messages, PR descriptions, and issue bodies
 
 ## Documentation
 
@@ -151,12 +155,8 @@ def validate_token(token: str) -> None:
 ### Local Testing
 
 ```bash
-# Test Vault server locally
-cd vault
-python vault_grpc_server.py
-
-# In another terminal, test health endpoint
-curl http://localhost:9090/health
+mise run dev    # Start local Vault via Docker Compose
+mise run build  # Build Docker image locally
 ```
 
 ### Platform Testing
@@ -173,7 +173,7 @@ Test deployment on each supported platform:
 
 1. **Create feature branch**
    ```bash
-   git checkout -b feature/your-feature-name
+   git checkout -b worktree-issue-{N}-{description}
    ```
 
 2. **Make changes**
@@ -183,21 +183,17 @@ Test deployment on each supported platform:
 
 3. **Test thoroughly**
    ```bash
-   pytest tests/ -v
+   mise run check
    ```
 
 4. **Commit with clear message**
    ```bash
-   git commit -m "feat: Add monitoring dashboard support
-   
-   - Add Prometheus metrics endpoint
-   - Update deployment scripts
-   - Add monitoring documentation"
+   git commit -m "feat: add monitoring dashboard support (#N)"
    ```
 
 5. **Push and create PR**
    ```bash
-   git push origin feature/your-feature-name
+   git push origin worktree-issue-{N}-{description}
    # Create PR on GitHub
    ```
 
@@ -242,37 +238,27 @@ Closes #123
 
 ```
 rune-admin/
-├── vault/                  # Rune-Vault gRPC server
-│   ├── vault_core.py       # Core business logic
-│   ├── vault_grpc_server.py  # gRPC entry point
-│   ├── demo_local.py       # Local testing demo
-│   └── verify_crypto_flow.py  # Crypto verification
-├── deployment/
-│   ├── oci/               # Oracle Cloud deployment
-│   ├── aws/               # AWS deployment
-│   ├── gcp/               # GCP deployment
-│   └── monitoring/        # Grafana + Prometheus configs
+├── vault/                  # Rune-Vault gRPC server (see [Architecture](docs/ARCHITECTURE.md))
+├── deployment/            # Terraform configs (OCI, AWS, GCP) + monitoring
 ├── scripts/
-│   ├── deploy-vault.sh    # Automated deployment
-│   ├── vault-dev.sh       # Local Vault for testing
+│   ├── vault-dev.sh       # Local development server
 │   └── load-test.sh       # Load testing runner
-├── tests/                 # Test suite
-├── docs/                  # Documentation
+├── tests/                 # Unit, integration, e2e, load tests
+├── docs/                  # Architecture, team setup guides
 └── install.sh             # Interactive installer
 ```
 
-## Key Components
+## Vault Architecture
 
-- **vault_core.py**: Core business logic for Vault operations
-- **Deployment scripts**: Platform-specific deployment automation
-- **Test suite**: Comprehensive testing of all functionality
-- **Documentation**: Admin guides and architecture details
+Core server code is in `vault/`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
 
 ## Security Considerations
 
+- Secret key (`vault_keys/`) must never be logged, returned in API responses, or leave the server process
+- Admin server binds to `127.0.0.1` only — never expose externally
 - Never commit private keys (SecKey.json)
-- Store tokens securely
-- Use environment variables for sensitive config
+- Token secrets must come from environment variables, never hardcoded
+- TLS is required for all cloud deployments
 - Review security implications of changes
 - Test authentication and authorization
 
