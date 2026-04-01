@@ -23,7 +23,6 @@ write_files:
           restart: unless-stopped
           ports:
             - "0.0.0.0:50051:50051"
-            - "127.0.0.1:9090:9090"
           environment:
             - VAULT_TEAM_SECRET=${team_secret}
             - VAULT_INDEX_NAME=${vault_index_name}
@@ -40,7 +39,7 @@ write_files:
             - ./backups:/secure/backups:rw
             - ./logs:/var/log/rune-vault:rw
           healthcheck:
-            test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9090/health')"]
+            test: ["CMD", "curl", "-sf", "http://localhost:8081/health"]
             interval: 30s
             timeout: 10s
             retries: 3
@@ -162,11 +161,11 @@ runcmd:
 
   # Wait for Vault to be ready
   - sleep 10
-  - timeout 300 bash -c 'until curl -sf http://localhost:9090/health; do sleep 2; done'
+  - timeout 300 bash -c 'until docker exec rune-vault curl -sf http://localhost:8081/health 2>/dev/null; do sleep 2; done'
 
 final_message: |
   Rune-Vault installation completed!
 
   Vault gRPC endpoint: <public-ip>:50051
-  Health check: curl http://localhost:9090/health
+  Health check: docker exec rune-vault curl -sf http://localhost:8081/health
   Docker logs: docker logs rune-vault

@@ -340,7 +340,7 @@ def serve_grpc(host: str = "0.0.0.0", port: int = 50051) -> grpc.Server:
         logger.info("gRPC server started on %s (insecure)", addr)
 
     server.start()
-    return server
+    return server, health_servicer
 
 
 if __name__ == "__main__":
@@ -356,11 +356,11 @@ if __name__ == "__main__":
     parser.add_argument("--grpc-port", type=int, default=50051, help="gRPC port")
     args = parser.parse_args()
 
-    # Start admin HTTP server (internal HTTP, not exposed via Docker)
-    admin_srv = start_admin_server(token_store)
-
     # Start gRPC server (non-blocking)
-    grpc_server = serve_grpc(host=args.host, port=args.grpc_port)
+    grpc_server, health_servicer = serve_grpc(host=args.host, port=args.grpc_port)
+
+    # Start admin HTTP server (internal HTTP, not exposed via Docker)
+    admin_srv = start_admin_server(token_store, health_servicer=health_servicer)
 
     # Graceful shutdown on SIGTERM / SIGINT
     def _shutdown(signum, frame):

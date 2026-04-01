@@ -162,3 +162,48 @@ class TestAdminServer:
     def test_unknown_resource(self):
         status, _ = _request(self.port, "GET", "/unknown")
         assert status == 404
+
+    # ── Health endpoint ──────────────────────────────────────────────
+
+    def test_health_ok_without_servicer(self):
+        status, data = _request(self.port, "GET", "/health")
+        assert status == 200
+        assert data["status"] == "ok"
+
+    def test_health_ok_with_serving_servicer(self):
+        from grpc_health.v1 import health_pb2
+        from grpc_health.v1.health import HealthServicer
+
+        servicer = HealthServicer()
+        servicer.set("", health_pb2.HealthCheckResponse.SERVING)
+
+        store = TokenStore()
+        store._roles = dict(DEFAULT_ROLES)
+        server = start_admin_server(store, "127.0.0.1", 0, health_servicer=servicer)
+        port = server.server_address[1]
+        time.sleep(0.1)
+        try:
+            status, data = _request(port, "GET", "/health")
+            assert status == 200
+            assert data["status"] == "ok"
+        finally:
+            server.shutdown()
+
+    def test_health_unhealthy_with_not_serving(self):
+        from grpc_health.v1 import health_pb2
+        from grpc_health.v1.health import HealthServicer
+
+        servicer = HealthServicer()
+        servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
+
+        store = TokenStore()
+        store._roles = dict(DEFAULT_ROLES)
+        server = start_admin_server(store, "127.0.0.1", 0, health_servicer=servicer)
+        port = server.server_address[1]
+        time.sleep(0.1)
+        try:
+            status, data = _request(port, "GET", "/health")
+            assert status == 503
+            assert data["status"] == "unhealthy"
+        finally:
+            server.shutdown()

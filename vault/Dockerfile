@@ -48,7 +48,7 @@ ENV PYTHONPATH=/app/proto:/app
 EXPOSE 50051
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-    CMD python3 -c "import grpc; from grpc_health.v1 import health_pb2, health_pb2_grpc; ch = grpc.insecure_channel('localhost:50051'); stub = health_pb2_grpc.HealthStub(ch); stub.Check(health_pb2.HealthCheckRequest())" || exit 1
+    CMD curl -sf http://localhost:8081/health || exit 1
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["--host", "0.0.0.0", "--grpc-port", "50051"]

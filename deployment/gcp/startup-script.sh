@@ -24,7 +24,6 @@ services:
     restart: unless-stopped
     ports:
       - "0.0.0.0:50051:50051"
-      - "127.0.0.1:9090:9090"
     env_file:
       - .env
     environment:
@@ -40,7 +39,7 @@ services:
       - ./backups:/secure/backups:rw
       - ./logs:/var/log/rune-vault:rw
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9090/health')"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8081/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -151,6 +150,6 @@ docker compose up -d
 
 # Wait for Vault to be ready
 sleep 10
-timeout 300 bash -c 'until curl -sf http://localhost:9090/health; do sleep 2; done'
+timeout 300 bash -c 'until docker exec rune-vault curl -sf http://localhost:8081/health 2>/dev/null; do sleep 2; done'
 
 echo "=== Rune-Vault startup script completed at $(date) ==="
