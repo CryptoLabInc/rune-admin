@@ -24,6 +24,7 @@ DEFAULT_ADMIN_PORT = 8081
 # =============================================================================
 
 _ROUTE_DEFS = [
+    ("GET", "/health", "_handle_health"),
     ("GET", "/tokens", "_handle_list_tokens"),
     ("GET", "/roles", "_handle_list_roles"),
     ("POST", "/tokens", "_handle_issue_token"),
@@ -47,6 +48,7 @@ class AdminHandler(BaseHTTPRequestHandler):
 
     # Set by start_admin_server() before requests are handled
     token_store = None
+    health_servicer = None
 
     def log_message(self, format, *args):
         logger.info(format, *args)
@@ -102,6 +104,18 @@ class AdminHandler(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         self._dispatch("DELETE")
+
+    # ── Health ────────────────────────────────────────────────────────────
+
+    def _handle_health(self):
+        from grpc_health.v1 import health_pb2
+
+        if self.health_servicer is not None:
+            resp = self.health_servicer.Check(health_pb2.HealthCheckRequest(service=""), None)
+            if resp.status != health_pb2.HealthCheckResponse.SERVING:
+                self._send_json({"status": "unhealthy"}, 503)
+                return
+        self._send_json({"status": "ok"})
 
     # ── Token handlers ───────────────────────────────────────────────────
 
@@ -205,9 +219,12 @@ class AdminHandler(BaseHTTPRequestHandler):
         self._send_json({"message": f"Deleted role '{name}'"})
 
 
-def start_admin_server(store, host: str = DEFAULT_ADMIN_HOST, port: int = DEFAULT_ADMIN_PORT):
+def start_admin_server(
+    store, host: str = DEFAULT_ADMIN_HOST, port: int = DEFAULT_ADMIN_PORT, health_servicer=None
+):
     """Start the admin HTTP server in a daemon thread."""
     AdminHandler.token_store = store
+    AdminHandler.health_servicer = health_servicer
     server = HTTPServer((host, port), AdminHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True, name="admin-server")
     thread.start()

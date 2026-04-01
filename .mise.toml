@@ -20,6 +20,12 @@ oci = "3"
 _.python.venv = { path = ".venv", create = true }
 PYTHONPATH = "{{config_root}}/vault/proto:{{config_root}}/vault"
 
+# ── Docker image settings ───────────────────────────────────────────
+[vars]
+docker_image = "ghcr.io/cryptolabinc/rune-vault"
+docker_builder = "rune-vault-builder"
+docker_platforms = "linux/amd64,linux/arm64"
+
 # ── Tasks ────────────────────────────────────────────────────────────
 
 [tasks.setup]
@@ -93,12 +99,43 @@ description = "Regenerate protobuf/gRPC stubs"
 run = "cd vault && bash scripts/proto-gen.sh"
 
 [tasks.build]
-description = "Build Docker image locally"
-run = "cd vault && make build"
+description = "Build Docker image locally (via buildx)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+TAG="{{arg(name="tag", default="latest")}}"
+
+docker buildx inspect "{{vars.docker_builder}}" >/dev/null 2>&1 || \
+  docker buildx create --name "{{vars.docker_builder}}" --use --driver docker-container
+
+cd vault
+docker buildx build --builder "{{vars.docker_builder}}" \
+  -t "{{vars.docker_image}}:$TAG" \
+  --load .
+"""
+
+[tasks.push]
+description = "Build and push multi-platform Docker image to GHCR"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+TAG="{{arg(name="tag", default="latest")}}"
+
+gh auth token | docker login ghcr.io -u "$(gh api user -q .login)" --password-stdin
+
+docker buildx inspect "{{vars.docker_builder}}" >/dev/null 2>&1 || \
+  docker buildx create --name "{{vars.docker_builder}}" --use --driver docker-container
+
+cd vault
+docker buildx build --builder "{{vars.docker_builder}}" \
+  --platform "{{vars.docker_platforms}}" \
+  -t "{{vars.docker_image}}:$TAG" \
+  --push .
+"""
 
 [tasks.dev]
 description = "Start local development Vault via Docker Compose"
-run = "bash scripts/vault-dev.sh"
+run = "cd vault && docker compose up --build -d vault"
 
 [tasks.certs]
 description = "Generate self-signed TLS certificates"

@@ -43,6 +43,14 @@ Do NOT run python, pytest, or ruff directly.
 - Token secrets must come from environment variables, never hardcoded
 - TLS is required for all cloud deployments
 
+## Worktree setup
+
+After entering a worktree, you MUST run before any work:
+
+```bash
+mise trust && mise run setup
+```
+
 ## PR format
 
 Follow `.github/PULL_REQUEST_TEMPLATE.md` exactly. Fill every section, replace all placeholders.

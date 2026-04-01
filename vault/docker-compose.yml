@@ -1,5 +1,8 @@
 services:
   vault:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: ghcr.io/cryptolabinc/rune-vault:${RUNE_VAULT_TAG:-latest}
     container_name: rune-vault
 
@@ -29,7 +32,6 @@ services:
 
     ports:
       - "0.0.0.0:50051:50051"
-      - "127.0.0.1:9090:9090"
 
     security_opt:
       - no-new-privileges:true
@@ -37,7 +39,7 @@ services:
     restart: unless-stopped
 
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9090/health')"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8081/health"]
       interval: 30s
       timeout: 10s
       retries: 3

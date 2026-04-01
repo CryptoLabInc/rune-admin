@@ -574,10 +574,8 @@ deploy_local() {
     print_step "Waiting for Vault to become healthy..."
     local elapsed=0
     local timeout=60
-    local health_url="http://localhost:9090/health"
-
     while [ $elapsed -lt $timeout ]; do
-        if curl -sf "$health_url" >/dev/null 2>&1; then
+        if docker exec rune-vault curl -sf http://localhost:8081/health 2>/dev/null; then
             print_info "Vault is healthy!"
 
             # Set up runevault alias for admin CLI
