@@ -10,7 +10,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 2. **Decryption Service**: Decrypt search results from enVector Cloud
 3. **Authentication**: Validate team member access via tokens
 4. **Access Control**: Per-user RBAC with role-based top_k limits, scope enforcement, and rate limiting
-5. **Monitoring**: Track usage, performance, and security metrics
+5. **Audit Logging**: Structured JSON logs for compliance and debugging
 
 ## High-Level Architecture
 
@@ -60,9 +60,9 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
                             │  └──────────────────────┘  │
                             │                            │
                             │  ┌──────────────────────┐  │
-                            │  │  Auth & Monitoring   │  │
+                            │  │  Auth & Audit        │  │
                             │  │  - Token validation  │  │
-                            │  │  - Prometheus metrics│  │
+                            │  │  - Audit logging     │  │
                             │  └──────────────────────┘  │
                             └────────────────────────────┘
 ```
@@ -76,8 +76,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 | Port | Protocol | Purpose | Exposure |
 |------|----------|---------|----------|
 | 50051 | gRPC + TLS | Vault service, health check, reflection | Public (team members) |
-| 9090 | HTTP | Health, metrics, status | Host-only (127.0.0.1 in Docker) |
-| 8081 | HTTP | Admin token/role CRUD | Container-internal only |
+| 8081 | HTTP | Admin token/role CRUD + health check | Container-internal only |
 
 ## Component Details
 
@@ -94,10 +93,8 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 **Runtime**:
 - Python 3.12 gRPC server
 - gRPC server on port 50051 (used by envector-mcp-server)
-- HTTP health/metrics endpoint on port 9090
+- gRPC health check via `grpc.health.v1` protocol
 - Internal admin HTTP API on port 8081 (container-local only)
-- Prometheus metrics exporter
-- System monitoring (psutil)
 
 **Key Storage** (`vault_keys/vault-key/`):
 ```
@@ -188,6 +185,7 @@ Custom roles can be created via the Admin API or CLI.
 
 | Method | Path | Purpose |
 |--------|------|---------|
+| GET | /health | Health check (queries gRPC health servicer) |
 | GET | /tokens | List all tokens |
 | POST | /tokens | Issue new token |
 | DELETE | /tokens/{user} | Revoke token |
@@ -225,49 +223,7 @@ agent_id = SHA256(token)[:32]
 - Vault re-derives the DEK from team secret + agent_id to decrypt
 - Ensures one agent cannot decrypt another agent's metadata even if both are on the same team
 
-### 7. Monitoring & Observability
-
-**Prometheus Metrics** (exposed at `:9090/metrics`):
-```
-# Request tracking (all gRPC methods)
-vault_requests_total{method, endpoint, status, user}
-vault_request_duration_seconds{method, endpoint}
-
-# Decryption operations
-vault_decryption_operations_total{status}
-vault_decryption_duration_seconds
-
-# Key access
-vault_key_access_total{key_type, status}
-
-# System gauges
-vault_health_status          (1=healthy, 0=unhealthy)
-vault_cpu_usage_percent
-vault_memory_usage_bytes
-vault_uptime_seconds
-```
-
-**HTTP Endpoints** (port 9090):
-
-| Endpoint | Purpose |
-|----------|---------|
-| `/health` | Full health check (sub-checks: keys, memory, cpu, disk) |
-| `/health/ready` | Readiness probe (keys accessible?) |
-| `/health/live` | Liveness probe (always 200 if process running) |
-| `/metrics` | Prometheus metrics (text format) |
-| `/status` | Service status with version, uptime, resource usage |
-
-**Health Check** (`/health`):
-- Runs sub-checks for keys, memory, cpu, disk
-- Each check returns: `{status: healthy|degraded|unhealthy, message}`
-- Overall status: unhealthy if any check is unhealthy, degraded if any degraded
-- Thresholds: >80% = degraded, >90% = unhealthy (memory, cpu, disk)
-
-**Grafana Dashboards**:
-- See `deployment/monitoring/grafana-dashboard.json` for templates
-- Pre-configured alerts in `deployment/monitoring/prometheus-alerts.yml`
-
-### 8. Audit Logging
+### 7. Audit Logging
 
 Structured JSON logging for all gRPC operations (`audit.py`):
 
@@ -399,7 +355,7 @@ EvalKey: Distributed to all team members (safe to share, FHE operations)
 
 **Layer 1: Network**
 - TLS 1.3 for all Vault communications
-- Firewall rules (allow gRPC 50051; monitoring 9090 host-only)
+- Firewall rules (allow gRPC 50051)
 - Optional: VPN for extra isolation
 
 **Layer 2: Authentication**
@@ -413,10 +369,9 @@ EvalKey: Distributed to all team members (safe to share, FHE operations)
 - Secure key generation (crypto-safe randomness)
 - Per-agent metadata DEKs (agent isolation)
 
-**Layer 4: Monitoring**
-- Prometheus alerts (unusual access patterns)
-- Grafana dashboards (real-time visibility)
-- Audit logs (compliance reporting)
+**Layer 4: Audit**
+- Structured JSON audit logs (compliance reporting)
+- Per-request logging: user, method, latency, status, source IP
 
 ## Deployment Architecture
 
@@ -437,21 +392,19 @@ Cloud Resources Created
     │   ├── Shape: 2 OCPU, 8GB RAM, 50GB disk
     │   └── Software:
     │       ├── Python 3.12
-    │       ├── pyenvector (FHE SDK)
-    │       └── Prometheus exporter
+    │       └── pyenvector (FHE SDK)
     │
     ├── Networking
     │   ├── Public IP address
-    │   ├── Security group (allow 50051/gRPC; 9090 host-only)
+    │   ├── Security group (allow 50051/gRPC)
     │   └── DNS: vault-{team}.oci.envector.io
     │
     ├── Storage
     │   ├── /vault_keys/ (encrypted volume)
     │   └── Backup to cloud storage (optional)
     │
-    └── Monitoring
-        ├── Prometheus scraper
-        └── Grafana dashboard
+    └── Audit Logging
+        └── /var/log/rune-vault/audit.log
 ```
 
 ### High Availability (Optional)
@@ -542,23 +495,6 @@ terraform apply -var="ha_enabled=true" \
 - Latency P95 >200ms → Add instances
 - Error rate >1% → Investigate (likely config issue, not scale)
 
-### Monitoring & Alerts
-
-**Critical Alerts** (PagerDuty/Slack):
-- Vault down (health check fails)
-- Error rate >5%
-- Latency P95 >500ms
-- Disk usage >80%
-
-**Warning Alerts** (Email):
-- CPU >70% for >10min
-- Memory >75%
-- Unusual access patterns (spike in queries)
-
-**Dashboards**:
-- Real-time: Grafana (`deployment/monitoring/grafana-dashboard.json`)
-- Historical: Prometheus (`deployment/monitoring/prometheus-alerts.yml`)
-
 ## Module Reference
 
 | Module | Purpose |
@@ -570,9 +506,7 @@ terraform apply -var="ha_enabled=true" \
 | `validation_interceptor.py` | gRPC interceptor: protovalidate + runtime input checks |
 | `request_validator.py` | Runtime validation rules (control chars, whitespace) |
 | `audit.py` | Structured JSON audit logging with file rotation |
-| `monitoring.py` | Health checks, Prometheus metrics, /status endpoint |
 | `vault_admin_cli.py` | CLI for token/role management (`runevault` command) |
-| `verify_crypto_flow.py` | Crypto pipeline verification script |
 
 ## Troubleshooting
 
@@ -582,12 +516,12 @@ terraform apply -var="ha_enabled=true" \
 
 **Diagnosis**:
 ```bash
-# Check Vault CPU
-curl https://vault-yourteam.oci.envector.io/metrics | grep cpu
+# Check Vault CPU on the server
+ssh admin@vault-yourteam.oci.envector.io
+top
 
-# Check FHE key dimension
-# (higher dim = more accurate but slower)
-cat /vault_keys/SecKey.json | jq '.dim'
+# Check audit log for latency
+docker exec rune-vault tail -20 /var/log/rune-vault/audit.log
 ```
 
 **Solutions**:
@@ -636,6 +570,4 @@ sudo journalctl -u vault -n 100
 ## Next Steps
 
 - Deploy your first Vault: [Quick Start](../README.md#quick-start)
-- Team setup guide: [TEAM-SETUP.md](TEAM-SETUP.md)
-- Load testing: `scripts/load-test.sh`
-- Monitoring setup: `deployment/monitoring/`
+- Contributing: [CONTRIBUTING.md](../CONTRIBUTING.md)

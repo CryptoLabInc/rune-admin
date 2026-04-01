@@ -140,7 +140,6 @@ mise run test:cov     # Tests with coverage report
 
 - **README.md**: Quick start guide for administrators
 - **docs/ARCHITECTURE.md**: Infrastructure architecture details
-- **docs/TEAM-SETUP.md**: Team onboarding procedures
 - **CHANGELOG.md**: Version changes
 
 ### Documentation Standards
@@ -231,8 +230,8 @@ Closes #123
 1. Update version in relevant files
 2. Update CHANGELOG.md with all changes
 3. Test deployment on all supported platforms
-4. Create git tag: `git tag -a v0.1.0 -m "Release v0.1.0"`
-5. Push tag: `git push origin v0.1.0`
+4. Create git tag: `git tag -a v0.3.0 -m "Release v0.3.0"`
+5. Push tag: `git push origin v0.3.0`
 
 ## Repository Structure
 
@@ -241,10 +240,9 @@ rune-admin/
 ├── vault/                  # Rune-Vault gRPC server (see [Architecture](docs/ARCHITECTURE.md))
 ├── deployment/            # Terraform configs (OCI, AWS, GCP) + monitoring
 ├── scripts/
-│   ├── vault-dev.sh       # Local development server
 │   └── load-test.sh       # Load testing runner
 ├── tests/                 # Unit, integration, e2e, load tests
-├── docs/                  # Architecture, team setup guides
+├── docs/                  # Architecture docs
 └── install.sh             # Interactive installer
 ```
 

@@ -1,133 +1,74 @@
 # Changelog
 
-All notable changes to Rune-Admin will be documented in this file.
+All notable changes to Rune-Vault will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0] - 2026-02-28
-
-### Changed - Remove FastMCP, Pure gRPC Vault
-- **Directory restructure**: Moved `mcp/vault/` to `vault/` — Vault is a gRPC service, not an MCP server
-- **Extract business logic**: Created `vault_core.py` with all core logic (key management, auth, decryption)
-- **Sole entry point**: `vault_grpc_server.py` is now the only server entry point with CLI args (`--host`, `--grpc-port`, `--metrics-port`)
-- **Rewrite monitoring**: Replaced starlette-based monitoring with stdlib `http.server` on port 9090
-- **Port change**: Health/metrics endpoint moved from port 50080 to port 9090
-
-### Removed
-- `vault_mcp.py` — FastMCP wrapper removed; business logic extracted to `vault_core.py`
-- `fastmcp` and `uvicorn` dependencies
-- Port 50080 (legacy MCP HTTP endpoint) — no clients used it
-
-### Updated
-- All Docker, Kubernetes, and cloud deployment files (OCI/AWS/GCP) updated for new ports and entry point
-- All tests updated: path `mcp/vault` → `vault`, module `vault_mcp` → `vault_core`
-- Scripts, documentation, and README updated to reflect new structure
-
-## [0.3.0] - 2026-02-04
-
-### Changed - Infrastructure Focus
-- **Repository Split**: Separated admin infrastructure from user-facing components
-- **Dimension Upgrade**: Increased FHE dimension from 32 to 1024 for production use
-- **Test Suite**: Refactored tests to work with FastMCP decorator pattern
+## [0.2.1] - 2026-03-26
 
 ### Added
-- Comprehensive test suite (22 unit tests, 7 integration tests)
-- Test coverage for authentication, cryptography, public key management
-- Dimension-aware crypto fixtures for testing
-- FastMCP implementation pattern separation (business logic vs. MCP decorators)
+- Token rotation command: `runevault token rotate --user X` and `--all` (#24)
 
-### Removed
-- Plugin-specific files (skills/, examples/, agents/)
-- Team member onboarding scripts (moved to plugin repository)
-- Plugin-focused documentation
+### Changed
+- Replace if/elif routing with regex route table in admin server
 
 ### Fixed
-- FastMCP decorator testing issue (business logic now testable independently)
-- Dimension mismatch in test fixtures
-- Memory optimization for FHE key generation tests
+- Restore install dir ownership before docker compose up on local deploy
 
-## [0.2.0] - 2026-02-02
+## [0.2.0] - 2026-03-25
 
-### Added - Complete Infrastructure with MCP Servers
+### Added
+- **Per-user token auth**: RBAC with `TokenStore`, per-user tokens, role-based top_k limits and rate limiting (#18)
+- **Admin server**: Internal HTTP API on `127.0.0.1:8081` for token/role CRUD (#18)
+- **CLI**: `runevault` command for token and role management (#18)
 
-**Major Update**: Full-featured Vault infrastructure with deployment automation.
+### Changed
+- Replace HMAC DEK derivation with HKDF-SHA256; remove `MetadataKey.json` dependency (#18)
+- Rename default role from `agent` to `member` (#18)
+- Migrate cloud deployments to per-user token auth (#18)
 
-#### Core Infrastructure
-- **Vault MCP Server** (`mcp/vault/vault_mcp.py`)
-  - `get_public_key`: Returns EncKey, EvalKey bundle
-  - `decrypt_scores`: Decrypts search results with Top-K filtering
-  - Rate limiting (max top_k=10)
-  - Token-based authentication
-  
-- **FHE Cryptography** (pyenvector integration)
-  - Automatic key generation on startup
-  - 4-key system: EncKey, SecKey, EvalKey, MetadataKey
-  - Dimension-aware cipher operations
+### Fixed
+- Switch Docker build CI runner from self-hosted to ubuntu-latest
 
-#### Deployment Support
-- **Multi-cloud deployment**:
-  - Oracle Cloud Infrastructure (OCI)
-  - Amazon Web Services (AWS)
-  - Google Cloud Platform (GCP)
-  
-- **Installation Scripts**:
-  - Automated setup: `install.sh` (macOS/Linux)
-  - Deployment automation: `scripts/deploy-vault.sh`
-  - Local development: `scripts/vault-dev.sh`
+## [0.1.3] - 2026-03-20
 
-#### Security
-- Token-based authentication system
-- Public/private key separation
-- Environment variable configuration
-- Secure key storage patterns
+### Added
+- Interactive one-command installer (`install.sh`) with TLS and multi-cloud support (#27)
+- GitHub Actions workflow to build and push Docker image to GHCR (#30)
+- gRPC reflection enabled
 
-#### Documentation
-- **README.md**: Administrator quick start guide
-- **docs/ARCHITECTURE.md**: Infrastructure architecture and data flow
-- **docs/TEAM-SETUP.md**: Team onboarding procedures
-- **SKILL.md**: Operational procedures (legacy, to be removed)
+### Fixed
+- Replace cloud-init with startup scripts for OCI, GCP, AWS reliability
 
-#### Testing & Verification
-- Demo scripts: `demo_local.py`, `verify_crypto_flow.py`
-- Load testing framework
-- Health check endpoints
+## [0.1.2] - 2026-03-17
 
-### Infrastructure Components
+### Added
+- TLS enforcement for Vault gRPC server-side (#17)
+- Auto-detect public IP and include in certificate SAN
 
-**Included in Repository**:
-- Vault MCP Server implementation
-- Deployment automation for OCI/AWS/GCP
-- Key generation and management tools
-- Monitoring and health check utilities
-- Configuration templates
+### Changed
+- Expose gRPC port directly; remove ngrok Docker service
 
-**External Dependencies**:
-- pyenvector >= 1.2.0 (FHE library)
-- fastmcp >= 2.0.0 (MCP framework)
-- uvicorn (ASGI server)
+### Fixed
+- Use gosu for privilege drop so mounted TLS certs are readable
+
+## [0.1.1] - 2026-02-28
+
+### Added
+- Per-agent metadata DEK derivation
+
+### Changed
+- **Directory restructure**: `mcp/vault/` to `vault/` — Vault is a gRPC service, not an MCP server
+- **Sole entry point**: `vault_grpc_server.py` with CLI args (`--host`, `--grpc-port`)
+- Extract business logic to `vault_core.py`
+
+### Removed
+- `vault_mcp.py` (FastMCP wrapper)
+- `fastmcp` and `uvicorn` dependencies
+- Port 50080 (legacy MCP HTTP endpoint)
 
 ## [0.1.0] - 2026-01-15
 
-### Added - Initial Release (Documentation Only)
-
-- Repository structure
-- Basic documentation files
-- Deployment planning documents
-
----
-
-## Version Notes
-
-### Version 0.3.0
-- **Focus**: Production-ready infrastructure
-- **Breaking**: Repository split requires updating git remotes
-- **Upgrade Path**: Update dimension to 1024, regenerate keys
-
-### Version 0.2.0
-- **Focus**: Complete Vault infrastructure
-- **Breaking**: Requires Python 3.12, ~4GB RAM for key generation
-- **Deployment**: Multi-cloud support with automated scripts
-
-### Version 0.1.0
-- **Focus**: Initial planning and documentation
+### Added
+- Initial release: repository structure and documentation
