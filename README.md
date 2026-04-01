@@ -147,8 +147,8 @@ terraform state show oci_core_security_list.vault
 ssh admin@vault-yourteam.oci.envector.io
 top
 
-# Check audit log for latency
-docker exec rune-vault tail -20 /var/log/rune-vault/audit.log
+# Check audit log for latency (mounted to host ./logs/)
+tail -20 /opt/rune/logs/audit.log
 ```
 
 ### Issue: Vault crashed
