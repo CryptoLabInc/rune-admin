@@ -124,3 +124,25 @@ class TestGetPublicKey:
         assert "agent_id" in bundle
         assert "agent_dek" in bundle
         assert len(bundle["agent_id"]) == 32  # SHA256 hex[:32]
+
+    def test_bundle_contains_envector_credentials(self, test_keys, monkeypatch):
+        """Bundle should contain enVector endpoint and API key when configured."""
+        monkeypatch.setattr('vault_core.ENVECTOR_ENDPOINT', 'cluster-test.envector.io')
+        monkeypatch.setattr('vault_core.ENVECTOR_API_KEY', 'test-api-key-abc123')
+
+        result = get_public_key("evt_0000000000000000000000000000demo")
+        bundle = json.loads(result)
+
+        assert bundle["envector_endpoint"] == "cluster-test.envector.io"
+        assert bundle["envector_api_key"] == "test-api-key-abc123"
+
+    def test_bundle_envector_empty_when_not_configured(self, test_keys, monkeypatch):
+        """Bundle should have null enVector fields when not configured on Vault."""
+        monkeypatch.setattr('vault_core.ENVECTOR_ENDPOINT', None)
+        monkeypatch.setattr('vault_core.ENVECTOR_API_KEY', None)
+
+        result = get_public_key("evt_0000000000000000000000000000demo")
+        bundle = json.loads(result)
+
+        assert bundle.get("envector_endpoint") is None
+        assert bundle.get("envector_api_key") is None

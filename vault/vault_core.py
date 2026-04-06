@@ -226,6 +226,10 @@ def _get_public_key_impl(token: str) -> str:
     bundle["agent_id"] = agent_id
     bundle["agent_dek"] = base64.b64encode(agent_dek).decode("ascii")
 
+    # enVector Cloud credentials — agents receive these from Vault instead of user input
+    bundle["envector_endpoint"] = ENVECTOR_ENDPOINT
+    bundle["envector_api_key"] = ENVECTOR_API_KEY
+
     return json.dumps(bundle)
 
 
