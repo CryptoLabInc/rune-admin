@@ -58,31 +58,42 @@ def main():
     sec_key_path = os.path.join(key_subdir, "SecKey.json")
     enc_key_path = os.path.join(key_subdir, "EncKey.json")
 
-    # ── Step 2: Connect to enVector Cloud ────────────────────────────
+    # ── Step 2: Connect to enVector Cloud and reset server-side keys ─
     print(f"==> Connecting to enVector Cloud ({endpoint})...")
+    # First connect without auto_key_setup to clean up stale server state
+    ev.init(
+        address=endpoint,
+        key_path=tmp_key_dir,
+        key_id=KEY_ID,
+        dim=DIM,
+        eval_mode="rmp",
+        auto_key_setup=False,
+        access_token=api_key,
+        query_encryption="plain",
+    )
     try:
-        ev.init(
-            address=endpoint,
-            key_path=tmp_key_dir,
-            key_id=KEY_ID,
-            dim=DIM,
-            eval_mode="rmp",
-            auto_key_setup=True,
-            access_token=api_key,
-            query_encryption="plain",
-        )
+        ev.delete_key(KEY_ID)
+        print(f"    Deleted stale server key '{KEY_ID}'.")
     except Exception:
-        ev.init(
-            address=endpoint,
-            key_path=tmp_key_dir,
-            key_id=KEY_ID,
-            dim=DIM,
-            eval_mode="rmp",
-            auto_key_setup=False,
-            access_token=api_key,
-            query_encryption="plain",
-        )
-    print("    Connected.")
+        pass
+    try:
+        ev.drop_index(INDEX_NAME)
+        print(f"    Deleted stale index '{INDEX_NAME}'.")
+    except Exception:
+        pass
+
+    # Reconnect with auto_key_setup to register the fresh keys
+    ev.init(
+        address=endpoint,
+        key_path=tmp_key_dir,
+        key_id=KEY_ID,
+        dim=DIM,
+        eval_mode="rmp",
+        auto_key_setup=True,
+        access_token=api_key,
+        query_encryption="plain",
+    )
+    print("    Connected with fresh keys.")
 
     # ── Step 3: Create index and insert vectors ──────────────────────
     print(f"==> Creating index '{INDEX_NAME}'...")
@@ -99,9 +110,24 @@ def main():
     except Exception as e:
         print(f"    Index may already exist: {e}")
 
-    print("==> Inserting test vectors...")
+    print("==> Generating test vectors with controlled similarities...")
     np.random.seed(42)
-    vectors = np.random.rand(10, DIM).tolist()
+
+    # Generate query vector first
+    query = np.random.randn(DIM)
+    query = query / np.linalg.norm(query)
+
+    # Create document vectors with target similarities spread across 0.3 ~ 0.9
+    target_sims = [0.9, 0.8, 0.7, 0.6, 0.5, 0.45, 0.4, 0.35, 0.3, 0.55]
+    vectors = []
+    for alpha in target_sims:
+        noise = np.random.randn(DIM)
+        noise = noise / np.linalg.norm(noise)
+        vec = alpha * query + np.sqrt(1 - alpha**2) * noise  # blend with query
+        vec = vec / np.linalg.norm(vec)  # re-normalize
+        vectors.append(vec)
+    vectors = np.array(vectors)
+    vectors = vectors.tolist()
     metadata = [f"doc_{i}" for i in range(10)]
 
     from pyenvector.index import Index
@@ -111,7 +137,7 @@ def main():
 
     # ── Step 4: Run scoring to capture CiphertextScore ───────────────
     print("==> Running scoring query...")
-    query = np.random.rand(DIM).tolist()
+    query = query.tolist()
     results = index.scoring(query=query)
     score_block = results[0]
     score_proto_bytes = score_block.data.SerializeToString()
