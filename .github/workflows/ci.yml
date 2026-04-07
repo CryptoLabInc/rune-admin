@@ -1,0 +1,64 @@
+name: Pull Request
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - "deployment/**"
+      - ".github/workflows/docker-publish.yml"
+      - "LICENSE"
+      - ".githooks/**"
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - "deployment/**"
+      - ".github/workflows/docker-publish.yml"
+      - "LICENSE"
+      - ".githooks/**"
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: [self-hosted, vault-ci]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        env:
+          MISE_ENV: ci
+      - run: mise run setup
+      - name: Format check
+        run: mise run format:check
+      - name: Lint
+        run: mise run lint
+      - name: Test (unit + integration)
+        run: mise run test
+
+  build-image:
+    if: github.event_name == 'push'
+    needs: check
+    runs-on: [self-hosted, vault-ci]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          docker build -t rune-vault:ci-${{ github.sha }} vault/
+      - name: Smoke test
+        run: |
+          docker run -d --name vault-ci-${{ github.run_id }} \
+            -e VAULT_TLS_DISABLE=true \
+            rune-vault:ci-${{ github.sha }}
+          timeout 60 bash -c 'until docker exec vault-ci-${{ github.run_id }} \
+            curl -sf http://localhost:8081/health 2>/dev/null; do sleep 2; done'
+      - name: Teardown
+        if: always()
+        run: |
+          docker rm -f vault-ci-${{ github.run_id }} || true
+          docker rmi rune-vault:ci-${{ github.sha }} || true
+          docker system prune -f
