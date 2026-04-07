@@ -89,9 +89,7 @@ All commands **must** be run via `mise run` to ensure correct tool versions and 
 ```
 tests/
 ├── unit/          # Fast, isolated tests per module
-├── integration/   # End-to-end Vault API tests
-├── e2e/           # Full system scenario tests
-└── load/          # Locust-based load testing
+└── integration/   # End-to-end Vault API tests
 ```
 
 ### Running Tests
@@ -158,13 +156,18 @@ mise run dev    # Start local Vault via Docker Compose
 mise run build  # Build Docker image locally
 ```
 
-### Platform Testing
+### Testing the Installer Locally
 
-Test deployment on each supported platform:
+Use `scripts/install-dev.sh` to test the full installation flow using local working tree files instead of downloading from GitHub.
 
-- **OCI**: `scripts/deploy-vault.sh --provider oci`
-- **AWS**: `scripts/deploy-vault.sh --provider aws`
-- **GCP**: `scripts/deploy-vault.sh --provider gcp`
+```bash
+sudo bash scripts/install-dev.sh
+```
+
+This script behaves identically to `install.sh` but:
+- Copies `docker-compose.yml`, TLS scripts, and Terraform configs from the local repo
+- Uses a locally built Docker image (`mise run build`) instead of pulling from GHCR
+- Requires no network access to GitHub
 
 ## Submitting Changes
 
@@ -240,8 +243,7 @@ rune-admin/
 ├── vault/                  # Rune-Vault gRPC server (see [Architecture](docs/ARCHITECTURE.md))
 ├── deployment/            # Terraform configs (OCI, AWS, GCP) + monitoring
 ├── scripts/
-│   └── load-test.sh       # Load testing runner
-├── tests/                 # Unit, integration, e2e, load tests
+├── tests/                 # Unit, integration tests
 ├── docs/                  # Architecture docs
 └── install.sh             # Interactive installer
 ```
