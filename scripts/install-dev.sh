@@ -414,6 +414,7 @@ setup_runevault_alias() {
             echo '# Rune-Vault admin CLI' >> "$shell_rc"
             echo 'alias runevault="docker exec -it rune-vault python3 /app/vault_admin_cli.py"' >> "$shell_rc"
             print_info "runevault alias added to ${shell_rc}"
+            print_warn "Run 'exec \$SHELL' to reload your shell and enable the runevault command."
         fi
     fi
 }
