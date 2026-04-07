@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""
+Generate test fixtures for integration tests.
+
+Connects to enVector Cloud to capture a real CiphertextScore blob,
+then generates metadata envelopes locally. All fixtures are saved
+to tests/fixtures/ for use in CI without cloud access.
+
+Usage:
+    ENVECTOR_ENDPOINT=... ENVECTOR_API_KEY=... python scripts/generate-test-fixtures.py
+"""
+
+import base64
+import hashlib
+import json
+import os
+import shutil
+import sys
+import tempfile
+
+import numpy as np
+
+FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "tests", "fixtures")
+TEAM_SECRET = "fixture-team-secret-for-testing"
+TOKEN = "evt_0000000000000000000000000000demo"
+AGENT_ID = hashlib.sha256(TOKEN.encode("utf-8")).hexdigest()[:32]
+EMBEDDING_DIM = 384
+FHE_DIM = 1024
+KEY_ID = "test-fixture"
+INDEX_NAME = "test_fixture_index"
+
+
+def main():
+    endpoint = os.getenv("ENVECTOR_ENDPOINT")
+    api_key = os.getenv("ENVECTOR_API_KEY")
+    if not endpoint or not api_key:
+        print("Error: ENVECTOR_ENDPOINT and ENVECTOR_API_KEY must be set.")
+        sys.exit(1)
+
+    import pyenvector as ev
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+    from pyenvector.crypto import Cipher, KeyGenerator
+    from pyenvector.utils.aes import encrypt_metadata
+
+    try:
+        from pyenvector.proto_gen.v2.common.type_pb2 import CiphertextScore
+    except ModuleNotFoundError:
+        from pyenvector.proto_gen.type_pb2 import CiphertextScore
+
+    # ── Step 1: Generate FHE keys in temp dir ────────────────────────
+    print("==> Generating FHE keys...")
+    tmp_key_dir = tempfile.mkdtemp(prefix="fixture_keys_")
+    key_subdir = os.path.join(tmp_key_dir, KEY_ID)
+    keygen = KeyGenerator(key_path=tmp_key_dir, key_id=KEY_ID, dim_list=[FHE_DIM])
+    keygen.generate_keys()
+    print(f"    Keys generated in {key_subdir}")
+
+    sec_key_path = os.path.join(key_subdir, "SecKey.json")
+    enc_key_path = os.path.join(key_subdir, "EncKey.json")
+
+    # ── Step 2: Connect to enVector Cloud ────────────────────────────
+    print(f"==> Connecting to enVector Cloud ({endpoint})...")
+    try:
+        ev.init(
+            address=endpoint,
+            key_path=tmp_key_dir,
+            key_id=KEY_ID,
+            dim=EMBEDDING_DIM,
+            eval_mode="rmp",
+            auto_key_setup=True,
+            access_token=api_key,
+            query_encryption="plain",
+        )
+    except Exception:
+        ev.init(
+            address=endpoint,
+            key_path=tmp_key_dir,
+            key_id=KEY_ID,
+            dim=EMBEDDING_DIM,
+            eval_mode="rmp",
+            auto_key_setup=False,
+            access_token=api_key,
+            query_encryption="plain",
+        )
+    print("    Connected.")
+
+    # ── Step 3: Create index and insert vectors ──────────────────────
+    print(f"==> Creating index '{INDEX_NAME}'...")
+    try:
+        ev.create_index(
+            index_name=INDEX_NAME,
+            dim=EMBEDDING_DIM,
+            index_params={"index_type": "FLAT"},
+            query_encryption="plain",
+            metadata_encryption=False,
+            metadata_key=b"",
+        )
+        print("    Index created.")
+    except Exception as e:
+        print(f"    Index may already exist: {e}")
+
+    print("==> Inserting test vectors...")
+    np.random.seed(42)
+    vectors = np.random.rand(10, EMBEDDING_DIM).tolist()
+    metadata = [f"doc_{i}" for i in range(10)]
+
+    from pyenvector.index import Index
+    index = Index(index_name=INDEX_NAME)
+    index.insert(data=vectors, metadata=metadata)
+    print(f"    Inserted {len(vectors)} vectors.")
+
+    # ── Step 4: Run scoring to capture CiphertextScore ───────────────
+    print("==> Running scoring query...")
+    query = np.random.rand(EMBEDDING_DIM).tolist()
+    results = index.scoring(query=query)
+    score_block = results[0]
+    score_proto_bytes = score_block.data.SerializeToString()
+    score_b64 = base64.b64encode(score_proto_bytes).decode("utf-8")
+    print(f"    CiphertextScore captured ({len(score_proto_bytes)} bytes).")
+
+    # ── Step 5: Decrypt locally for expected output ──────────────────
+    print("==> Decrypting scores locally for expected output...")
+    cipher = Cipher(enc_key_path=enc_key_path, dim=FHE_DIM)
+    raw_decrypted = cipher.decrypt_score(score_block, sec_key_path=sec_key_path)
+    # Convert protobuf containers to plain Python lists for JSON serialization
+    decrypted = {
+        "score": [list(row) for row in raw_decrypted["score"]],
+        "shard_idx": list(raw_decrypted.get("shard_idx", [])),
+    }
+    print(f"    Decrypted: {len(decrypted['score'])} shards.")
+
+    # ── Step 6: Generate metadata envelopes ──────────────────────────
+    print("==> Generating metadata envelopes...")
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=None,
+        info=AGENT_ID.encode("utf-8"),
+    )
+    agent_dek = hkdf.derive(TEAM_SECRET.encode("utf-8"))
+
+    plaintexts = [
+        {"title": "Test Document 1", "content": "Hello world"},
+        {"title": "Test Document 2", "content": "Integration test data"},
+        {"title": "Test Document 3", "content": "Fixture metadata"},
+    ]
+
+    envelopes = []
+    for pt in plaintexts:
+        ct_b64 = encrypt_metadata(pt, agent_dek)
+        envelopes.append(json.dumps({"a": AGENT_ID, "c": ct_b64}))
+    print(f"    Generated {len(envelopes)} envelopes.")
+
+    # ── Step 7: Cleanup index ────────────────────────────────────────
+    print(f"==> Cleaning up index '{INDEX_NAME}'...")
+    try:
+        index.delete_index()
+        print("    Index deleted.")
+    except Exception as e:
+        print(f"    Cleanup (manual deletion may be needed): {e}")
+
+    # ── Step 8: Save fixtures ────────────────────────────────────────
+    print(f"==> Saving fixtures to {FIXTURES_DIR}...")
+    os.makedirs(FIXTURES_DIR, exist_ok=True)
+
+    # FHE Keys (filenames must match pyenvector conventions: EncKey.json, SecKey.json)
+    keys_dir = os.path.join(FIXTURES_DIR, "keys")
+    os.makedirs(keys_dir, exist_ok=True)
+    shutil.copy2(sec_key_path, os.path.join(keys_dir, "SecKey.json"))
+    shutil.copy2(enc_key_path, os.path.join(keys_dir, "EncKey.json"))
+
+    # CiphertextScore blob
+    with open(os.path.join(FIXTURES_DIR, "ciphertext_score.b64"), "w") as f:
+        f.write(score_b64)
+
+    # Expected scores
+    with open(os.path.join(FIXTURES_DIR, "expected_scores.json"), "w") as f:
+        json.dump(decrypted, f, indent=2)
+
+    # Metadata envelopes
+    with open(os.path.join(FIXTURES_DIR, "metadata_envelopes.json"), "w") as f:
+        json.dump(envelopes, f, indent=2)
+
+    # Expected metadata plaintext
+    with open(os.path.join(FIXTURES_DIR, "expected_metadata.json"), "w") as f:
+        json.dump(plaintexts, f, indent=2)
+
+    # Config
+    config = {
+        "team_secret": TEAM_SECRET,
+        "agent_id": AGENT_ID,
+        "token": TOKEN,
+        "key_id": KEY_ID,
+        "fhe_dim": FHE_DIM,
+        "embedding_dim": EMBEDDING_DIM,
+    }
+    with open(os.path.join(FIXTURES_DIR, "config.json"), "w") as f:
+        json.dump(config, f, indent=2)
+
+    # Cleanup temp keys
+    shutil.rmtree(tmp_key_dir, ignore_errors=True)
+
+    print("==> Done. Fixtures saved to tests/fixtures/")
+
+
+if __name__ == "__main__":
+    main()
