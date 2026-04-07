@@ -24,7 +24,7 @@ FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "tests", "fixtures"
 TEAM_SECRET = "fixture-team-secret-for-testing"
 TOKEN = "evt_0000000000000000000000000000demo"
 AGENT_ID = hashlib.sha256(TOKEN.encode("utf-8")).hexdigest()[:32]
-DIM = 768
+DIM = 1024
 KEY_ID = "test-fixture"
 INDEX_NAME = "test_fixture_index"
 
