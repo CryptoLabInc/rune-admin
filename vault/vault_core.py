@@ -36,7 +36,7 @@ KEY_SUBDIR = os.path.join(KEY_DIR, KEY_ID)
 # enVector Cloud configuration
 ENVECTOR_ENDPOINT = os.getenv("ENVECTOR_ENDPOINT", "").strip() or None
 ENVECTOR_API_KEY = os.getenv("ENVECTOR_API_KEY", "").strip() or None
-EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "768"))
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1024"))
 
 # Team index name (set by admin, distributed to all team members via get_public_key)
 VAULT_INDEX_NAME = os.getenv("VAULT_INDEX_NAME", "").strip() or None
