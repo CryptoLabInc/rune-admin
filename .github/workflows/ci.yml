@@ -33,6 +33,10 @@ jobs:
         env:
           MISE_ENV: ci
       - run: mise run setup
+      - name: Decrypt test fixtures
+        env:
+          FIXTURES_GPG_PASSPHRASE: ${{ secrets.FIXTURES_GPG_PASSPHRASE }}
+        run: mise run fixtures:decrypt
       - name: Format check
         run: mise run format:check
       - name: Lint
