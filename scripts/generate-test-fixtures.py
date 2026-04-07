@@ -24,8 +24,7 @@ FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "tests", "fixtures"
 TEAM_SECRET = "fixture-team-secret-for-testing"
 TOKEN = "evt_0000000000000000000000000000demo"
 AGENT_ID = hashlib.sha256(TOKEN.encode("utf-8")).hexdigest()[:32]
-EMBEDDING_DIM = 384
-FHE_DIM = 1024
+DIM = 768
 KEY_ID = "test-fixture"
 INDEX_NAME = "test_fixture_index"
 
@@ -52,7 +51,7 @@ def main():
     print("==> Generating FHE keys...")
     tmp_key_dir = tempfile.mkdtemp(prefix="fixture_keys_")
     key_subdir = os.path.join(tmp_key_dir, KEY_ID)
-    keygen = KeyGenerator(key_path=tmp_key_dir, key_id=KEY_ID, dim_list=[FHE_DIM])
+    keygen = KeyGenerator(key_path=tmp_key_dir, key_id=KEY_ID, dim_list=[DIM])
     keygen.generate_keys()
     print(f"    Keys generated in {key_subdir}")
 
@@ -66,7 +65,7 @@ def main():
             address=endpoint,
             key_path=tmp_key_dir,
             key_id=KEY_ID,
-            dim=EMBEDDING_DIM,
+            dim=DIM,
             eval_mode="rmp",
             auto_key_setup=True,
             access_token=api_key,
@@ -77,7 +76,7 @@ def main():
             address=endpoint,
             key_path=tmp_key_dir,
             key_id=KEY_ID,
-            dim=EMBEDDING_DIM,
+            dim=DIM,
             eval_mode="rmp",
             auto_key_setup=False,
             access_token=api_key,
@@ -90,7 +89,7 @@ def main():
     try:
         ev.create_index(
             index_name=INDEX_NAME,
-            dim=EMBEDDING_DIM,
+            dim=DIM,
             index_params={"index_type": "FLAT"},
             query_encryption="plain",
             metadata_encryption=False,
@@ -102,7 +101,7 @@ def main():
 
     print("==> Inserting test vectors...")
     np.random.seed(42)
-    vectors = np.random.rand(10, EMBEDDING_DIM).tolist()
+    vectors = np.random.rand(10, DIM).tolist()
     metadata = [f"doc_{i}" for i in range(10)]
 
     from pyenvector.index import Index
@@ -112,7 +111,7 @@ def main():
 
     # ── Step 4: Run scoring to capture CiphertextScore ───────────────
     print("==> Running scoring query...")
-    query = np.random.rand(EMBEDDING_DIM).tolist()
+    query = np.random.rand(DIM).tolist()
     results = index.scoring(query=query)
     score_block = results[0]
     score_proto_bytes = score_block.data.SerializeToString()
@@ -121,7 +120,7 @@ def main():
 
     # ── Step 5: Decrypt locally for expected output ──────────────────
     print("==> Decrypting scores locally for expected output...")
-    cipher = Cipher(enc_key_path=enc_key_path, dim=FHE_DIM)
+    cipher = Cipher(enc_key_path=enc_key_path, dim=DIM)
     raw_decrypted = cipher.decrypt_score(score_block, sec_key_path=sec_key_path)
     # Convert protobuf containers to plain Python lists for JSON serialization
     decrypted = {
@@ -155,7 +154,7 @@ def main():
     # ── Step 7: Cleanup index ────────────────────────────────────────
     print(f"==> Cleaning up index '{INDEX_NAME}'...")
     try:
-        index.delete_index()
+        index.drop()
         print("    Index deleted.")
     except Exception as e:
         print(f"    Cleanup (manual deletion may be needed): {e}")
@@ -192,8 +191,7 @@ def main():
         "agent_id": AGENT_ID,
         "token": TOKEN,
         "key_id": KEY_ID,
-        "fhe_dim": FHE_DIM,
-        "embedding_dim": EMBEDDING_DIM,
+        "dim": DIM,
     }
     with open(os.path.join(FIXTURES_DIR, "config.json"), "w") as f:
         json.dump(config, f, indent=2)

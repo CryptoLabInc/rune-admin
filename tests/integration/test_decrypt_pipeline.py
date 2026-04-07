@@ -58,7 +58,7 @@ def patch_vault(fixtures, monkeypatch):
     # Reinitialize cipher with fixture SecKey (dim must match fixture FHE dim)
     # cipher.decrypt_score needs enc_key_path but only uses sec_key_path for decryption
     # Use a dummy enc_key_path since we only decrypt
-    fixture_cipher = Cipher(enc_key_path=fixtures["enc_key_path"], dim=config["fhe_dim"])
+    fixture_cipher = Cipher(enc_key_path=fixtures["enc_key_path"], dim=config["dim"])
     monkeypatch.setattr(vault_core, "cipher", fixture_cipher)
 
     token_store._rate_limiters.clear()
