@@ -36,7 +36,7 @@ KEY_SUBDIR = os.path.join(KEY_DIR, KEY_ID)
 # enVector Cloud configuration
 ENVECTOR_ENDPOINT = os.getenv("ENVECTOR_ENDPOINT", "").strip() or None
 ENVECTOR_API_KEY = os.getenv("ENVECTOR_API_KEY", "").strip() or None
-EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "384"))
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "768"))
 
 # Team index name (set by admin, distributed to all team members via get_public_key)
 VAULT_INDEX_NAME = os.getenv("VAULT_INDEX_NAME", "").strip() or None
@@ -225,6 +225,10 @@ def _get_public_key_impl(token: str) -> str:
     agent_dek = derive_agent_key(VAULT_TEAM_SECRET, agent_id)
     bundle["agent_id"] = agent_id
     bundle["agent_dek"] = base64.b64encode(agent_dek).decode("ascii")
+
+    # enVector Cloud credentials — agents receive these from Vault instead of user input
+    bundle["envector_endpoint"] = ENVECTOR_ENDPOINT
+    bundle["envector_api_key"] = ENVECTOR_API_KEY
 
     return json.dumps(bundle)
 

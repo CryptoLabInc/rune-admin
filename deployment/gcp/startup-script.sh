@@ -31,7 +31,7 @@ services:
       - VAULT_INDEX_NAME=${vault_index_name}
       - ENVECTOR_ENDPOINT=${envector_endpoint}
       - ENVECTOR_API_KEY=${envector_api_key}
-      - EMBEDDING_DIM=384
+      - EMBEDDING_DIM=768
     volumes:
       - vault-keys:/app/vault_keys:rw
       - ./config:/app/config:rw
