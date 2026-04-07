@@ -137,6 +137,39 @@ docker buildx build --builder "{{vars.docker_builder}}" \
 description = "Start local development Vault via Docker Compose"
 run = "cd vault && docker compose up --build -d vault"
 
+[tasks."fixtures:decrypt"]
+description = "Decrypt test fixtures from GPG archive"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+if [ -z "${FIXTURES_GPG_PASSPHRASE:-}" ]; then
+  echo "Error: FIXTURES_GPG_PASSPHRASE is not set." >&2
+  exit 1
+fi
+gpg --decrypt --batch --yes --passphrase "$FIXTURES_GPG_PASSPHRASE" \
+  -o tests/fixtures.tar.gz tests/fixtures.tar.gz.gpg
+tar xzf tests/fixtures.tar.gz -C tests/
+rm tests/fixtures.tar.gz
+echo "Fixtures decrypted to tests/fixtures/"
+"""
+
+[tasks."fixtures:encrypt"]
+description = "Encrypt test fixtures into GPG archive"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+if [ -z "${FIXTURES_GPG_PASSPHRASE:-}" ]; then
+  echo "Error: FIXTURES_GPG_PASSPHRASE is not set." >&2
+  exit 1
+fi
+tar czf tests/fixtures.tar.gz -C tests fixtures/
+gpg --symmetric --cipher-algo AES256 --batch --yes \
+  --passphrase "$FIXTURES_GPG_PASSPHRASE" \
+  -o tests/fixtures.tar.gz.gpg tests/fixtures.tar.gz
+rm tests/fixtures.tar.gz
+echo "Fixtures encrypted to tests/fixtures.tar.gz.gpg"
+"""
+
 [tasks.certs]
 description = "Generate self-signed TLS certificates"
 run = "bash scripts/generate-certs.sh"

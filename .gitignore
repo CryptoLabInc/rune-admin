@@ -63,8 +63,10 @@ logs/
 terraform.tfstate
 terraform.tfstate.backup
 .terraform/
+.terraform.lock.hcl
 .terraformrc
 terraform.rc
+*.tfvars
 
 # Node.js (if applicable)
 node_modules/
@@ -109,3 +111,6 @@ vault_keys/
 # Test artifacts
 test-results/
 .test_cache/
+
+# Test fixtures (plaintext — decrypted from fixtures.tar.gz.gpg)
+tests/fixtures/
