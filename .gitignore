@@ -111,3 +111,6 @@ vault_keys/
 # Test artifacts
 test-results/
 .test_cache/
+
+# Test fixtures (plaintext — decrypted from fixtures.tar.gz.gpg)
+tests/fixtures/
