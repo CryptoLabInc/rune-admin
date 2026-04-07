@@ -59,11 +59,6 @@ variable "runner_labels" {
   default     = "vault-ci"
 }
 
-variable "public_key_path" {
-  description = "Path to SSH public key file for instance access"
-  type        = string
-  default     = "~/.ssh/id_rsa.pub"
-}
 
 # VCN for CI Runner
 resource "oci_core_vcn" "ci_vcn" {
@@ -103,7 +98,7 @@ resource "oci_core_route_table" "ci_route_table" {
   }
 }
 
-# Security List — SSH only (runner connects outbound to GitHub)
+# Security List — egress only (no SSH ingress; use OCI Cloud Shell for access)
 resource "oci_core_security_list" "ci_security_list" {
   compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.ci_vcn.id
@@ -112,17 +107,6 @@ resource "oci_core_security_list" "ci_security_list" {
   egress_security_rules {
     destination = "0.0.0.0/0"
     protocol    = "all"
-  }
-
-  # SSH
-  ingress_security_rules {
-    protocol = "6" # TCP
-    source   = "0.0.0.0/0"
-
-    tcp_options {
-      min = 22
-      max = 22
-    }
   }
 }
 
@@ -150,7 +134,6 @@ resource "oci_core_instance" "ci_runner" {
   }
 
   metadata = {
-    ssh_authorized_keys = file(pathexpand(var.public_key_path))
     user_data = base64encode(templatefile("${path.module}/startup-script.sh", {
       github_repo         = var.github_repo
       github_runner_token = var.github_runner_token
@@ -183,7 +166,7 @@ output "runner_public_ip" {
   description = "Public IP of CI runner instance"
 }
 
-output "ssh_command" {
-  value       = "ssh -i <YOUR_SSH_PRIVATE_KEY_PATH> ubuntu@${oci_core_instance.ci_runner.public_ip}"
-  description = "SSH command to connect to CI runner"
+output "console_url" {
+  value       = "https://cloud.oracle.com/compute/instances/${oci_core_instance.ci_runner.id}?region=${var.region}"
+  description = "OCI Console URL for CI runner instance (use Cloud Shell for access)"
 }
