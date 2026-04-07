@@ -63,8 +63,10 @@ logs/
 terraform.tfstate
 terraform.tfstate.backup
 .terraform/
+.terraform.lock.hcl
 .terraformrc
 terraform.rc
+*.tfvars
 
 # Node.js (if applicable)
 node_modules/
