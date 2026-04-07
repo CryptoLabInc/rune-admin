@@ -274,7 +274,7 @@ check_prerequisites_csp() {
 
 choose_deploy_target() {
     print_step "Select deployment target"
-    local options=("Local (This machine)" "AWS" "GCP" "OCI")
+    local options=("Local (This machine)" "AWS (requires GHCR access)" "GCP (requires GHCR access)" "OCI (requires GHCR access)")
     local targets=("local" "aws" "gcp" "oci")
     local selected
     selected=$(select_menu "${options[@]}")
@@ -601,8 +601,10 @@ deploy_csp() {
     fi
 
     # Build and push Docker image to GHCR (remote servers pull from registry)
+    # Requires GHCR push access to the CryptoLabInc organization.
     print_step "Building and pushing Docker image to GHCR..."
     echo "  CSP deployments pull the image from GHCR, so a push is required."
+    echo "  This requires GHCR push access to the CryptoLabInc organization."
     echo ""
     if ! gh auth status &>/dev/null; then
         print_error "GitHub CLI not authenticated. Run: gh auth login"

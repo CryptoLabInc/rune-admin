@@ -35,7 +35,10 @@ Feature requests should include:
 
 - [mise](https://mise.jdx.dev): `curl https://mise.jdx.dev/install.sh | sh`
 - [Docker](https://docs.docker.com/get-docker/) (for local Vault and image builds)
-- Access to cloud provider (OCI/AWS/GCP) for integration testing
+
+**CSP deployment only:**
+- Access to cloud provider (OCI/AWS/GCP)
+- GitHub CLI (`gh`) with GHCR push access to the CryptoLabInc organization
 
 ### Local Setup
 
@@ -79,7 +82,7 @@ All commands **must** be run via `mise run` to ensure correct tool versions and 
 | `mise run check` | All checks: format + lint + unit tests |
 | `mise run proto` | Regenerate protobuf/gRPC stubs |
 | `mise run build` | Build Docker image locally |
-| `mise run push` | Build and push multi-platform image to GHCR |
+| `mise run push` | Build and push multi-platform image to GHCR (requires GHCR access) |
 | `mise run dev` | Start local Vault via Docker Compose |
 | `mise run certs` | Generate self-signed TLS certificates |
 

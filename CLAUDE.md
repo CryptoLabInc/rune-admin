@@ -24,7 +24,7 @@ Do NOT run python, pytest, or ruff directly.
 | `mise run check` | All checks: format + lint + unit tests |
 | `mise run proto` | Regenerate protobuf/gRPC stubs |
 | `mise run build` | Build Docker image locally |
-| `mise run push` | Build and push multi-platform image to GHCR |
+| `mise run push` | Build and push multi-platform image to GHCR (requires GHCR access) |
 | `mise run dev` | Start local Vault via Docker Compose |
 | `mise run certs` | Generate self-signed TLS certificates |
 
