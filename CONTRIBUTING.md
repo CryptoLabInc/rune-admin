@@ -79,6 +79,7 @@ All commands **must** be run via `mise run` to ensure correct tool versions and 
 | `mise run check` | All checks: format + lint + unit tests |
 | `mise run proto` | Regenerate protobuf/gRPC stubs |
 | `mise run build` | Build Docker image locally |
+| `mise run push` | Build and push multi-platform image to GHCR |
 | `mise run dev` | Start local Vault via Docker Compose |
 | `mise run certs` | Generate self-signed TLS certificates |
 
