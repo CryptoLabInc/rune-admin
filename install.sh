@@ -379,7 +379,7 @@ roles:
     scope: [get_public_key, decrypt_scores, decrypt_metadata, manage_tokens]
     top_k: 50
     rate_limit: 150/60s
-  agent:
+  member:
     scope: [get_public_key, decrypt_scores, decrypt_metadata]
     top_k: 10
     rate_limit: 30/60s
@@ -773,8 +773,13 @@ show_summary() {
     fi
     echo ""
     echo "  Issue per-user tokens with:"
-    echo "    runevault token issue --user <name> --role agent --expires 90d"
+    echo "    runevault token issue --user <name> --role member --expires 90d"
     echo ""
+    if [ "$DEPLOY_TARGET" = "local" ]; then
+        echo "  Reload your shell before using the runevault command:"
+        echo "    exec \$SHELL"
+        echo ""
+    fi
     echo "  Each team member uses their individual token for authentication."
     echo "  Team Secret (above) is only needed for DEK derivation — keep it secure."
     if [ "$TLS_MODE" = "self-signed" ]; then
