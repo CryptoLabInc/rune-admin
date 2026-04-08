@@ -33,9 +33,11 @@ jobs:
         env:
           MISE_ENV: ci
       - run: mise run setup
+      - name: Clean previous fixtures
+        run: rm -rf tests/fixtures/
       - name: Decrypt test fixtures
         env:
-          FIXTURES_GPG_PASSPHRASE: ${{ secrets.FIXTURES_GPG_PASSPHRASE }}
+          FIXTURES_GPG_PASSPHRASE: ${{ secrets.FIXTURES_GPG_PASSPHRASE_ALT }}
         run: mise run fixtures:decrypt
       - name: Format check
         run: mise run format:check
@@ -43,6 +45,9 @@ jobs:
         run: mise run lint
       - name: Test (unit + integration)
         run: mise run test
+      - name: Clean up fixtures
+        if: always()
+        run: rm -rf tests/fixtures/
 
   build-image:
     if: github.event_name == 'push'

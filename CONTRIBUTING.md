@@ -106,6 +106,10 @@ mise run test:unit    # Unit tests only
 mise run test:cov     # Tests with coverage report
 ```
 
+### Test Fixtures
+
+Integration tests use GPG-encrypted fixtures containing FHE keys and ciphertext blobs. See [tests/FIXTURES.md](tests/FIXTURES.md) for the full update procedure, including passphrase rotation and re-encryption steps.
+
 ### Test Requirements
 
 - Unit tests should be fast (< 2s per test)
