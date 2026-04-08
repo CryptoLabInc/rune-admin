@@ -3,13 +3,13 @@
 Vault Admin CLI — manages per-user tokens and roles.
 
 Usage (via docker exec or runevault alias):
-    runevault token issue --user alice --role agent --expires 90d
+    runevault token issue --user alice --role member --expires 90d
     runevault token revoke --user alice
     runevault token list
     runevault role list
     runevault role create --name researcher \\
         --scope get_public_key,decrypt_scores --top-k 3 --rate-limit 10/60s
-    runevault role update --name agent --top-k 8
+    runevault role update --name member --top-k 8
     runevault role delete --name researcher
 """
 
