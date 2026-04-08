@@ -781,6 +781,11 @@ show_summary() {
     echo "  Issue per-user tokens with:"
     echo "    runevault token issue --user <name> --role agent --expires 90d"
     echo ""
+    if [ "$DEPLOY_TARGET" = "local" ]; then
+        echo "  Reload your shell before using the runevault command:"
+        echo "    exec \$SHELL"
+        echo ""
+    fi
     echo "  Each team member uses their individual token for authentication."
     echo "  Team Secret (above) is only needed for DEK derivation — keep it secure."
     if [ "$TLS_MODE" = "self-signed" ]; then
