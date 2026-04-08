@@ -5,6 +5,27 @@ All notable changes to Rune-Vault will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-07
+
+### ⚠ BREAKING CHANGES
+
+- **Embedding dimension changed from 768 to 1024**: Switched default embedding model from bge-base-en-v1.5 (768d, English-only) to Qwen3-Embedding-0.6B (1024d, multilingual). All existing encrypted indexes are incompatible and must be re-created with the new dimension. There is no automatic migration path.
+
+### Added
+- Multilingual embedding support (100+ languages) via Qwen3-Embedding-0.6B (#53)
+
+### Changed
+- `EMBEDDING_DIM` default: 768 → 1024 in `vault_core.py`, `docker-compose.yml`, all deployment scripts, and `install.sh` (#53)
+
+### Internal
+- Self-hosted CI runner on OCI (2 OCPU / 8 GB, 3 concurrent jobs) with GitHub Actions workflow for automated format, lint, test, and Docker build (#44)
+- Fixture-based integration tests for decrypt pipeline (`_decrypt_scores_impl`, `_decrypt_metadata_impl`) (#44)
+- GPG-encrypted test fixtures — no enVector Cloud access required in CI (#44)
+- CI `docker-publish.yml` switched to self-hosted runner (#44)
+- Local dev installer `scripts/install-dev.sh` for offline development and testing (#52)
+- Unit tests trimmed to vault logic only — removed pyenvector-specific tests (#44)
+- Removed `tests/e2e/`, `tests/load/`, `scripts/load-test.sh` — replaced by fixture-based integration tests (#44)
+
 ## [0.2.1] - 2026-03-26
 
 ### Added
