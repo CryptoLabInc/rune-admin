@@ -26,7 +26,8 @@ done
 
 REPO="CryptoLabInc/rune-admin"
 DOCKER_IMAGE="ghcr.io/cryptolabinc/rune-vault"
-DEFAULT_INSTALL_DIR="/opt/rune-vault"
+_user_home="${SUDO_USER:+$(eval echo ~"$SUDO_USER")}"
+DEFAULT_INSTALL_DIR="${_user_home:-$HOME}/rune-vault"
 VAULT_PUBLIC_IP=""
 CSP_CA_CERT_LOCAL=""
 
