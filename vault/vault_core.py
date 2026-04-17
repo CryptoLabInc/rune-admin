@@ -37,6 +37,7 @@ KEY_SUBDIR = os.path.join(KEY_DIR, KEY_ID)
 ENVECTOR_ENDPOINT = os.getenv("ENVECTOR_ENDPOINT", "").strip() or None
 ENVECTOR_API_KEY = os.getenv("ENVECTOR_API_KEY", "").strip() or None
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1024"))
+EVAL_MODE = os.getenv("ENVECTOR_EVAL_MODE", "rmp").lower()
 
 # Team index name (set by admin, distributed to all team members via get_public_key)
 VAULT_INDEX_NAME = os.getenv("VAULT_INDEX_NAME", "").strip() or None
@@ -76,7 +77,7 @@ def ensure_vault():
             key_path=KEY_DIR,
             key_id=KEY_ID,
             dim=EMBEDDING_DIM,
-            eval_mode="rmp",
+            eval_mode=EVAL_MODE,
             auto_key_setup=True,
             access_token=ENVECTOR_API_KEY,
             query_encryption="plain",
@@ -90,7 +91,7 @@ def ensure_vault():
             key_path=KEY_DIR,
             key_id=KEY_ID,
             dim=EMBEDDING_DIM,
-            eval_mode="rmp",
+            eval_mode=EVAL_MODE,
             auto_key_setup=False,
             access_token=ENVECTOR_API_KEY,
             query_encryption="plain",
