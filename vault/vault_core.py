@@ -37,6 +37,7 @@ KEY_SUBDIR = os.path.join(KEY_DIR, KEY_ID)
 ENVECTOR_ENDPOINT = os.getenv("ENVECTOR_ENDPOINT", "").strip() or None
 ENVECTOR_API_KEY = os.getenv("ENVECTOR_API_KEY", "").strip() or None
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1024"))
+_VALID_EVAL_MODES = {"rmp", "mm"}
 EVAL_MODE = os.getenv("ENVECTOR_EVAL_MODE", "rmp").lower()
 
 # Team index name (set by admin, distributed to all team members via get_public_key)
@@ -51,6 +52,13 @@ def ensure_vault():
        (SDK handles key registration → loading)
     3. Create the team index if it doesn't exist
     """
+    if EVAL_MODE not in _VALID_EVAL_MODES:
+        raise ValueError(
+            f"Invalid ENVECTOR_EVAL_MODE={EVAL_MODE!r}. "
+            f"Must be one of: {sorted(_VALID_EVAL_MODES)}. "
+            "If you changed this value, delete vault_keys/ and restart Vault."
+        )
+
     import pyenvector as ev
 
     # Phase 1: local key generation

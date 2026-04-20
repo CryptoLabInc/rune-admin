@@ -119,27 +119,16 @@ class TestEvalModePassedToEvInit:
             query_encryption="plain",
         )
 
-    def test_invalid_eval_mode_propagates_to_sdk_not_vault(self, monkeypatch, tmp_path):
-        """Invalid EVAL_MODE passes through to the SDK — vault has no allowlist guard.
-
-        Expected behavior:
-        - ev.init(auto_key_setup=True) raises (SDK rejects "invalid")
-        - vault logs warning, retries with auto_key_setup=False
-        - second ev.init also raises
-        - ensure_vault() propagates the exception
-        """
+    def test_invalid_eval_mode_rejected_at_vault_level(self, monkeypatch, tmp_path):
+        """Invalid EVAL_MODE is caught by vault's allowlist guard before reaching the SDK."""
         self._setup_offline_patches(monkeypatch, tmp_path, eval_mode="invalid")
 
         mock_ev = MagicMock()
-        mock_ev.init.side_effect = ValueError("unsupported eval_mode: invalid")
         original = self._patch_pyenvector(mock_ev)
         try:
-            with pytest.raises(Exception):
+            with pytest.raises(ValueError, match="Invalid ENVECTOR_EVAL_MODE"):
                 vault_core.ensure_vault()
         finally:
             self._restore_pyenvector(original)
 
-        # Both retry attempts use the same invalid mode → 2 calls total
-        assert mock_ev.init.call_count == 2
-        for call_args in mock_ev.init.call_args_list:
-            assert call_args.kwargs["eval_mode"] == "invalid"
+        mock_ev.init.assert_not_called()
