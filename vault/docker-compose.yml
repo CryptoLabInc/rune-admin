@@ -26,6 +26,7 @@ services:
       - ENVECTOR_API_KEY=${ENVECTOR_API_KEY:-}
       - EMBEDDING_DIM=${EMBEDDING_DIM:-1024}
       - ENVECTOR_EVAL_MODE=${ENVECTOR_EVAL_MODE:-rmp}
+      - ENVECTOR_TLS=${ENVECTOR_TLS:-true}
       - VAULT_AUDIT_LOG=${VAULT_AUDIT_LOG:-file}
 
     networks:
