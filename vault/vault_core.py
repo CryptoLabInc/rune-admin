@@ -39,6 +39,7 @@ ENVECTOR_API_KEY = os.getenv("ENVECTOR_API_KEY", "").strip() or None
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1024"))
 _VALID_EVAL_MODES = {"rmp", "mm"}
 EVAL_MODE = os.getenv("ENVECTOR_EVAL_MODE", "rmp").lower()
+ENVECTOR_TLS = os.getenv("ENVECTOR_TLS", "").strip().lower() not in ("false", "0", "no")
 
 # Team index name (set by admin, distributed to all team members via get_public_key)
 VAULT_INDEX_NAME = os.getenv("VAULT_INDEX_NAME", "").strip() or None
@@ -89,6 +90,7 @@ def ensure_vault():
             auto_key_setup=True,
             access_token=ENVECTOR_API_KEY,
             query_encryption="plain",
+            secure=ENVECTOR_TLS,
         )
         logger.info("Key registered on enVector Cloud (auto_key_setup).")
     except Exception as e:
@@ -103,6 +105,7 @@ def ensure_vault():
             auto_key_setup=False,
             access_token=ENVECTOR_API_KEY,
             query_encryption="plain",
+            secure=ENVECTOR_TLS,
         )
         logger.info("Connected to enVector Cloud (auto_key_setup=False).")
 

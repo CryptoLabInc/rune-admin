@@ -95,6 +95,7 @@ class TestEvalModePassedToEvInit:
             auto_key_setup=True,
             access_token="test-key",
             query_encryption="plain",
+            secure=True,
         )
 
     def test_ensure_vault_passes_eval_mode_rmp_to_ev_init(self, monkeypatch, tmp_path):
@@ -117,6 +118,7 @@ class TestEvalModePassedToEvInit:
             auto_key_setup=True,
             access_token="test-key",
             query_encryption="plain",
+            secure=True,
         )
 
     def test_invalid_eval_mode_rejected_at_vault_level(self, monkeypatch, tmp_path):
