@@ -96,6 +96,12 @@ Thumbs.db
 *.dll
 *.dylib
 
+# Go build artifacts
+vault/runevault
+vault/cmd/runevault/runevault
+vault/**/*.test
+vault/**/*.out
+
 # Database
 *.db
 *.sqlite
@@ -114,3 +120,6 @@ test-results/
 
 # Test fixtures (plaintext — decrypted from fixtures.tar.gz.gpg)
 tests/fixtures/
+
+# Local dev runtime files (config, socket, keys, pid)
+vault/dev/

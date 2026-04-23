@@ -1,0 +1,43 @@
+# runevault.conf — example deployment configuration.
+#
+# Lookup order:
+#   1. --config <path> CLI flag
+#   2. /opt/rune-vault/configs/runevault.conf
+#   3. ./runevault.conf (cwd, dev only)
+#
+# This file should be mode 0600, owned by the vault-user.
+# Replace placeholder values before use.
+
+daemon:
+  pid_file: /opt/rune-vault/.runevault.pid
+
+server:
+  grpc:
+    host: 0.0.0.0
+    port: 50051
+    tls:
+      cert: /opt/rune-vault/certs/server.pem
+      key: /opt/rune-vault/certs/server.key
+      disable: false        # true for dev only — never in production
+  admin:
+    socket: /opt/rune-vault/admin.sock
+
+keys:
+  path: /opt/rune-vault/vault-keys
+  index_name: my-team
+  embedding_dim: 1024
+
+envector:
+  endpoint: https://envector.example.com
+  api_key: REPLACE_WITH_API_KEY
+  # Alternative: api_key_file: /run/secrets/envector_api_key
+
+tokens:
+  team_secret: REPLACE_WITH_RANDOM_HEX_32
+  # Alternative: team_secret_file: /run/secrets/team_secret
+  roles_file: /opt/rune-vault/configs/roles.yml
+  tokens_file: /opt/rune-vault/configs/tokens.yml
+
+audit:
+  mode: file+stdout         # one of: "", file, stdout, file+stdout
+  path: /opt/rune-vault/logs/audit.log

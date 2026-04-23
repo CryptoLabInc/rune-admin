@@ -2,10 +2,5 @@
 # Used by setting MISE_ENV=ci in GitHub Actions workflows
 
 [tools]
-python = "3.12"
+go = "1.25"
 buf = "1.66"
-ruff = "0.15"
-
-[env]
-_.python.venv = { path = ".venv", create = true }
-PYTHONPATH = "{{config_root}}/vault/proto:{{config_root}}/vault"
