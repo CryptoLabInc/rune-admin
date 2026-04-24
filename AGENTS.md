@@ -57,7 +57,7 @@ Follow `.github/PULL_REQUEST_TEMPLATE.md` exactly. Fill every section, replace a
 
 ## Development workflow
 
-- Feature branches: `worktree-issue-{N}-{description}`
+- Feature branches: `issue-{N}-{description}`
 - All changes via PR to main
 - Reference issue numbers in commits: `feat: description (#N)`
 - Rebase onto target branch, not merge commits in feature branches
