@@ -1,3 +1,5 @@
+//go:build e2e
+
 package tests
 
 import (
@@ -11,17 +13,13 @@ import (
 	"time"
 )
 
-// TestCLISmokeEndToEnd builds the runevault binary, boots it as a daemon
-// against a tmp config (TLS disabled, no FHE key generation needed because
-// we never call DecryptScores), exercises issue/list/revoke through the
-// admin UDS, then verifies daemon stop.
+// TestE2EDaemonLifecycle boots runevault as a daemon against a tmp config
+// (TLS disabled), exercises token/role CLI operations through the admin UDS,
+// then verifies daemon stop.
 //
-// Skipped under -short.
-func TestCLISmokeEndToEnd(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping CLI smoke under -short")
-	}
-
+// Set RUNEVAULT_TEST_BINARY to a pre-built binary path to skip the in-test
+// build step (required in CI — run `mise run go:build` first).
+func TestE2EDaemonLifecycle(t *testing.T) {
 	repoRoot := RepoRoot()
 	tmp, err := os.MkdirTemp("", "vts-")
 	if err != nil {
@@ -29,12 +27,7 @@ func TestCLISmokeEndToEnd(t *testing.T) {
 	}
 	t.Cleanup(func() { os.RemoveAll(tmp) })
 
-	binary := filepath.Join(tmp, "runevault")
-	build := exec.Command("go", "build", "-o", binary, "./cmd/runevault")
-	build.Dir = filepath.Join(repoRoot, "vault")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build: %v\n%s", err, out)
-	}
+	binary := resolveBinary(t, repoRoot, tmp)
 
 	confPath := filepath.Join(tmp, "runevault.conf")
 	conf := fmt.Sprintf(`daemon:
@@ -170,6 +163,26 @@ audit:
 	case <-time.After(5 * time.Second):
 		t.Errorf("daemon did not exit after stop")
 	}
+}
+
+// resolveBinary returns the runevault binary path. If RUNEVAULT_TEST_BINARY
+// is set it is used as-is (relative paths are resolved from repoRoot).
+// Otherwise the binary is built from source into tmp.
+func resolveBinary(t *testing.T, repoRoot, tmp string) string {
+	t.Helper()
+	if p := os.Getenv("RUNEVAULT_TEST_BINARY"); p != "" {
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(repoRoot, p)
+		}
+		return p
+	}
+	binary := filepath.Join(tmp, "runevault")
+	build := exec.Command("go", "build", "-o", binary, "./cmd")
+	build.Dir = filepath.Join(repoRoot, "vault")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+	return binary
 }
 
 func waitFor(path string, dur time.Duration) bool {

@@ -1,6 +1,6 @@
-# CI-only tool configuration
-# Used by setting MISE_ENV=ci in GitHub Actions workflows
+# CI environment overrides — merged on top of .mise.toml when MISE_ENV=ci.
+# Tasks are inherited from .mise.toml; only CI-specific settings go here.
 
-[tools]
-go = "1.25"
-buf = "1.66"
+# Only install tools required for build and test; skip deployment tools.
+[settings]
+enable_tools = ["go", "buf"]

@@ -14,6 +14,9 @@ terraform = "1.14"
 gcloud = "562"
 oci = "3"
 
+[env]
+CGO_ENABLED = "1"
+
 # ── Tasks ────────────────────────────────────────────────────────────
 
 [tasks.setup]
@@ -37,7 +40,7 @@ echo "Run 'mise run check' to verify."
 """
 
 [tasks.check]
-description = "Run all quality checks (gofmt + go vet + go test)"
+description = "Run all quality checks (gofmt + go vet + unit tests)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -51,7 +54,7 @@ if [ -n "$diff" ]; then
 fi
 echo "==> go vet..."
 go vet ./...
-echo "==> Running Go tests..."
+echo "==> Running unit tests..."
 go test -race ./...
 echo ""
 echo "All checks passed."
@@ -62,7 +65,7 @@ description = "Regenerate Go protobuf/gRPC stubs into vault/pkg/vaultpb"
 run = "cd vault && buf generate"
 
 [tasks."go:build"]
-description = "Build runevault binary"
+description = "Build runevault binary to vault/bin/runevault"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -71,17 +74,32 @@ COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 PKG="github.com/CryptoLabInc/rune-admin/vault/internal/commands"
 cd vault && go build \
+  -o bin/runevault \
   -ldflags "-X '${PKG}.buildVersion=${VERSION}' -X '${PKG}.buildCommit=${COMMIT}' -X '${PKG}.buildDate=${DATE}'" \
-  ./...
+  ./cmd
 """
 
 [tasks."go:test"]
-description = "Run Go unit + integration tests with race detector"
-run = "cd vault && go test -race ./..."
+description = "Run all tests including E2E (requires pre-built binary via RUNEVAULT_TEST_BINARY)"
+run = "cd vault && go test -race -tags e2e ./..."
 
 [tasks."go:test:unit"]
-description = "Run Go unit tests only (skip CLI smoke E2E)"
-run = "cd vault && go test -race -short ./..."
+description = "Run unit tests only (E2E excluded by build tag)"
+run = "cd vault && go test -race ./..."
+
+[tasks."go:test:e2e"]
+description = "Run E2E tests against the pre-built runevault binary (run go:build first)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+BINARY="${RUNEVAULT_TEST_BINARY:-$(pwd)/vault/bin/runevault}"
+if [ ! -x "$BINARY" ]; then
+  echo "runevault binary not found at $BINARY — run 'mise run go:build' first" >&2
+  exit 1
+fi
+export RUNEVAULT_TEST_BINARY="$BINARY"
+cd vault && go test -race -tags e2e ./internal/tests/...
+"""
 
 [tasks."go:vet"]
 description = "Run go vet on all Go packages"

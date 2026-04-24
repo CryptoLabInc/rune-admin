@@ -97,8 +97,7 @@ Thumbs.db
 *.dylib
 
 # Go build artifacts
-vault/runevault
-vault/cmd/runevault/runevault
+vault/bin/
 vault/**/*.test
 vault/**/*.out
 

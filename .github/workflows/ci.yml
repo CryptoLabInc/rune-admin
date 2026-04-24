@@ -9,6 +9,7 @@ on:
       - "deployment/**"
       - "LICENSE"
       - ".githooks/**"
+      - ".github/workflows/**"
   push:
     branches: [main]
     paths-ignore:
@@ -17,6 +18,7 @@ on:
       - "deployment/**"
       - "LICENSE"
       - ".githooks/**"
+      - ".github/workflows/**"
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
@@ -24,12 +26,12 @@ concurrency:
 
 jobs:
   check:
-    runs-on: [self-hosted, vault-ci]
+    runs-on: ubuntu-latest
+    env:
+      MISE_ENV: ci
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
-        env:
-          MISE_ENV: ci
       - run: mise run setup
       - name: Clean previous fixtures
         run: rm -rf tests/fixtures/
@@ -37,12 +39,14 @@ jobs:
         env:
           FIXTURES_GPG_PASSPHRASE: ${{ secrets.FIXTURES_GPG_PASSPHRASE_ALT }}
         run: mise run fixtures:decrypt
-      - name: Check (gofmt + vet + tests)
+      - name: Check (gofmt + vet + unit tests)
         run: mise run check
       - name: Build
         run: |
           VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
           VERSION=$VERSION mise run go:build
+      - name: E2E tests
+        run: mise run go:test:e2e
       - name: Clean up fixtures
         if: always()
         run: rm -rf tests/fixtures/
