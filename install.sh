@@ -463,11 +463,7 @@ csp_post_deploy() {
     || die "Could not read vault_public_ip from terraform output."
   CSP_PUBLIC_IP="$public_ip"
 
-  local ssh_user
-  case "$csp" in
-    oci) ssh_user=opc ;;
-    *)   ssh_user=ubuntu ;;
-  esac
+  local ssh_user=ubuntu
 
   mkdir -p "${INSTALL_DIR_CSP}/certs"
   [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "${INSTALL_DIR_CSP}/certs"
