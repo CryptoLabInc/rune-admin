@@ -229,23 +229,33 @@ csp_preflight() {
   local csp=$1
   info "Running CSP preflight checks for ${csp}..."
 
-  local missing=0
-  for tool in terraform ssh-keygen scp curl; do
-    command -v "$tool" >/dev/null 2>&1 || { warn "'${tool}' not found."; missing=1; }
-  done
-
-  local csp_cli
-  case "$csp" in
-    aws) csp_cli=aws ;;
-    gcp) csp_cli=gcloud ;;
-    oci) csp_cli=oci ;;
-  esac
-  command -v "$csp_cli" >/dev/null 2>&1 \
-    || { warn "CSP CLI '${csp_cli}' not found. Install and configure credentials."; missing=1; }
-
-  if [[ "$missing" -eq 1 ]]; then
-    die "Missing prerequisites above. Install them and re-run."
+  if command -v terraform >/dev/null 2>&1; then
+    success "CSP preflight passed."
+    return 0
   fi
+
+  printf '\n'
+  warn "terraform is not installed."
+  printf '\n'
+
+  local answer=n
+  if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
+    read -r -p "Install terraform automatically? [y/N] " answer
+  else
+    warn "Non-interactive mode: cannot auto-install terraform."
+  fi
+
+  case "$answer" in
+    [Yy]*) _install_tool terraform ;;
+    *)
+      printf 'Install it manually and re-run the installer:\n' >&2
+      case "$OS_SLUG" in
+        linux)  printf '  terraform: https://developer.hashicorp.com/terraform/install\n' >&2 ;;
+        darwin) printf '  terraform: brew install terraform\n' >&2 ;;
+      esac
+      exit 1
+      ;;
+  esac
 
   success "CSP preflight passed."
 }
@@ -304,9 +314,12 @@ csp_prompt_config() {
   [[ -n "$TEAM_NAME" ]]          || die "Team name is required."
   [[ -n "$ENVECTOR_ENDPOINT" ]]  || die "enVector endpoint is required."
   [[ -n "$ENVECTOR_API_KEY" ]]   || die "enVector API key is required."
-  [[ "$csp" = gcp ]] && { [[ -n "$GCP_PROJECT_ID" ]]     || die "GCP project ID is required."; }
-  [[ "$csp" = oci ]] && { [[ -n "$OCI_COMPARTMENT_ID" ]] || die "OCI compartment OCID is required."; }
-
+  if [[ "$csp" = gcp ]]; then
+    [[ -n "$GCP_PROJECT_ID" ]]     || die "GCP project ID is required."
+  fi
+  if [[ "$csp" = oci ]]; then
+    [[ -n "$OCI_COMPARTMENT_ID" ]] || die "OCI compartment OCID is required."
+  fi
 }
 
 csp_generate_ssh_key() {
@@ -555,8 +568,26 @@ _install_tool() {
       ;;
     linux:openssl)  _pkg_install openssl ;;
     linux:sha256sum) _pkg_install coreutils ;;
+    linux:terraform)
+      local tf_version arch_suffix=amd64
+      [[ "$ARCH_SLUG" = arm64 ]] && arch_suffix=arm64
+      tf_version=$(curl -fsSL https://api.github.com/repos/hashicorp/terraform/releases/latest \
+        | grep '"tag_name"' | head -1 \
+        | sed 's/.*"tag_name": *"v\([^"]*\)".*/\1/')
+      [[ -n "$tf_version" ]] || die "Failed to resolve latest terraform version."
+      command -v unzip >/dev/null 2>&1 || _pkg_install unzip
+      local tmpdir
+      tmpdir=$(mktemp -d)
+      curl -fsSL \
+        "https://releases.hashicorp.com/terraform/${tf_version}/terraform_${tf_version}_linux_${arch_suffix}.zip" \
+        -o "${tmpdir}/tf.zip"
+      unzip -o "${tmpdir}/tf.zip" -d "${tmpdir}" >/dev/null
+      install -m 0755 "${tmpdir}/terraform" /usr/local/bin/terraform
+      rm -rf "${tmpdir}"
+      ;;
     darwin:cosign)  _brew install cosign ;;
     darwin:openssl) _brew install openssl ;;
+    darwin:terraform) _brew install terraform ;;
     darwin:shasum)
       die "shasum is pre-installed on macOS. Something is very wrong." ;;
     *:systemctl)
@@ -851,7 +882,9 @@ setup_system() {
   install -m 0755 "$SCRATCH/runevault" "$BINARY_DEST"
   success "Binary installed: ${BINARY_DEST}"
 
-  [[ "$SKIP_SERVICE" -eq 0 ]] && _add_invoking_user_to_group
+  if [[ "$SKIP_SERVICE" -eq 0 ]]; then
+    _add_invoking_user_to_group
+  fi
 }
 
 # ── Phase 5: TLS certificates ──────────────────────────────────────────────────
