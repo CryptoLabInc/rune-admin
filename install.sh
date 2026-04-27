@@ -229,33 +229,57 @@ csp_preflight() {
   local csp=$1
   info "Running CSP preflight checks for ${csp}..."
 
-  if command -v terraform >/dev/null 2>&1; then
-    success "CSP preflight passed."
-    return 0
+  if ! command -v terraform >/dev/null 2>&1; then
+    printf '\n'
+    warn "terraform is not installed."
+    printf '\n'
+    local answer=n
+    if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
+      read -r -p "Install terraform automatically? [y/N] " answer
+    else
+      warn "Non-interactive mode: cannot auto-install terraform."
+    fi
+    case "$answer" in
+      [Yy]*) _install_tool terraform ;;
+      *)
+        printf 'Install it manually and re-run the installer:\n' >&2
+        case "$OS_SLUG" in
+          linux)  printf '  terraform: https://developer.hashicorp.com/terraform/install\n' >&2 ;;
+          darwin) printf '  terraform: brew install terraform\n' >&2 ;;
+        esac
+        exit 1
+        ;;
+    esac
   fi
 
-  printf '\n'
-  warn "terraform is not installed."
-  printf '\n'
-
-  local answer=n
-  if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
-    read -r -p "Install terraform automatically? [y/N] " answer
-  else
-    warn "Non-interactive mode: cannot auto-install terraform."
-  fi
-
-  case "$answer" in
-    [Yy]*) _install_tool terraform ;;
-    *)
-      printf 'Install it manually and re-run the installer:\n' >&2
-      case "$OS_SLUG" in
-        linux)  printf '  terraform: https://developer.hashicorp.com/terraform/install\n' >&2 ;;
-        darwin) printf '  terraform: brew install terraform\n' >&2 ;;
-      esac
-      exit 1
+  local csp_cli auth_cmd auth_setup
+  case "$csp" in
+    aws)
+      csp_cli=aws
+      auth_cmd='aws sts get-caller-identity'
+      auth_setup='aws configure'
+      ;;
+    gcp)
+      csp_cli=gcloud
+      auth_cmd='gcloud auth application-default print-access-token'
+      auth_setup='gcloud auth application-default login'
+      ;;
+    oci)
+      csp_cli=oci
+      auth_cmd='oci iam region list'
+      auth_setup='oci setup config'
       ;;
   esac
+
+  local tf_user="${SUDO_USER:-$(id -un)}"
+
+  if ! sudo -u "$tf_user" -H bash -lc "command -v ${csp_cli}" >/dev/null 2>&1; then
+    die "'${csp_cli}' CLI not found in PATH for user '${tf_user}'. Install it and re-run."
+  fi
+
+  if ! sudo -u "$tf_user" -H bash -lc "${auth_cmd}" >/dev/null 2>&1; then
+    die "'${csp_cli}' is not authenticated for user '${tf_user}'. Authenticate and re-run: ${auth_setup}"
+  fi
 
   success "CSP preflight passed."
 }
@@ -490,7 +514,7 @@ csp_summary() {
   printf '\n'
   printf '  Issue a token:  runevault token issue --user <name> --role member\n'
   printf '  Check status:   runevault status\n'
-  printf '  View logs:      journalctl -u runevault -f\n'
+  printf '  View logs:      runevault logs\n'
   printf '  Manage daemon:  sudo systemctl start|stop|restart runevault\n'
   printf '\n'
   warn "BACKUP: Keep this safe — it cannot be recovered if lost:"
@@ -1223,11 +1247,10 @@ post_install() {
   printf 'Next steps:\n'
   printf '  Issue a token:  runevault token issue --user <name> --role member\n'
   printf '  Check status:   runevault status\n'
+  printf '  View logs:      runevault logs\n'
   if [[ "$OS_SLUG" = linux ]]; then
-    printf '  View logs:      journalctl -u runevault -f\n'
     printf '  Manage daemon:  sudo systemctl start|stop|restart runevault\n'
   else
-    printf '  View logs:      tail -f %s/logs/runevault.stderr.log\n' "${INSTALL_PREFIX}"
     printf '  Manage daemon:  sudo launchctl bootout system/com.cryptolabinc.runevault\n'
     printf '                  sudo launchctl bootstrap system /Library/LaunchDaemons/com.cryptolabinc.runevault.plist\n'
   fi
