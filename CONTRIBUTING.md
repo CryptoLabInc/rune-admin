@@ -15,7 +15,7 @@ Before creating an issue:
 2. Collect relevant information:
    - Rune-Admin version
    - Deployment platform (OCI/AWS/GCP)
-   - Python version
+   - Go version (`go version`)
    - Error messages and logs
    - Steps to reproduce
 
@@ -34,7 +34,6 @@ Feature requests should include:
 ### Prerequisites
 
 - [mise](https://mise.jdx.dev): `curl https://mise.jdx.dev/install.sh | sh`
-- [Docker](https://docs.docker.com/get-docker/) (for local Vault and image builds)
 
 **CSP deployment only:**
 - Access to cloud provider (OCI/AWS/GCP)
@@ -50,8 +49,8 @@ Feature requests should include:
 
 2. **Install tools and bootstrap**
    ```bash
-   mise install        # Install Python 3.12, buf, ruff, terraform, cloud CLIs
-   mise run setup      # Create venv, install deps, generate proto stubs
+   mise install        # Install Go 1.25, buf, terraform, cloud CLIs
+   mise run setup      # Resolve Go modules, generate proto stubs
    ```
 
 3. **Verify setup**
@@ -68,47 +67,34 @@ Feature requests should include:
 
 ### Commands
 
-All commands **must** be run via `mise run` to ensure correct tool versions and venv activation.
+All commands **must** be run via `mise run` to ensure correct tool versions.
 
-| Command | Description |
-|---------|-------------|
-| `mise run test` | Unit + integration tests |
-| `mise run test:unit` | Unit tests only |
-| `mise run test:cov` | Tests with coverage report |
-| `mise run lint` | Ruff linter |
-| `mise run lint:fix` | Ruff with auto-fix |
-| `mise run format` | Ruff formatter |
-| `mise run format:check` | Check formatting without modifying |
-| `mise run check` | All checks: format + lint + unit tests |
-| `mise run proto` | Regenerate protobuf/gRPC stubs |
-| `mise run build` | Build Docker image locally |
-| `mise run push` | Build and push multi-platform image to GHCR (requires GHCR access) |
-| `mise run dev` | Start local Vault via Docker Compose |
-| `mise run certs` | Generate self-signed TLS certificates |
+See [CLAUDE.md](CLAUDE.md#commands) for the complete task table.
 
 ## Testing
 
 ### Test Structure
 
 ```
-tests/
-├── unit/          # Fast, isolated tests per module
-└── integration/   # End-to-end Vault API tests
+vault/internal/
+├── tokens/        # Token store + role/rate-limit unit tests
+├── crypto/        # HKDF + AES-CTR + envector-go-sdk wrappers
+├── server/        # gRPC handlers, interceptors, audit, admin UDS, pidfile
+├── commands/      # CLI subcommands + admin client
+├── integration/   # E2E: decrypt pipeline (fixture-based) + CLI smoke
+└── testutil/      # Fixture path resolver
 ```
 
 ### Running Tests
 
-All test commands **must** be run via `mise run`:
-
 ```bash
-mise run test         # Unit + integration tests
-mise run test:unit    # Unit tests only
-mise run test:cov     # Tests with coverage report
+mise run go:test          # All tests with race detector
+mise run go:test:unit     # Skip CLI smoke E2E (faster)
 ```
 
 ### Test Fixtures
 
-Integration tests use GPG-encrypted fixtures containing FHE keys and ciphertext blobs. See [tests/FIXTURES.md](tests/FIXTURES.md) for the full update procedure, including passphrase rotation and re-encryption steps.
+Integration tests use GPG-encrypted fixtures containing FHE keys and ciphertext blobs. See [tests/FIXTURES.md](tests/FIXTURES.md) for the full update procedure, including passphrase rotation and re-encryption steps. The fixture-based decrypt-pipeline test under `vault/internal/integration/` skips automatically when `tests/fixtures/` is not decrypted.
 
 ### Test Requirements
 
@@ -116,17 +102,16 @@ Integration tests use GPG-encrypted fixtures containing FHE keys and ciphertext 
 - Use fixtures for crypto setup to avoid repeated key generation
 - Mock external dependencies
 - Test both success and error paths
-- New gRPC methods need corresponding unit tests in `tests/unit/`
-- Token/auth changes must update `tests/unit/test_auth.py`
+- New gRPC methods need corresponding unit tests in `vault/internal/server/grpc_test.go`
+- Token/auth changes must update `vault/internal/tokens/store_test.go`
 
 ## Code Style
 
-### Python
+### Go
 
-- Follow PEP 8
-- All public functions need type hints
-- Keep functions focused and testable
-- Format and lint with ruff: `mise run format` and `mise run lint`
+- Run `mise run go:fmt` to format
+- All exported identifiers need a doc comment
+- Tests live alongside the code they test (`*_test.go`)
 - Run `mise run check` before committing
 
 ### Shell Scripts
