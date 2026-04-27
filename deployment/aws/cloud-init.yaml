@@ -5,10 +5,9 @@ packages: [ca-certificates, curl, openssl]
 write_files:
   - path: /etc/profile.d/runevault-installer-env.sh
     content: |
-      export RUNEVAULT_TEAM_NAME='${vault_index_name}'
+      export RUNEVAULT_TEAM_NAME='${team_name}'
       export RUNEVAULT_ENVECTOR_ENDPOINT='${envector_endpoint}'
       export RUNEVAULT_ENVECTOR_API_KEY='${envector_api_key}'
-      export RUNEVAULT_TLS_HOSTNAME='${tls_hostname}'
     permissions: '0600'
 
 runcmd:

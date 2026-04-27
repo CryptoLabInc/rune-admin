@@ -47,12 +47,6 @@ variable "tls_mode" {
   default     = "self-signed"
 }
 
-variable "tls_hostname" {
-  description = "Domain name to include in TLS certificate SAN"
-  type        = string
-  default     = ""
-}
-
 variable "envector_endpoint" {
   description = "enVector Cloud endpoint"
   type        = string
@@ -62,12 +56,6 @@ variable "envector_api_key" {
   description = "enVector Cloud API key"
   type        = string
   sensitive   = true
-}
-
-variable "vault_index_name" {
-  description = "Vault index name"
-  type        = string
-  default     = "runecontext"
 }
 
 variable "machine_type" {
@@ -164,11 +152,8 @@ resource "google_compute_instance" "vault" {
 
   metadata_startup_script = templatefile("${path.module}/startup-script.sh", {
     team_name          = var.team_name
-    tls_mode           = var.tls_mode
-    tls_hostname       = var.tls_hostname
     envector_endpoint  = var.envector_endpoint
     envector_api_key   = var.envector_api_key
-    vault_index_name   = var.vault_index_name
     runevault_version  = var.runevault_version
   })
 

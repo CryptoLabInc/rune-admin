@@ -23,16 +23,13 @@
 #   RUNEVAULT_ENVECTOR_API_KEY_FILE  envector.api_key_file (alternative)
 #   RUNEVAULT_TLS_CERT_PATH          Path to existing TLS cert (skips auto-gen)
 #   RUNEVAULT_TLS_KEY_PATH           Path to existing TLS key  (skips auto-gen)
-#   RUNEVAULT_TLS_HOSTNAME           Additional DNS SAN for auto-generated TLS cert
 #
 # Non-interactive env vars (CSP install — operator workstation):
 #   RUNEVAULT_ENVECTOR_ENDPOINT      enVector endpoint URL (required)
 #   RUNEVAULT_ENVECTOR_API_KEY       enVector API key (required)
-#   RUNEVAULT_TEAM_NAME              Vault index name (required)
-#   RUNEVAULT_TLS_HOSTNAME           Domain name for TLS SAN on VM cert (optional)
+#   RUNEVAULT_TEAM_NAME              Team name — used for resource naming and vault index (required)
 #   RUNEVAULT_TARGET                 Pre-select target without interactive menu
 #   RUNEVAULT_INSTALL_DIR            Pre-set CSP install directory
-#   RUNEVAULT_CSP_TEAM_NAME          Team name for cloud resource naming
 #   RUNEVAULT_CSP_REGION             Cloud region
 #   RUNEVAULT_GCP_PROJECT_ID         GCP: project ID (required for GCP)
 #   RUNEVAULT_OCI_COMPARTMENT_ID     OCI: compartment OCID (required for OCI)
@@ -267,11 +264,9 @@ csp_prompt_config() {
     printf '  API key from the dashboard.\n'
     printf '\n'
 
-    _prompt ENVECTOR_ENDPOINT  "enVector endpoint"         ""
-    _prompt ENVECTOR_API_KEY   "enVector API key"           ""
-    _prompt VAULT_INDEX_NAME   "Vault index name"           "runecontext"
-    _prompt TEAM_NAME          "Team name (resource naming)" "default"
-    _prompt TLS_HOSTNAME       "TLS hostname / domain SAN (optional, Enter to skip)" ""
+    _prompt TEAM_NAME          "Team name"          ""
+    _prompt ENVECTOR_ENDPOINT  "enVector endpoint"  ""
+    _prompt ENVECTOR_API_KEY   "enVector API key"   ""
 
     case "$csp" in
       aws) _prompt CSP_REGION "AWS region"   "us-east-1"   ;;
@@ -286,19 +281,17 @@ csp_prompt_config() {
     esac
     printf '\n'
   else
+    TEAM_NAME="${RUNEVAULT_TEAM_NAME:-}"
     ENVECTOR_ENDPOINT="${RUNEVAULT_ENVECTOR_ENDPOINT:-}"
     ENVECTOR_API_KEY="${RUNEVAULT_ENVECTOR_API_KEY:-}"
-    VAULT_INDEX_NAME="${RUNEVAULT_TEAM_NAME:-}"
-    TEAM_NAME="${RUNEVAULT_CSP_TEAM_NAME:-default}"
-    TLS_HOSTNAME="${RUNEVAULT_TLS_HOSTNAME:-}"
     CSP_REGION="${RUNEVAULT_CSP_REGION:-}"
     GCP_PROJECT_ID="${RUNEVAULT_GCP_PROJECT_ID:-}"
     OCI_COMPARTMENT_ID="${RUNEVAULT_OCI_COMPARTMENT_ID:-}"
 
     local missing=()
+    [[ -z "$TEAM_NAME" ]]         && missing+=("RUNEVAULT_TEAM_NAME")
     [[ -z "$ENVECTOR_ENDPOINT" ]] && missing+=("RUNEVAULT_ENVECTOR_ENDPOINT")
     [[ -z "$ENVECTOR_API_KEY" ]]  && missing+=("RUNEVAULT_ENVECTOR_API_KEY")
-    [[ -z "$VAULT_INDEX_NAME" ]]  && missing+=("RUNEVAULT_TEAM_NAME")
     [[ "$csp" = gcp && -z "$GCP_PROJECT_ID" ]]      && missing+=("RUNEVAULT_GCP_PROJECT_ID")
     [[ "$csp" = oci && -z "$OCI_COMPARTMENT_ID" ]]  && missing+=("RUNEVAULT_OCI_COMPARTMENT_ID")
     if [[ ${#missing[@]} -gt 0 ]]; then
@@ -308,9 +301,9 @@ csp_prompt_config() {
     fi
   fi
 
+  [[ -n "$TEAM_NAME" ]]          || die "Team name is required."
   [[ -n "$ENVECTOR_ENDPOINT" ]]  || die "enVector endpoint is required."
   [[ -n "$ENVECTOR_API_KEY" ]]   || die "enVector API key is required."
-  [[ -n "$VAULT_INDEX_NAME" ]]   || die "Vault index name is required."
   [[ "$csp" = gcp ]] && { [[ -n "$GCP_PROJECT_ID" ]]     || die "GCP project ID is required."; }
   [[ "$csp" = oci ]] && { [[ -n "$OCI_COMPARTMENT_ID" ]] || die "OCI compartment OCID is required."; }
 
@@ -392,10 +385,8 @@ csp_render_tfvars() {
   {
     printf 'team_name          = "%s"\n' "$(escape_tf "${TEAM_NAME:-default}")"
     printf 'tls_mode           = "self-signed"\n'
-    printf 'tls_hostname       = "%s"\n' "$(escape_tf "${TLS_HOSTNAME:-}")"
     printf 'envector_endpoint  = "%s"\n' "$(escape_tf "${ENVECTOR_ENDPOINT}")"
     printf 'envector_api_key   = "%s"\n' "$(escape_tf "${ENVECTOR_API_KEY}")"
-    printf 'vault_index_name   = "%s"\n' "$(escape_tf "${VAULT_INDEX_NAME}")"
     printf 'runevault_version  = "%s"\n' "$(escape_tf "${VERSION}")"
     printf 'public_key         = "%s"\n' "$(escape_tf "${public_key}")"
     printf 'region             = "%s"\n' "$(escape_tf "${CSP_REGION}")"
@@ -903,7 +894,6 @@ generate_tls_certs() {
   printf 'DNS.3 = runevault\n'                       >> "$tmpconf"
   printf 'IP.1  = 127.0.0.1\n'                       >> "$tmpconf"
   [[ -n "$public_ip" ]] && printf 'IP.2  = %s\n' "$public_ip" >> "$tmpconf"
-  [[ -n "${RUNEVAULT_TLS_HOSTNAME:-}" ]] && printf 'DNS.4 = %s\n' "${RUNEVAULT_TLS_HOSTNAME}" >> "$tmpconf"
 
   openssl genrsa -out "${cert_dir}/ca.key" 4096 2>/dev/null
   openssl req -new -x509 \

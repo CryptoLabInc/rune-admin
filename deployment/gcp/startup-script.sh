@@ -13,10 +13,9 @@ curl -fsSL "https://github.com/sigstore/cosign/releases/latest/download/cosign-l
 chmod 0755 /usr/local/bin/cosign
 
 cat > /etc/profile.d/runevault-installer-env.sh <<'ENVFILE'
-export RUNEVAULT_TEAM_NAME='${vault_index_name}'
+export RUNEVAULT_TEAM_NAME='${team_name}'
 export RUNEVAULT_ENVECTOR_ENDPOINT='${envector_endpoint}'
 export RUNEVAULT_ENVECTOR_API_KEY='${envector_api_key}'
-export RUNEVAULT_TLS_HOSTNAME='${tls_hostname}'
 ENVFILE
 chmod 600 /etc/profile.d/runevault-installer-env.sh
 set -a; . /etc/profile.d/runevault-installer-env.sh; set +a
