@@ -177,14 +177,16 @@ data "oci_identity_availability_domains" "ads" {
 }
 
 data "oci_core_images" "ubuntu_image" {
-  compartment_id   = var.compartment_id
-  operating_system = "Canonical Ubuntu"
-  sort_by          = "TIMECREATED"
-  sort_order       = "DESC"
+  compartment_id           = var.compartment_id
+  operating_system         = "Canonical Ubuntu"
+  operating_system_version = "24.04"
+  shape                    = "VM.Standard.E5.Flex"
+  sort_by                  = "TIMECREATED"
+  sort_order               = "DESC"
 
   filter {
     name   = "display_name"
-    values = ["^Canonical-Ubuntu-22.04-.*"]
+    values = ["^Canonical-Ubuntu-24.04-.*"]
     regex  = true
   }
 }
