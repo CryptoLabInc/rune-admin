@@ -9,19 +9,33 @@
 #   sudo bash install.sh [options]
 #
 # Options:
-#   --version <tag>      Install a specific release tag (default: latest)
-#   --force              Overwrite existing config and TLS certificates
-#   --non-interactive    Skip all prompts; supply secrets via env vars
-#   --uninstall          Stop the service, remove files, optionally delete data
+#   --version <tag>               Install a specific release tag (default: latest)
+#   --target <local|aws|gcp|oci>  Deploy locally or to a cloud provider (default: local)
+#   --install-dir <path>          CSP install directory (default: $HOME/rune-vault-<csp>)
+#   --force                       Overwrite existing config and TLS certificates
+#   --non-interactive             Skip all prompts; supply secrets via env vars
+#   --uninstall                   Stop the service, remove files, optionally delete data
 #
-# Non-interactive env vars:
+# Non-interactive env vars (local install):
 #   RUNEVAULT_TEAM_NAME              keys.index_name (required)
 #   RUNEVAULT_ENVECTOR_ENDPOINT      envector.endpoint (required)
 #   RUNEVAULT_ENVECTOR_API_KEY       envector.api_key
 #   RUNEVAULT_ENVECTOR_API_KEY_FILE  envector.api_key_file (alternative)
-#   RUNEVAULT_TEAM_SECRET            tokens.team_secret (auto-generated if unset)
 #   RUNEVAULT_TLS_CERT_PATH          Path to existing TLS cert (skips auto-gen)
 #   RUNEVAULT_TLS_KEY_PATH           Path to existing TLS key  (skips auto-gen)
+#   RUNEVAULT_TLS_HOSTNAME           Additional DNS SAN for auto-generated TLS cert
+#
+# Non-interactive env vars (CSP install — operator workstation):
+#   RUNEVAULT_ENVECTOR_ENDPOINT      enVector endpoint URL (required)
+#   RUNEVAULT_ENVECTOR_API_KEY       enVector API key (required)
+#   RUNEVAULT_TEAM_NAME              Vault index name (required)
+#   RUNEVAULT_TLS_HOSTNAME           Domain name for TLS SAN on VM cert (optional)
+#   RUNEVAULT_TARGET                 Pre-select target without interactive menu
+#   RUNEVAULT_INSTALL_DIR            Pre-set CSP install directory
+#   RUNEVAULT_CSP_TEAM_NAME          Team name for cloud resource naming
+#   RUNEVAULT_CSP_REGION             Cloud region
+#   RUNEVAULT_GCP_PROJECT_ID         GCP: project ID (required for GCP)
+#   RUNEVAULT_OCI_COMPARTMENT_ID     OCI: compartment OCID (required for OCI)
 #
 # Dev/testing env vars (set by scripts/install-dev.sh):
 #   RUNEVAULT_LOCAL_BINARY    Path to local binary; skips download + verification
@@ -39,12 +53,19 @@ CERT_REGEXP="^https://github.com/CryptoLabInc/rune-admin/.github/workflows/relea
 SERVICE_USER=runevault
 GRPC_PORT=50051
 
+RAW_BASE="https://raw.githubusercontent.com/${REPO}"
+DEFAULT_INSTALL_DIR_CSP_FMT="%s/rune-vault-%s"
+
 # Overridable by env (used by scripts/install-dev.sh)
 INSTALL_PREFIX="${RUNEVAULT_INSTALL_PREFIX:-/opt/runevault}"
 BINARY_DEST="${RUNEVAULT_BINARY_PATH:-/usr/local/bin/runevault}"
 SKIP_VERIFY="${RUNEVAULT_SKIP_VERIFY:-0}"
 LOCAL_BINARY="${RUNEVAULT_LOCAL_BINARY:-}"
 SKIP_SERVICE="${RUNEVAULT_SKIP_SERVICE:-0}"
+
+TARGET="${RUNEVAULT_TARGET:-}"
+INSTALL_DIR_CSP="${RUNEVAULT_INSTALL_DIR:-}"
+CSP_PUBLIC_IP=""
 
 # ── Color helpers ──────────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
@@ -69,6 +90,8 @@ while [[ $# -gt 0 ]]; do
     --uninstall)       UNINSTALL=1; shift ;;
     --force)           FORCE=1; shift ;;
     --non-interactive) NON_INTERACTIVE=1; shift ;;
+    --target)         TARGET="$2"; shift 2 ;;
+    --install-dir)    INSTALL_DIR_CSP="$2"; shift 2 ;;
     *) die "Unknown flag: $1" ;;
   esac
 done
@@ -158,6 +181,355 @@ run_uninstall() {
   fi
 
   success "Rune-Vault uninstalled."
+}
+
+# ── CSP helpers ───────────────────────────────────────────────────────────────
+
+_prompt() {
+  local varname=$1 label=$2 default=${3:-}
+  [[ -n "${!varname:-}" ]] && return 0
+  local val
+  if [[ -n "$default" ]]; then
+    read -r -p "${label} [${default}]: " val
+    printf -v "$varname" '%s' "${val:-$default}"
+  else
+    read -r -p "${label}: " val
+    printf -v "$varname" '%s' "$val"
+  fi
+}
+
+resolve_target() {
+  if [[ -n "${TARGET:-}" ]]; then
+    case "$TARGET" in
+      local|aws|gcp|oci) ;;
+      *) die "Invalid --target value: ${TARGET}. Valid: local, aws, gcp, oci." ;;
+    esac
+    return 0
+  fi
+  if [[ "$NON_INTERACTIVE" -eq 0 && -t 0 ]]; then
+    printf '\n'
+    printf '  Select installation target:\n'
+    printf '    1) Local (this machine)\n'
+    printf '    2) AWS\n'
+    printf '    3) GCP\n'
+    printf '    4) OCI\n'
+    printf '\n'
+    local choice
+    read -r -p "  Choice [1]: " choice
+    case "${choice:-1}" in
+      1|local) TARGET=local ;;
+      2|aws)   TARGET=aws ;;
+      3|gcp)   TARGET=gcp ;;
+      4|oci)   TARGET=oci ;;
+      *) die "Invalid choice: ${choice}" ;;
+    esac
+  else
+    TARGET=local
+  fi
+}
+
+csp_preflight() {
+  local csp=$1
+  info "Running CSP preflight checks for ${csp}..."
+
+  local missing=0
+  for tool in terraform ssh-keygen scp curl; do
+    command -v "$tool" >/dev/null 2>&1 || { warn "'${tool}' not found."; missing=1; }
+  done
+
+  local csp_cli
+  case "$csp" in
+    aws) csp_cli=aws ;;
+    gcp) csp_cli=gcloud ;;
+    oci) csp_cli=oci ;;
+  esac
+  command -v "$csp_cli" >/dev/null 2>&1 \
+    || { warn "CSP CLI '${csp_cli}' not found. Install and configure credentials."; missing=1; }
+
+  if [[ "$missing" -eq 1 ]]; then
+    die "Missing prerequisites above. Install them and re-run."
+  fi
+
+  success "CSP preflight passed."
+}
+
+csp_prompt_config() {
+  local csp=$1
+
+  if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
+    printf '\n'
+    printf '══════════════════════════════════════════════════════════\n'
+    printf '  Cloud deployment configuration\n'
+    printf '══════════════════════════════════════════════════════════\n'
+    printf '\n'
+    printf '  Create your enVector cluster at https://envector.io\n'
+    printf '  before proceeding. You will need the endpoint URL and\n'
+    printf '  API key from the dashboard.\n'
+    printf '\n'
+
+    _prompt ENVECTOR_ENDPOINT  "enVector endpoint"         ""
+    _prompt ENVECTOR_API_KEY   "enVector API key"           ""
+    _prompt VAULT_INDEX_NAME   "Vault index name"           "runecontext"
+    _prompt TEAM_NAME          "Team name (resource naming)" "default"
+    _prompt TLS_HOSTNAME       "TLS hostname / domain SAN (optional, Enter to skip)" ""
+
+    case "$csp" in
+      aws) _prompt CSP_REGION "AWS region"   "us-east-1"   ;;
+      gcp)
+        _prompt CSP_REGION    "GCP region"   "us-central1"
+        _prompt GCP_PROJECT_ID "GCP project ID" ""
+        ;;
+      oci)
+        _prompt CSP_REGION      "OCI region"          "us-ashburn-1"
+        _prompt OCI_COMPARTMENT_ID "OCI compartment OCID" ""
+        ;;
+    esac
+    printf '\n'
+  else
+    ENVECTOR_ENDPOINT="${RUNEVAULT_ENVECTOR_ENDPOINT:-}"
+    ENVECTOR_API_KEY="${RUNEVAULT_ENVECTOR_API_KEY:-}"
+    VAULT_INDEX_NAME="${RUNEVAULT_TEAM_NAME:-}"
+    TEAM_NAME="${RUNEVAULT_CSP_TEAM_NAME:-default}"
+    TLS_HOSTNAME="${RUNEVAULT_TLS_HOSTNAME:-}"
+    CSP_REGION="${RUNEVAULT_CSP_REGION:-}"
+    GCP_PROJECT_ID="${RUNEVAULT_GCP_PROJECT_ID:-}"
+    OCI_COMPARTMENT_ID="${RUNEVAULT_OCI_COMPARTMENT_ID:-}"
+
+    local missing=()
+    [[ -z "$ENVECTOR_ENDPOINT" ]] && missing+=("RUNEVAULT_ENVECTOR_ENDPOINT")
+    [[ -z "$ENVECTOR_API_KEY" ]]  && missing+=("RUNEVAULT_ENVECTOR_API_KEY")
+    [[ -z "$VAULT_INDEX_NAME" ]]  && missing+=("RUNEVAULT_TEAM_NAME")
+    [[ "$csp" = gcp && -z "$GCP_PROJECT_ID" ]]      && missing+=("RUNEVAULT_GCP_PROJECT_ID")
+    [[ "$csp" = oci && -z "$OCI_COMPARTMENT_ID" ]]  && missing+=("RUNEVAULT_OCI_COMPARTMENT_ID")
+    if [[ ${#missing[@]} -gt 0 ]]; then
+      printf 'ERROR: Missing required env vars:\n' >&2
+      for v in "${missing[@]}"; do printf '  %s\n' "$v" >&2; done
+      exit 1
+    fi
+  fi
+
+  [[ -n "$ENVECTOR_ENDPOINT" ]]  || die "enVector endpoint is required."
+  [[ -n "$ENVECTOR_API_KEY" ]]   || die "enVector API key is required."
+  [[ -n "$VAULT_INDEX_NAME" ]]   || die "Vault index name is required."
+  [[ "$csp" = gcp ]] && { [[ -n "$GCP_PROJECT_ID" ]]     || die "GCP project ID is required."; }
+  [[ "$csp" = oci ]] && { [[ -n "$OCI_COMPARTMENT_ID" ]] || die "OCI compartment OCID is required."; }
+
+}
+
+csp_generate_ssh_key() {
+  local key_path="${INSTALL_DIR_CSP}/ssh_key"
+  if [[ -f "$key_path" ]]; then
+    info "SSH key already exists: ${key_path}"
+    return 0
+  fi
+  ssh-keygen -t ed25519 -N '' -f "$key_path" -q
+  chmod 0600 "$key_path"
+  chmod 0644 "${key_path}.pub"
+  [[ -n "${SUDO_USER:-}" ]] \
+    && chown "${SUDO_USER}" "$key_path" "${key_path}.pub"
+  success "SSH key generated: ${key_path}"
+}
+
+_curl_retry_csp() {
+  local url=$1 dest=$2 i
+  for i in 1 2 3; do
+    curl -fsSL --connect-timeout 15 -o "$dest" "$url" && return 0
+    warn "Download attempt ${i} failed for $(basename "$url"). Retrying..."
+    sleep 5
+  done
+  die "Failed to download: ${url}"
+}
+
+csp_copy_terraform_files() {
+  local csp=$1
+  local script_dir
+  script_dir="$(cd "$(dirname "$0")" && pwd)"
+  local tf_src="${script_dir}/deployment/${csp}"
+  local tf_dest="${INSTALL_DIR_CSP}/deployment"
+  mkdir -p "$tf_dest"
+
+  local files
+  case "$csp" in
+    aws) files=(main.tf cloud-init.yaml) ;;
+    *)   files=(main.tf startup-script.sh) ;;
+  esac
+
+  for f in "${files[@]}"; do
+    if [[ -f "${tf_src}/${f}" ]]; then
+      cp "${tf_src}/${f}" "${tf_dest}/${f}"
+    else
+      info "Downloading ${f} from GitHub..."
+      _curl_retry_csp "${RAW_BASE}/${VERSION}/deployment/${csp}/${f}" "${tf_dest}/${f}"
+    fi
+  done
+
+  printf '*.tfvars\nterraform.tfstate*\n.terraform/\n' > "${INSTALL_DIR_CSP}/.gitignore"
+  [[ -n "${SUDO_USER:-}" ]] && chown -R "${SUDO_USER}" "$tf_dest" "${INSTALL_DIR_CSP}/.gitignore"
+  success "Terraform files ready: ${tf_dest}"
+}
+
+escape_tf() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+csp_render_tfvars() {
+  local csp=$1
+  local tf_dir="${INSTALL_DIR_CSP}/deployment"
+  local tfvars="${tf_dir}/terraform.tfvars"
+  local public_key=""
+
+  if [[ -f "${tf_dir}/terraform.tfstate" ]]; then
+    if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
+      local answer=n
+      read -r -p "terraform.tfstate already exists in ${tf_dir}. Re-apply? [y/N] " answer
+      [[ "$answer" =~ ^[Yy] ]] || { info "Aborted."; exit 0; }
+    else
+      warn "terraform.tfstate exists — re-applying (idempotent)."
+    fi
+  fi
+
+  [[ -f "${INSTALL_DIR_CSP}/ssh_key.pub" ]] \
+    && public_key=$(cat "${INSTALL_DIR_CSP}/ssh_key.pub")
+
+  {
+    printf 'team_name          = "%s"\n' "$(escape_tf "${TEAM_NAME:-default}")"
+    printf 'tls_mode           = "self-signed"\n'
+    printf 'tls_hostname       = "%s"\n' "$(escape_tf "${TLS_HOSTNAME:-}")"
+    printf 'envector_endpoint  = "%s"\n' "$(escape_tf "${ENVECTOR_ENDPOINT}")"
+    printf 'envector_api_key   = "%s"\n' "$(escape_tf "${ENVECTOR_API_KEY}")"
+    printf 'vault_index_name   = "%s"\n' "$(escape_tf "${VAULT_INDEX_NAME}")"
+    printf 'runevault_version  = "%s"\n' "$(escape_tf "${VERSION}")"
+    printf 'public_key         = "%s"\n' "$(escape_tf "${public_key}")"
+    printf 'region             = "%s"\n' "$(escape_tf "${CSP_REGION}")"
+    case "$csp" in
+      gcp) printf 'project_id         = "%s"\n' "$(escape_tf "${GCP_PROJECT_ID}")" ;;
+      oci) printf 'compartment_id     = "%s"\n' "$(escape_tf "${OCI_COMPARTMENT_ID}")" ;;
+    esac
+  } > "$tfvars"
+
+  chmod 0600 "$tfvars"
+  [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "$tfvars"
+  success "terraform.tfvars written: ${tfvars}"
+}
+
+csp_run_terraform() {
+  local tf_dir="${INSTALL_DIR_CSP}/deployment"
+  local tf_user="${SUDO_USER:-$(id -un)}"
+
+  info "Running terraform init..."
+  (cd "$tf_dir" && sudo -u "$tf_user" terraform init -input=false)
+  info "Running terraform apply..."
+  (cd "$tf_dir" && sudo -u "$tf_user" terraform apply -auto-approve -input=false)
+
+  chmod 0600 "${tf_dir}/terraform.tfstate" 2>/dev/null || true
+  chmod 0600 "${tf_dir}/terraform.tfstate.backup" 2>/dev/null || true
+  success "Terraform apply complete."
+}
+
+csp_post_deploy() {
+  local tf_dir="${INSTALL_DIR_CSP}/deployment"
+  local tf_user="${SUDO_USER:-$(id -un)}"
+  local key_path="${INSTALL_DIR_CSP}/ssh_key"
+
+  local public_ip
+  public_ip=$(cd "$tf_dir" && sudo -u "$tf_user" terraform output -raw vault_public_ip 2>/dev/null) \
+    || die "Could not read vault_public_ip from terraform output."
+  CSP_PUBLIC_IP="$public_ip"
+
+  info "Waiting for gRPC port 50051 on ${public_ip} (up to 10 min)..."
+  local elapsed=0
+  while [[ $elapsed -lt 600 ]]; do
+    bash -c "echo > /dev/tcp/${public_ip}/50051" 2>/dev/null && break || true
+    sleep 10
+    elapsed=$((elapsed + 10))
+  done
+  if [[ $elapsed -ge 600 ]]; then
+    warn "Timed out waiting for port 50051. The VM may still be initializing."
+  fi
+
+  sleep 30
+
+  info "Fetching CA certificate from VM..."
+  mkdir -p "${INSTALL_DIR_CSP}/certs"
+  [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "${INSTALL_DIR_CSP}/certs"
+  local scp_opts="-o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15"
+  local scp_prefix=""
+  [[ -n "${SUDO_USER:-}" ]] && scp_prefix="sudo -u ${SUDO_USER}"
+  local ca_fetched=0
+  for ssh_user in ubuntu opc; do
+    local attempt
+    for attempt in 1 2 3; do
+      # shellcheck disable=SC2086
+      if $scp_prefix scp $scp_opts -i "$key_path" \
+           "${ssh_user}@${public_ip}:/opt/runevault/certs/ca.pem" \
+           "${INSTALL_DIR_CSP}/certs/ca.pem" 2>/dev/null; then
+        ca_fetched=1
+        break 2
+      fi
+      sleep 10
+    done
+  done
+
+  if [[ "$ca_fetched" -eq 0 ]]; then
+    warn "Could not fetch CA cert automatically. Fetch it manually:"
+    warn "  scp -i ${key_path} ubuntu@${public_ip}:/opt/runevault/certs/ca.pem ${INSTALL_DIR_CSP}/certs/ca.pem"
+  else
+    success "CA certificate saved: ${INSTALL_DIR_CSP}/certs/ca.pem"
+  fi
+}
+
+csp_summary() {
+  local csp=$1
+  local tf_dir="${INSTALL_DIR_CSP}/deployment"
+  local key_path="${INSTALL_DIR_CSP}/ssh_key"
+  local public_ip="${CSP_PUBLIC_IP:-<unknown>}"
+
+  printf '\n'
+  success "Rune-Vault deployed to $(printf '%s' "$csp" | tr 'a-z' 'A-Z')."
+  printf '\n'
+  printf '  Endpoint:  %s:50051\n' "$public_ip"
+  printf '  CA cert:   %s\n'       "${INSTALL_DIR_CSP}/certs/ca.pem"
+  printf '  SSH:       ssh -i %s ubuntu@%s\n' "$key_path" "$public_ip"
+  printf '  Terraform: %s\n'       "$tf_dir"
+  printf '\n'
+  printf 'Tear down:\n'
+  printf '  cd %s && terraform destroy -auto-approve\n' "$tf_dir"
+  printf '\n'
+  printf 'Retrieve team_secret from VM (share securely with team members):\n'
+  printf '  ssh -i %s ubuntu@%s\n' "$key_path" "$public_ip"
+  printf '  sudo grep team_secret /opt/runevault/configs/runevault.conf\n'
+  printf '\n'
+  warn "BACKUP: Keep this safe — it cannot be recovered if lost:"
+  warn "  Terraform state: ${tf_dir}/terraform.tfstate"
+}
+
+csp_dispatch() {
+  local csp="$TARGET"
+  local user_home="${SUDO_USER:+$(eval echo ~"${SUDO_USER}")}"
+  user_home="${user_home:-$HOME}"
+  INSTALL_DIR_CSP="${INSTALL_DIR_CSP:-${user_home}/rune-vault-${csp}}"
+  mkdir -p "$INSTALL_DIR_CSP"
+  [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "$INSTALL_DIR_CSP"
+
+  csp_preflight "$csp"
+
+  if [[ -z "$VERSION" ]]; then
+    info "Resolving latest release version..."
+    VERSION=$(curl -fsSL \
+      "https://api.github.com/repos/${REPO}/releases/latest" \
+      | grep '"tag_name"' | head -1 \
+      | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+    [[ -n "$VERSION" ]] || die "Failed to resolve latest version from GitHub API."
+    info "Latest version: ${VERSION}"
+  fi
+
+  csp_prompt_config "$csp"
+  [[ -n "$VERSION" ]] || die "runevault version is required (use --version <tag>)."
+  csp_generate_ssh_key
+  csp_copy_terraform_files "$csp"
+  csp_render_tfvars "$csp"
+  csp_run_terraform
+  csp_post_deploy
+  csp_summary "$csp"
+  exit 0
 }
 
 # ── Tool auto-install ──────────────────────────────────────────────────────────
@@ -531,6 +903,7 @@ generate_tls_certs() {
   printf 'DNS.3 = runevault\n'                       >> "$tmpconf"
   printf 'IP.1  = 127.0.0.1\n'                       >> "$tmpconf"
   [[ -n "$public_ip" ]] && printf 'IP.2  = %s\n' "$public_ip" >> "$tmpconf"
+  [[ -n "${RUNEVAULT_TLS_HOSTNAME:-}" ]] && printf 'DNS.4 = %s\n' "${RUNEVAULT_TLS_HOSTNAME}" >> "$tmpconf"
 
   openssl genrsa -out "${cert_dir}/ca.key" 4096 2>/dev/null
   openssl req -new -x509 \
@@ -855,10 +1228,9 @@ post_install() {
 }
 
 # ── Main ───────────────────────────────────────────────────────────────────────
-if [[ "$UNINSTALL" -eq 1 ]]; then
-  run_uninstall
-  exit 0
-fi
+[[ "$UNINSTALL" -eq 1 ]] && { run_uninstall; exit 0; }
+resolve_target
+[[ "$TARGET" != "local" ]] && csp_dispatch
 
 preflight
 download_and_verify
