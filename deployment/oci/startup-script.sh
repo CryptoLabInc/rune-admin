@@ -31,5 +31,7 @@ done
 
 bash /tmp/install.sh --target local --non-interactive --version "${runevault_version}"
 
+usermod -aG runevault ubuntu
+
 rm -f /etc/profile.d/runevault-installer-env.sh
 echo "=== completed at $(date) ==="

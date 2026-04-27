@@ -829,15 +829,6 @@ _create_system_user() {
 
 _add_invoking_user_to_group() {
   local invoking_user="${SUDO_USER:-}"
-  if [[ -z "$invoking_user" && "$OS_SLUG" = linux ]]; then
-    local candidate
-    for candidate in ubuntu ec2-user debian opc; do
-      if id -u "$candidate" >/dev/null 2>&1; then
-        invoking_user="$candidate"
-        break
-      fi
-    done
-  fi
   [[ -z "$invoking_user" ]] && return 0
   if [[ "$OS_SLUG" = linux ]]; then
     usermod -aG "$SERVICE_USER" "$invoking_user"
