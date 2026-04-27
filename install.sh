@@ -485,9 +485,13 @@ csp_summary() {
   printf 'Tear down:\n'
   printf '  cd %s && terraform destroy -auto-approve\n' "$tf_dir"
   printf '\n'
-  printf 'Retrieve team_secret from VM (share securely with team members):\n'
+  printf 'Next steps (SSH into the VM, then run on the VM):\n'
   printf '  ssh -i %s ubuntu@%s\n' "$key_path" "$public_ip"
-  printf '  sudo grep team_secret /opt/runevault/configs/runevault.conf\n'
+  printf '\n'
+  printf '  Issue a token:  runevault token issue --user <name> --role member\n'
+  printf '  Check status:   runevault status\n'
+  printf '  View logs:      journalctl -u runevault -f\n'
+  printf '  Manage daemon:  sudo systemctl start|stop|restart runevault\n'
   printf '\n'
   warn "BACKUP: Keep this safe — it cannot be recovered if lost:"
   warn "  Terraform state: ${tf_dir}/terraform.tfstate"
