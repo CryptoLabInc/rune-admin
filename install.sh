@@ -429,6 +429,7 @@ csp_run_terraform() {
 }
 
 csp_post_deploy() {
+  local csp=$1
   local tf_dir="${INSTALL_DIR_CSP}/deployment"
   local tf_user="${SUDO_USER:-$(id -un)}"
   local key_path="${INSTALL_DIR_CSP}/ssh_key"
@@ -438,46 +439,33 @@ csp_post_deploy() {
     || die "Could not read vault_public_ip from terraform output."
   CSP_PUBLIC_IP="$public_ip"
 
-  info "Waiting for gRPC port 50051 on ${public_ip} (up to 10 min)..."
-  local elapsed=0
-  while [[ $elapsed -lt 600 ]]; do
-    bash -c "echo > /dev/tcp/${public_ip}/50051" 2>/dev/null && break || true
-    sleep 10
-    elapsed=$((elapsed + 10))
-  done
-  if [[ $elapsed -ge 600 ]]; then
-    warn "Timed out waiting for port 50051. The VM may still be initializing."
-  fi
+  local ssh_user
+  case "$csp" in
+    oci) ssh_user=opc ;;
+    *)   ssh_user=ubuntu ;;
+  esac
 
-  sleep 30
-
-  info "Fetching CA certificate from VM..."
   mkdir -p "${INSTALL_DIR_CSP}/certs"
   [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "${INSTALL_DIR_CSP}/certs"
   local scp_opts="-o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15"
   local scp_prefix=""
   [[ -n "${SUDO_USER:-}" ]] && scp_prefix="sudo -u ${SUDO_USER}"
-  local ca_fetched=0
-  for ssh_user in ubuntu opc; do
-    local attempt
-    for attempt in 1 2 3; do
-      # shellcheck disable=SC2086
-      if $scp_prefix scp $scp_opts -i "$key_path" \
-           "${ssh_user}@${public_ip}:/opt/runevault/certs/ca.pem" \
-           "${INSTALL_DIR_CSP}/certs/ca.pem" 2>/dev/null; then
-        ca_fetched=1
-        break 2
-      fi
-      sleep 10
-    done
+
+  local timeout_secs=1800
+  info "Waiting for VM install to finish and CA cert to appear (up to $((timeout_secs / 60)) min)..."
+  local deadline=$(( $(date +%s) + timeout_secs ))
+  while [[ $(date +%s) -lt $deadline ]]; do
+    # shellcheck disable=SC2086
+    if $scp_prefix scp $scp_opts -i "$key_path" \
+         "${ssh_user}@${public_ip}:/opt/runevault/certs/ca.pem" \
+         "${INSTALL_DIR_CSP}/certs/ca.pem" 2>/dev/null; then
+      success "CA certificate saved: ${INSTALL_DIR_CSP}/certs/ca.pem"
+      return 0
+    fi
+    sleep 15
   done
 
-  if [[ "$ca_fetched" -eq 0 ]]; then
-    warn "Could not fetch CA cert automatically. Fetch it manually:"
-    warn "  scp -i ${key_path} ubuntu@${public_ip}:/opt/runevault/certs/ca.pem ${INSTALL_DIR_CSP}/certs/ca.pem"
-  else
-    success "CA certificate saved: ${INSTALL_DIR_CSP}/certs/ca.pem"
-  fi
+  die "Timed out waiting for VM-side install. SSH in and check /var/log/runevault-install.log: ssh -i ${key_path} ${ssh_user}@${public_ip}"
 }
 
 csp_summary() {
@@ -531,7 +519,7 @@ csp_dispatch() {
   csp_copy_terraform_files "$csp"
   csp_render_tfvars "$csp"
   csp_run_terraform
-  csp_post_deploy
+  csp_post_deploy "$csp"
   csp_summary "$csp"
   exit 0
 }
@@ -841,6 +829,15 @@ _create_system_user() {
 
 _add_invoking_user_to_group() {
   local invoking_user="${SUDO_USER:-}"
+  if [[ -z "$invoking_user" && "$OS_SLUG" = linux ]]; then
+    local candidate
+    for candidate in ubuntu ec2-user debian opc; do
+      if id -u "$candidate" >/dev/null 2>&1; then
+        invoking_user="$candidate"
+        break
+      fi
+    done
+  fi
   [[ -z "$invoking_user" ]] && return 0
   if [[ "$OS_SLUG" = linux ]]; then
     usermod -aG "$SERVICE_USER" "$invoking_user"
