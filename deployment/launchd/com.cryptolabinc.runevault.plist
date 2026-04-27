@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.cryptolabinc.runevault</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/runevault</string>
+    <string>daemon</string>
+    <string>start</string>
+    <string>--config</string>
+    <string>/opt/runevault/configs/runevault.conf</string>
+  </array>
+
+  <key>UserName</key>
+  <string>runevault</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>/opt/runevault/logs/runevault.stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/opt/runevault/logs/runevault.stderr.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>
