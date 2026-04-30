@@ -1,0 +1,10 @@
+#cloud-config
+# Dev mode: installs prereqs only. install.sh is injected via SCP by install-dev.sh.
+package_update: true
+packages: [ca-certificates, curl, openssl]
+
+runcmd:
+  - |
+      arch=$(dpkg --print-architecture); [ "$arch" = "amd64" ] && carch=amd64 || carch=arm64
+      curl -fsSL "https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-$${carch}" -o /usr/local/bin/cosign
+      chmod 0755 /usr/local/bin/cosign
