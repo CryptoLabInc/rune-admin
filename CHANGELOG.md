@@ -13,13 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Production installer `install.sh` with `--target local|aws|gcp|oci`, Sigstore signature verification, systemd/launchd service registration, and `--uninstall` flow
+- Production installer `install.sh` with `--target local|aws|gcp|oci`, SHA256SUMS checksum verification, systemd/launchd service registration, and `--uninstall` flow
 - Dev installer `scripts/install-dev.sh` (structural sibling of `install.sh`) for local/CSP testing without GitHub releases
 - CSP provisioning via Terraform for AWS, GCP, and OCI: preflight CLI/auth checks, cloud-init bootstrap, CA-cert SCP polling
 - CSP uninstall flow that wraps `terraform destroy`
 - `runevault status` (daemon + admin-socket health) and `runevault logs` (audit log tail) subcommands
 - `runevault` group lets members run the CLI without `sudo`
-- Multi-platform release pipeline (linux/darwin × amd64/arm64) with `SHA256SUMS` + Sigstore keyless signing
+- Multi-platform release pipeline (linux/darwin × amd64/arm64) with `SHA256SUMS` checksum manifest
 - `EnsureVault` startup hook to activate keys and ensure index on first run
 
 ### Changed

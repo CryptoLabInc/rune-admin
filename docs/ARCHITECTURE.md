@@ -398,7 +398,7 @@ Cloud Resources Created
     ├── Compute Instance (VM)
     │   ├── OS: Ubuntu 24.04 LTS
     │   └── Software (installed via cloud-init startup script):
-    │       ├── runevault binary (Sigstore-verified)
+    │       ├── runevault binary (SHA256SUMS-verified)
     │       └── runevault.service (systemd) registered
     │
     ├── Networking

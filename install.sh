@@ -37,8 +37,8 @@
 #   RUNEVAULT_OCI_COMPARTMENT_ID     OCI: compartment OCID (required for OCI)
 #
 # Dev/testing env vars (set by scripts/install-dev.sh):
-#   RUNEVAULT_LOCAL_BINARY    Path to local binary; skips download + verification
-#   RUNEVAULT_SKIP_VERIFY     Set to 1 to skip cosign verification
+#   RUNEVAULT_LOCAL_BINARY    Path to local binary; skips download + checksum verify
+#   RUNEVAULT_SKIP_VERIFY     Set to 1 to skip checksum verification (dev only)
 #   RUNEVAULT_INSTALL_PREFIX  Override /opt/runevault (default)
 #   RUNEVAULT_BINARY_PATH     Override /usr/local/bin/runevault (default)
 #   RUNEVAULT_SKIP_SERVICE    Set to 1 to skip systemd/launchd installation
@@ -47,8 +47,6 @@ set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 REPO=CryptoLabInc/rune-admin
-OIDC_ISSUER=https://token.actions.githubusercontent.com
-CERT_REGEXP="^https://github.com/CryptoLabInc/rune-admin/.github/workflows/release.yaml@"
 SERVICE_USER=runevault
 GRPC_PORT=50051
 
@@ -635,15 +633,6 @@ _install_tool() {
   local tool=$1
   info "Installing ${tool}..."
   case "$OS_SLUG:$tool" in
-    linux:cosign)
-      # Download pre-built binary from sigstore releases (no apt repo needed)
-      local arch_suffix=amd64
-      [[ "$ARCH_SLUG" = arm64 ]] && arch_suffix=arm64
-      curl -fsSL \
-        "https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-${arch_suffix}" \
-        -o /usr/local/bin/cosign
-      chmod 0755 /usr/local/bin/cosign
-      ;;
     linux:openssl)  _pkg_install openssl ;;
     linux:sha256sum) _pkg_install coreutils ;;
     linux:terraform)
@@ -663,7 +652,6 @@ _install_tool() {
       install -m 0755 "${tmpdir}/terraform" /usr/local/bin/terraform
       rm -rf "${tmpdir}"
       ;;
-    darwin:cosign)  _brew install cosign ;;
     darwin:openssl) _brew install openssl ;;
     darwin:terraform) _brew install terraform ;;
     darwin:shasum)
@@ -685,7 +673,6 @@ preflight() {
   [[ "$(id -u)" -eq 0 ]] || die "This installer must be run as root (use sudo)."
 
   local tools=(curl)
-  [[ "$SKIP_VERIFY" -eq 0 && -z "$LOCAL_BINARY" ]] && tools+=(cosign)
   if [[ "$OS_SLUG" = linux ]]; then
     tools+=(sha256sum systemctl)
   else
@@ -728,10 +715,8 @@ preflight() {
         printf 'Install them manually and re-run the installer:\n' >&2
         for tool in "${missing[@]}"; do
           case "$OS_SLUG:$tool" in
-            linux:cosign)   printf '  cosign:    https://docs.sigstore.dev/cosign/system_config/installation/\n' >&2 ;;
             linux:openssl)  printf '  openssl:   apt install openssl\n' >&2 ;;
             linux:sha256sum) printf '  sha256sum: apt install coreutils\n' >&2 ;;
-            darwin:cosign)  printf '  cosign:    brew install cosign\n' >&2 ;;
             darwin:openssl) printf '  openssl:   brew install openssl\n' >&2 ;;
           esac
         done
@@ -826,31 +811,16 @@ download_and_verify() {
   local base_url="https://github.com/${REPO}/releases/download/${VERSION}"
 
   info "Downloading ${archive}..."
-  _curl_retry "${base_url}/${archive}"         "$SCRATCH/${archive}"
-  _curl_retry "${base_url}/SHA256SUMS"         "$SCRATCH/SHA256SUMS"
-  _curl_retry "${base_url}/SHA256SUMS.sig"     "$SCRATCH/SHA256SUMS.sig"
-  _curl_retry "${base_url}/SHA256SUMS.pem"     "$SCRATCH/SHA256SUMS.pem"
+  _curl_retry "${base_url}/${archive}"  "$SCRATCH/${archive}"
+  _curl_retry "${base_url}/SHA256SUMS"  "$SCRATCH/SHA256SUMS"
 
   if [[ "$SKIP_VERIFY" -eq 1 ]]; then
-    warn "SKIP_VERIFY=1: skipping cosign verification (development only)."
+    warn "SKIP_VERIFY=1: skipping checksum verification (development only)."
   else
-    info "Verifying release signature..."
-    local cosign_err
-    cosign_err=$(mktemp)
-    cosign verify-blob \
-      --signature   "$SCRATCH/SHA256SUMS.sig" \
-      --certificate "$SCRATCH/SHA256SUMS.pem" \
-      --certificate-oidc-issuer "$OIDC_ISSUER" \
-      --certificate-identity-regexp "$CERT_REGEXP" \
-      "$SCRATCH/SHA256SUMS" 2>"$cosign_err" \
-      || { cat "$cosign_err" >&2
-           die "Signature verification failed — aborting before any installation."; }
-    success "Signature verified."
+    info "Verifying checksum..."
+    _checksum_verify "$SCRATCH/SHA256SUMS" "$SCRATCH/${archive}"
+    success "Checksum verified."
   fi
-
-  info "Verifying checksum..."
-  _checksum_verify "$SCRATCH/SHA256SUMS" "$SCRATCH/${archive}"
-  success "Checksum verified."
 
   info "Extracting binary..."
   tar -xzf "$SCRATCH/${archive}" -C "$SCRATCH" ./runevault

@@ -26,7 +26,7 @@ For system architecture and data flow details, see [docs/ARCHITECTURE.md](docs/A
 1. **enVector Cloud account** at [https://envector.io](https://envector.io) — Cluster Endpoint and API Key
 2. **Cloud provider account** (AWS, GCP, or OCI) — only needed for cloud deployment
 
-The [installer](#quick-start) auto-checks for the tools it needs (`cosign` for signature verification, plus `terraform` and the relevant cloud CLI when targeting a CSP).
+The [installer](#quick-start) auto-checks for the tools it needs (`terraform` and the relevant cloud CLI when targeting a CSP).
 
 ### For Team Members
 
@@ -40,8 +40,8 @@ Team members install [Rune](https://github.com/CryptoLabInc/rune) from Claude Ma
 
 ### 1. Install Rune-Vault
 
-The interactive installer downloads a Sigstore-signed `runevault` binary,
-verifies the signature, renders `runevault.conf`, generates TLS certs,
+The interactive installer downloads the `runevault` binary, verifies its
+`SHA256SUMS` checksum, renders `runevault.conf`, generates TLS certs,
 and registers a `runevault` service (systemd on Linux, launchd on macOS):
 
 ```bash
@@ -58,8 +58,9 @@ The installer prompts for team name, enVector endpoint, and CSP-specific
 inputs (region, GCP project ID, OCI compartment OCID). Use `--non-interactive`
 plus the `RUNEVAULT_*` env vars listed in [`install.sh`](install.sh) for CI.
 
-For tighter supply-chain assurance, download `install.sh` first and verify
-its signature before running it — see [Release Signature Verification](#release-signature-verification).
+If you'd rather inspect the script before running it, download `install.sh`
+and the `SHA256SUMS` file from the release page first, then run `install.sh`
+with the binary it pulls down — see [Release Checksum Verification](#release-checksum-verification).
 
 ### 2. Verify Deployment
 
@@ -155,27 +156,18 @@ Vault communications MUST use TLS. The installer automatically configures TLS ce
 - **EncKey/EvalKey**: Safe to distribute (public keys)
 - Per-agent metadata encryption uses HKDF-derived DEKs (no separate key file)
 
-### Release Signature Verification
+### Release Checksum Verification
 
-Every GitHub release ships `SHA256SUMS`, `SHA256SUMS.sig`, and `SHA256SUMS.pem`.
-The checksum file is signed keylessly via [Sigstore](https://sigstore.dev) from the
-`release.yaml` workflow. Verify before installing:
+Every GitHub release ships a `SHA256SUMS` file alongside the binaries.
+`install.sh` downloads it and runs `sha256sum --check` automatically. To
+verify by hand:
 
 ```bash
-cosign verify-blob \
-  --signature SHA256SUMS.sig \
-  --certificate SHA256SUMS.pem \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  --certificate-identity-regexp "^https://github.com/CryptoLabInc/rune-admin/.github/workflows/release.yaml@" \
-  SHA256SUMS
-
 sha256sum --check --ignore-missing SHA256SUMS
 ```
 
-The `--certificate-oidc-issuer` and `--certificate-identity-regexp` flags are
-required to pin the signature to this repository's workflow — without them,
-any Fulcio-issued certificate (including one from a different repository) would
-pass verification.
+Trust in the `SHA256SUMS` file itself relies on GitHub's HTTPS download
+of the release page.
 
 ## Deployment Targets
 

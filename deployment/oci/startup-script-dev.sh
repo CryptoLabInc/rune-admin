@@ -12,8 +12,5 @@ for i in $(seq 1 30); do
   echo "apt retry $i..." && sleep 10
 done
 
-arch=$(dpkg --print-architecture); [ "$arch" = "amd64" ] && carch=amd64 || carch=arm64
-curl -fsSL "https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-$${carch}" -o /usr/local/bin/cosign
-chmod 0755 /usr/local/bin/cosign
-
+touch /var/run/runevault-dev-ready
 echo "=== prereqs ready at $(date), waiting for install-dev.sh injection ==="

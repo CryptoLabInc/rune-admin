@@ -257,7 +257,7 @@ rune-admin/
 │   └── generate-test-fixtures.py  # Generates GPG-encrypted test fixtures
 ├── tests/                         # Encrypted fixture archive (see FIXTURES.md)
 ├── docs/ARCHITECTURE.md           # Architecture & data flow
-└── install.sh                     # Production installer (Sigstore-verified)
+└── install.sh                     # Production installer (SHA256SUMS-verified)
 ```
 
 ## Vault Architecture

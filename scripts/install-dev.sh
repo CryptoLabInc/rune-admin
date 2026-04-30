@@ -292,7 +292,6 @@ dev_local_install() {
   dev_local_prompt_config
 
   export RUNEVAULT_LOCAL_BINARY="$LOCAL_BINARY_HOST"
-  export RUNEVAULT_SKIP_VERIFY=1
   export RUNEVAULT_TEAM_NAME
   export RUNEVAULT_ENVECTOR_ENDPOINT
   export RUNEVAULT_ENVECTOR_API_KEY
@@ -554,14 +553,14 @@ dev_csp_upload_and_install() {
     || die "Timed out waiting for SSH. ssh -i ${key_path} ${ssh_user}@${public_ip}"
   success "SSH reachable."
 
-  # 2. Wait for cloud-init-dev to finish (cosign is the last thing it installs).
-  info "Waiting for cloud-init-dev to finish (cosign + apt prereqs)..."
+  # 2. Wait for cloud-init-dev to finish — sentinel file is touched at end of runcmd.
+  info "Waiting for cloud-init-dev to finish (apt prereqs + sentinel)..."
   deadline=$(( $(date +%s) + 600 ))
   local prereqs_ready=0
   while [[ $(date +%s) -lt $deadline ]]; do
     # shellcheck disable=SC2086
     if $ssh_prefix ssh $ssh_opts -i "$key_path" "${ssh_user}@${public_ip}" \
-         "test -x /usr/local/bin/cosign && test -x /usr/bin/openssl" 2>/dev/null; then
+         "test -e /var/run/runevault-dev-ready" 2>/dev/null; then
       prereqs_ready=1
       break
     fi
@@ -590,7 +589,6 @@ dev_csp_upload_and_install() {
   local remote_cmd
   remote_cmd="sudo \
     RUNEVAULT_LOCAL_BINARY=/tmp/runevault-${TARGET_OS}-${TARGET_ARCH} \
-    RUNEVAULT_SKIP_VERIFY=1 \
     RUNEVAULT_TEAM_NAME='${tn}' \
     RUNEVAULT_ENVECTOR_ENDPOINT='${ee}' \
     RUNEVAULT_ENVECTOR_API_KEY='${ek}' \

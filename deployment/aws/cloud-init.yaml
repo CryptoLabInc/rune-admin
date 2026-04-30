@@ -12,10 +12,6 @@ write_files:
 
 runcmd:
   - exec > /var/log/runevault-install.log 2>&1
-  - |
-      arch=$(dpkg --print-architecture); [ "$arch" = "amd64" ] && carch=amd64 || carch=arm64
-      curl -fsSL "https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-$${carch}" -o /usr/local/bin/cosign
-      chmod 0755 /usr/local/bin/cosign
   - set -a; . /etc/profile.d/runevault-installer-env.sh; set +a
   - |
       INSTALL_URL="https://raw.githubusercontent.com/CryptoLabInc/rune-admin/${runevault_version}/install.sh"
