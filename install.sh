@@ -14,7 +14,9 @@
 #   --install-dir <path>          CSP install directory (default: $HOME/rune-vault-<csp>)
 #   --force                       Overwrite existing config and TLS certificates
 #   --non-interactive             Skip all prompts; supply secrets via env vars
-#   --uninstall                   Stop the service, remove files, optionally delete data
+#   --uninstall                   Tear down the install. Local: stop service + remove files
+#                                 (optionally delete data). CSP: run 'terraform destroy' and
+#                                 optionally remove the install directory.
 #
 # Non-interactive env vars (local install):
 #   RUNEVAULT_TEAM_NAME              keys.index_name (required)
@@ -111,7 +113,13 @@ esac
 # ── Uninstall flow ─────────────────────────────────────────────────────────────
 run_uninstall() {
   info "Uninstalling Rune-Vault..."
-  [[ "$(id -u)" -eq 0 ]] || die "Uninstall must be run as root (use sudo)."
+
+  if [[ "$TARGET" != "local" ]]; then
+    csp_uninstall "$TARGET"
+    return 0
+  fi
+
+  [[ "$(id -u)" -eq 0 ]] || die "Local uninstall must be run as root (use sudo)."
 
   if [[ "$OS_SLUG" = linux ]]; then
     if systemctl is-active --quiet runevault.service 2>/dev/null; then
@@ -204,8 +212,10 @@ resolve_target() {
     return 0
   fi
   if [[ "$NON_INTERACTIVE" -eq 0 && -t 0 ]]; then
+    local action="installation"
+    [[ "$UNINSTALL" -eq 1 ]] && action="uninstall"
     printf '\n'
-    printf '  Select installation target:\n'
+    printf '  Select %s target:\n' "$action"
     printf '    1) Local (this machine)\n'
     printf '    2) AWS\n'
     printf '    3) GCP\n'
@@ -515,6 +525,62 @@ csp_summary() {
   printf '\n'
   warn "BACKUP: Keep this safe — it cannot be recovered if lost:"
   warn "  Terraform state: ${tf_dir}/terraform.tfstate"
+}
+
+csp_uninstall() {
+  local csp=$1
+  local user_home="${SUDO_USER:+$(eval echo ~"${SUDO_USER}")}"
+  user_home="${user_home:-$HOME}"
+  INSTALL_DIR_CSP="${INSTALL_DIR_CSP:-${user_home}/rune-vault-${csp}}"
+  local tf_dir="${INSTALL_DIR_CSP}/deployment"
+
+  if [[ ! -f "${tf_dir}/terraform.tfstate" ]]; then
+    warn "No terraform.tfstate found at ${tf_dir}/terraform.tfstate — nothing to destroy."
+    return 0
+  fi
+
+  command -v terraform >/dev/null 2>&1 \
+    || die "terraform is required to destroy CSP infrastructure. Install it: https://developer.hashicorp.com/terraform/install"
+
+  printf '\n'
+  warn "This will run 'terraform destroy' on the ${csp} infrastructure at:"
+  warn "  ${tf_dir}"
+  warn "All cloud resources (VM, network, etc.) will be removed permanently."
+  printf '\n'
+
+  if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
+    local answer=n
+    read -r -p "Continue? [y/N] " answer
+    [[ "$answer" =~ ^[Yy] ]] || { info "Aborted."; exit 0; }
+  fi
+
+  local tf_user="${SUDO_USER:-$(id -un)}"
+  info "Running terraform destroy in ${tf_dir}..."
+  (cd "$tf_dir" && sudo -u "$tf_user" terraform destroy -auto-approve)
+  success "Cloud infrastructure destroyed."
+
+  printf '\n'
+  warn "The following directory contains terraform state, SSH keys, and CA cert:"
+  warn "  ${INSTALL_DIR_CSP}/"
+  printf '\n'
+
+  if [[ "$NON_INTERACTIVE" -eq 1 ]]; then
+    warn "Non-interactive mode: directory preserved. Remove manually: rm -rf ${INSTALL_DIR_CSP}"
+  else
+    local answer=n
+    read -r -p "Delete the entire directory? [y/N] " answer
+    case "$answer" in
+      [Yy]*)
+        rm -rf "${INSTALL_DIR_CSP}"
+        success "Directory removed: ${INSTALL_DIR_CSP}"
+        ;;
+      *)
+        info "Directory preserved: ${INSTALL_DIR_CSP}"
+        ;;
+    esac
+  fi
+
+  success "Rune-Vault ${csp} infrastructure uninstalled."
 }
 
 csp_dispatch() {
@@ -1262,8 +1328,8 @@ post_install() {
 }
 
 # ── Main ───────────────────────────────────────────────────────────────────────
-[[ "$UNINSTALL" -eq 1 ]] && { run_uninstall; exit 0; }
 resolve_target
+[[ "$UNINSTALL" -eq 1 ]] && { run_uninstall; exit 0; }
 [[ "$TARGET" != "local" ]] && csp_dispatch
 
 preflight
