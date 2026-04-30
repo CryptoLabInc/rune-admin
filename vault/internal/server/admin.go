@@ -53,13 +53,7 @@ func AdminFromConfig(ctx context.Context, v *Vault) (func(context.Context) error
 		return nil, fmt.Errorf("admin: chmod socket: %w", err)
 	}
 
-	onShutdown := func() {
-		go func() {
-			time.Sleep(100 * time.Millisecond) // let response flush
-			_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
-		}()
-	}
-	mux := buildAdminMux(v, onShutdown)
+	mux := buildAdminMux(v)
 	srv := &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
@@ -83,33 +77,15 @@ func AdminFromConfig(ctx context.Context, v *Vault) (func(context.Context) error
 }
 
 // buildAdminMux wires the admin route table. Exposed for tests.
-// onShutdown is called (in a goroutine, after response) when POST /shutdown is
-// received; pass nil to disable the endpoint (tests).
-func buildAdminMux(v *Vault, onShutdown func()) http.Handler {
+// Daemon lifecycle (start/stop/restart) is owned by the OS service manager
+// (systemd / launchd) and is intentionally not exposed over the admin socket.
+func buildAdminMux(v *Vault) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
-	mux.HandleFunc("POST /shutdown", func(w http.ResponseWriter, r *http.Request) {
-		if onShutdown == nil {
-			writeError(w, http.StatusNotImplemented, "shutdown not enabled")
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]string{"message": "shutdown initiated"})
-		onShutdown()
-	})
-
-	mux.HandleFunc("POST /restart", func(w http.ResponseWriter, r *http.Request) {
-		if onShutdown == nil {
-			writeError(w, http.StatusNotImplemented, "restart not enabled")
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]string{"message": "restart initiated"})
-		v.RequestRestart()
-		onShutdown()
-	})
 	mux.HandleFunc("GET /tokens", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"tokens": v.Tokens().ListTokens()})
 	})

@@ -32,7 +32,7 @@ func newAdminTestVault(t *testing.T) *Vault {
 func adminTestServer(t *testing.T) (*httptest.Server, *Vault) {
 	t.Helper()
 	v := newAdminTestVault(t)
-	ts := httptest.NewServer(buildAdminMux(v, nil))
+	ts := httptest.NewServer(buildAdminMux(v))
 	t.Cleanup(ts.Close)
 	return ts, v
 }

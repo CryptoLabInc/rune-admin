@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -34,11 +33,6 @@ type Vault struct {
 	// Cached bundle pieces from disk. Re-read on demand to pick up
 	// rotated keys without restarting; kept here for zero-copy reuse.
 	bundleParams crypto.KeysParams
-
-	// restartRequested is set by the admin /restart endpoint so that
-	// Serve can return ErrRestartRequested and the process exits with
-	// code 1, triggering service-manager (systemd/launchd) restart.
-	restartRequested atomic.Bool
 }
 
 // NewVault wires all subsystems together. Caller is responsible for Close.
@@ -64,13 +58,6 @@ func defaultKeyID(_ *Config) string {
 
 // Tokens exposes the token store for the admin UDS server.
 func (v *Vault) Tokens() *tokens.Store { return v.tokens }
-
-// RequestRestart marks the vault for restart. Serve returns ErrRestartRequested
-// after the current shutdown sequence completes.
-func (v *Vault) RequestRestart() { v.restartRequested.Store(true) }
-
-// RestartRequested reports whether RequestRestart was called.
-func (v *Vault) RestartRequested() bool { return v.restartRequested.Load() }
 
 // Config exposes the resolved config (e.g., for status reporting).
 func (v *Vault) Config() *Config { return v.cfg }

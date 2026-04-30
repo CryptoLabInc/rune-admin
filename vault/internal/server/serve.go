@@ -21,12 +21,6 @@ import (
 	pb "github.com/CryptoLabInc/rune-admin/vault/pkg/vaultpb"
 )
 
-// ErrRestartRequested is returned by Serve when the admin POST /restart
-// endpoint was called. The caller (daemon start) should propagate this as a
-// non-zero exit so the service manager (systemd Restart=on-failure / launchd
-// KeepAlive) restarts the process.
-var ErrRestartRequested = errors.New("restart requested by admin socket")
-
 // Serve starts the gRPC + admin UDS listeners with the given Vault and
 // blocks until ctx is cancelled or a SIGTERM/SIGINT is received. The
 // admin listener is constructed by AdminFactory; passing nil disables the
@@ -120,9 +114,6 @@ func Serve(ctx context.Context, v *Vault, adminFactory AdminFactory) error {
 		shCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = adminShutdown(shCtx)
-	}
-	if v.RestartRequested() {
-		return ErrRestartRequested
 	}
 	return nil
 }
