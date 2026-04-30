@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,7 +115,9 @@ func LoadConfig(override string) (*Config, error) {
 	}
 	cfg.Source = path
 
-	checkSecretMode(path, "runevault.conf")
+	if err := checkSecretMode(path, "runevault.conf"); err != nil {
+		return nil, err
+	}
 
 	if err := cfg.Resolve(); err != nil {
 		return nil, fmt.Errorf("resolve config %s: %w", path, err)
@@ -145,8 +146,9 @@ func resolveConfigPath(override string) (path string, searched []string, err err
 	return "", searched, fmt.Errorf("config file not found (searched: %s)", strings.Join(searched, ", "))
 }
 
-// Resolve materialises *_file indirections into their inline equivalents
-// and warns about any non-0600 secret files. Idempotent.
+// Resolve materialises *_file indirections into their inline equivalents.
+// Returns an error if any referenced secret file has a permissive mode
+// (anything looser than 0o640). Idempotent.
 func (c *Config) Resolve() error {
 	if c.Envector.APIKeyFile != "" {
 		val, err := readSecretFile(c.Envector.APIKeyFile, "envector.api_key_file")
@@ -168,7 +170,9 @@ func (c *Config) Resolve() error {
 }
 
 func readSecretFile(path, label string) (string, error) {
-	checkSecretMode(path, label)
+	if err := checkSecretMode(path, label); err != nil {
+		return "", err
+	}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("read %s %s: %w", label, path, err)
@@ -176,22 +180,20 @@ func readSecretFile(path, label string) (string, error) {
 	return strings.TrimRight(string(b), "\n"), nil
 }
 
-// checkSecretMode emits a warning (does not fail) if the file mode is
-// less restrictive than 0600. The warning is only written for non-empty
-// paths that exist; missing files are surfaced by the caller's read.
-func checkSecretMode(path, label string) {
+// checkSecretMode returns an error if the file's mode permits any access
+// beyond owner read/write and group read (i.e., any bit outside 0o640).
+// A missing file is treated as "not our problem" — the caller's subsequent
+// read surfaces the not-found error with the right context.
+func checkSecretMode(path, label string) error {
 	info, err := os.Stat(path)
 	if err != nil {
-		return
+		return nil
 	}
 	mode := info.Mode().Perm()
 	if mode&^expectedSecretMode != 0 {
-		slog.Warn("config: secret file mode is too permissive",
-			"label", label,
-			"path", path,
-			"mode", fmt.Sprintf("%04o", mode),
-			"expected", "0640")
+		return fmt.Errorf("config: %s %s mode %04o is too permissive (expected at most 0640)", label, path, mode)
 	}
+	return nil
 }
 
 // Redact returns a copy of c with secret fields replaced by sentinel

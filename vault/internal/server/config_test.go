@@ -150,6 +150,42 @@ func TestLoadConfigTeamSecretFileIndirection(t *testing.T) {
 	}
 }
 
+func TestLoadConfigRejectsWorldReadableConfig(t *testing.T) {
+	path := writeConfig(t, minimalValidConfig(t))
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatal("expected error for world-readable config, got nil")
+	}
+	if !strings.Contains(err.Error(), "too permissive") {
+		t.Errorf("err missing 'too permissive': %v", err)
+	}
+}
+
+func TestLoadConfigRejectsWorldReadableSecretFile(t *testing.T) {
+	dir := t.TempDir()
+	secretFile := filepath.Join(dir, "team.secret")
+	if err := os.WriteFile(secretFile, []byte("file-team-secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	body := strings.Replace(
+		minimalValidConfig(t),
+		"  team_secret: inline-team-secret-deadbeef",
+		"  team_secret_file: "+secretFile,
+		1,
+	)
+	path := writeConfig(t, body)
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatal("expected error for world-readable team_secret_file, got nil")
+	}
+	if !strings.Contains(err.Error(), "too permissive") {
+		t.Errorf("err missing 'too permissive': %v", err)
+	}
+}
+
 func TestLoadConfigSecretFileMissing(t *testing.T) {
 	body := strings.Replace(
 		minimalValidConfig(t),
