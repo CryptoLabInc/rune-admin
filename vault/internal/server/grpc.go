@@ -208,7 +208,7 @@ func (s *VaultGRPC) DecryptScores(ctx context.Context, req *pb.DecryptScoresRequ
 		statusStr = "error"
 		msg := fmt.Sprintf("Deserialization failed: %s", err.Error())
 		errDetail = &msg
-		return &pb.DecryptScoresResponse{Error: msg}, nil
+		return &pb.DecryptScoresResponse{Error: msg}, status.Error(codes.InvalidArgument, msg)
 	}
 	if s.v.keys == nil {
 		statusStr = "error"
@@ -221,7 +221,7 @@ func (s *VaultGRPC) DecryptScores(ctx context.Context, req *pb.DecryptScoresRequ
 		statusStr = "error"
 		msg := err.Error()
 		errDetail = &msg
-		return &pb.DecryptScoresResponse{Error: msg}, nil
+		return &pb.DecryptScoresResponse{Error: msg}, status.Error(codes.Internal, msg)
 	}
 	entries := topK_FromShards(scores2D, shardIdx, int(topK))
 	resultCount = len(entries)
@@ -300,7 +300,7 @@ func (s *VaultGRPC) DecryptMetadata(ctx context.Context, req *pb.DecryptMetadata
 		statusStr = "error"
 		msg := "VAULT_TEAM_SECRET not configured"
 		errDetail = &msg
-		return &pb.DecryptMetadataResponse{Error: msg}, nil
+		return &pb.DecryptMetadataResponse{Error: msg}, status.Error(codes.Internal, msg)
 	}
 
 	out := make([]string, 0, len(req.GetEncryptedMetadataList()))
@@ -310,21 +310,21 @@ func (s *VaultGRPC) DecryptMetadata(ctx context.Context, req *pb.DecryptMetadata
 			statusStr = "error"
 			msg := fmt.Sprintf("Metadata decryption failed: %s", err.Error())
 			errDetail = &msg
-			return &pb.DecryptMetadataResponse{Error: msg}, nil
+			return &pb.DecryptMetadataResponse{Error: msg}, status.Error(codes.InvalidArgument, msg)
 		}
 		dek, err := crypto.DeriveAgentKey(s.v.cfg.Tokens.TeamSecret, env.AgentID)
 		if err != nil {
 			statusStr = "error"
 			msg := fmt.Sprintf("Metadata decryption failed: %s", err.Error())
 			errDetail = &msg
-			return &pb.DecryptMetadataResponse{Error: msg}, nil
+			return &pb.DecryptMetadataResponse{Error: msg}, status.Error(codes.Internal, msg)
 		}
 		pt, err := crypto.DecryptMetadata(env.Cipher, dek)
 		if err != nil {
 			statusStr = "error"
 			msg := fmt.Sprintf("Metadata decryption failed: %s", err.Error())
 			errDetail = &msg
-			return &pb.DecryptMetadataResponse{Error: msg}, nil
+			return &pb.DecryptMetadataResponse{Error: msg}, status.Error(codes.Internal, msg)
 		}
 		out = append(out, string(pt))
 	}

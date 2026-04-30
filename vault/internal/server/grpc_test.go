@@ -166,8 +166,8 @@ func TestDecryptMetadataMalformedEnvelope(t *testing.T) {
 		Token:                 tokens.DemoToken,
 		EncryptedMetadataList: []string{"not-json"},
 	})
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
+	if status.Code(err) != codes.InvalidArgument {
+		t.Errorf("code = %v, want InvalidArgument", status.Code(err))
 	}
 	if !strings.Contains(resp.GetError(), "Metadata decryption failed") {
 		t.Errorf("error = %q, want 'Metadata decryption failed'", resp.GetError())
