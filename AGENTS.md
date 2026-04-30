@@ -16,10 +16,11 @@ Do NOT run go, gofmt, or buf directly.
 | Command | Description |
 |---------|-------------|
 | `mise run setup` | Bootstrap (Go modules + proto stubs) |
-| `mise run check` | All checks: gofmt + go vet + go test (race) |
-| `mise run go:build` | Build the runevault binary |
-| `mise run go:test` | Run Go unit + integration tests with race detector |
-| `mise run go:test:unit` | Run Go unit tests only (skip CLI smoke E2E) |
+| `mise run check` | All checks: gofmt + go vet + unit tests (race) |
+| `mise run go:build` | Build the runevault binary to `vault/bin/runevault` |
+| `mise run go:test` | Run all tests including E2E (requires `RUNEVAULT_TEST_BINARY`) |
+| `mise run go:test:unit` | Run unit tests only (E2E excluded by build tag) |
+| `mise run go:test:e2e` | Run E2E tests against pre-built binary (run `go:build` first) |
 | `mise run go:vet` | Run go vet on all Go packages |
 | `mise run go:fmt` | Format Go source files |
 | `mise run go:fmt:check` | Check Go formatting without modifying |
