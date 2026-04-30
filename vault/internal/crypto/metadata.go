@@ -1,13 +1,16 @@
 // Package crypto provides metadata key derivation, AES-256-CTR metadata
-// encryption (wire-compatible with pyenvector.utils.aes), and FHE key
-// lifecycle wrappers around envector-go-sdk.
+// encryption, and FHE key lifecycle wrappers around envector-go-sdk.
 //
-// Wire format for metadata ciphertext (mirrors pyenvector.utils.aes.AESHelper):
+// Wire format for metadata ciphertext:
 //
 //	base64( IV (16 bytes) || ciphertext (variable) )
 //
 // AES-256-CTR is unauthenticated; integrity is enforced by upstream JSON
 // envelopes and HKDF-derived per-agent keys.
+//
+// TODO: migrate to AES-256-GCM (AEAD) — keys are issued directly between
+// rune and rune-vault so there is no external wire-format compatibility
+// constraint. Requires coordinated update of the rune-side encryption path.
 package crypto
 
 import (
@@ -56,9 +59,8 @@ func AgentIDFromToken(token string) string {
 	return hex.EncodeToString(sum[:])[:32]
 }
 
-// EncryptMetadata produces a base64-encoded ciphertext compatible with
-// pyenvector.utils.aes.encrypt_metadata: AES-256-CTR with a random 16-byte
-// IV prefixed to the ciphertext.
+// EncryptMetadata produces a base64-encoded AES-256-CTR ciphertext with a
+// random 16-byte IV prefixed to the ciphertext.
 func EncryptMetadata(plaintext, key []byte) (string, error) {
 	if len(key) != dekLen {
 		return "", ErrInvalidKey
