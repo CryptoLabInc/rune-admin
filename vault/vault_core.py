@@ -74,19 +74,6 @@ def ensure_vault():
             shutil.rmtree(KEY_SUBDIR)
         logger.info(f"Generating keys in {KEY_SUBDIR}...")
         os.makedirs(KEY_SUBDIR, exist_ok=True)
-        if EVAL_MODE == "mm":
-            # Workaround for pyenvector 1.4.0: generate_keys() unconditionally
-            # converts the 849MB EvalKey.bin to JSON, which OOMs containers
-            # under ~8GB. In MM mode the eval key is not used, so replace the
-            # conversion with a 1-byte dummy. The library's own MM-mode dummy
-            # logic is dead code because C++ creates EvalKey.bin first.
-            from pyenvector.crypto.key_manager import KeyManager
-
-            def _skip_eval_bin_to_json(self, bin_path, json_path):
-                with open(json_path, "wb") as f:
-                    f.write(b"\x00")
-
-            KeyManager.eval_bin_to_json = _skip_eval_bin_to_json
         keygen = KeyGenerator(
             key_path=KEY_SUBDIR,
             key_id=KEY_ID,
