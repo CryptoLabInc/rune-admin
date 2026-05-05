@@ -11,6 +11,7 @@ import heapq
 import json
 import logging
 import os
+import shutil
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
@@ -65,6 +66,12 @@ def ensure_vault():
     # Phase 1: local key generation
     enc_key = os.path.join(KEY_SUBDIR, "EncKey.json")
     if not os.path.exists(enc_key):
+        if os.path.exists(KEY_SUBDIR) and any(os.scandir(KEY_SUBDIR)):
+            logger.warning(
+                f"Incomplete key state found in {KEY_SUBDIR} (EncKey.json missing). "
+                "Cleaning up and regenerating..."
+            )
+            shutil.rmtree(KEY_SUBDIR)
         logger.info(f"Generating keys in {KEY_SUBDIR}...")
         os.makedirs(KEY_SUBDIR, exist_ok=True)
         keygen = KeyGenerator(
