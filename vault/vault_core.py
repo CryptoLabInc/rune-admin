@@ -39,7 +39,7 @@ ENVECTOR_ENDPOINT = os.getenv("ENVECTOR_ENDPOINT", "").strip() or None
 ENVECTOR_API_KEY = os.getenv("ENVECTOR_API_KEY", "").strip() or None
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1024"))
 _VALID_EVAL_MODES = {"rmp", "mm"}
-EVAL_MODE = os.getenv("ENVECTOR_EVAL_MODE", "rmp").lower()
+EVAL_MODE = os.getenv("ENVECTOR_EVAL_MODE", "mm").lower()
 ENVECTOR_TLS = os.getenv("ENVECTOR_TLS", "").strip().lower() not in ("false", "0", "no")
 
 # Team index name (set by admin, distributed to all team members via get_public_key)
@@ -75,7 +75,11 @@ def ensure_vault():
         logger.info(f"Generating keys in {KEY_SUBDIR}...")
         os.makedirs(KEY_SUBDIR, exist_ok=True)
         keygen = KeyGenerator(
-            key_path=KEY_SUBDIR, key_id=KEY_ID, dim_list=[DIM], metadata_encryption=False
+            key_path=KEY_SUBDIR,
+            key_id=KEY_ID,
+            dim_list=[DIM],
+            metadata_encryption=False,
+            eval_mode=EVAL_MODE,
         )
         keygen.generate_keys()
     else:

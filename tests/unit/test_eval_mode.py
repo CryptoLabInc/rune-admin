@@ -2,7 +2,7 @@
 Unit tests for ENVECTOR_EVAL_MODE configuration (PR #59 test plan).
 
 Test plan coverage:
-- Item 1: EVAL_MODE defaults to "rmp" when env var is not set
+- Item 1: EVAL_MODE defaults to "mm" when env var is not set
 - Item 2: ev.init() is called with "mm" when ENVECTOR_EVAL_MODE=mm
 - Item 3: invalid EVAL_MODE propagates to SDK (no vault-level validation guard)
 """
@@ -23,7 +23,7 @@ class TestEvalModeEnvVar:
 
     def test_eval_mode_reflects_env_at_load_time(self):
         """EVAL_MODE at module level matches what os.getenv would return."""
-        expected = os.getenv("ENVECTOR_EVAL_MODE", "rmp").lower()
+        expected = os.getenv("ENVECTOR_EVAL_MODE", "mm").lower()
         assert vault_core.EVAL_MODE == expected
 
     def test_eval_mode_is_lowercased(self, monkeypatch):
@@ -32,17 +32,17 @@ class TestEvalModeEnvVar:
         # Simulate what the module does: os.getenv(...).lower()
         assert vault_core.EVAL_MODE.lower() == "rmp"
 
-    def test_eval_mode_default_is_rmp_when_env_unset(self, monkeypatch):
-        """When ENVECTOR_EVAL_MODE is not set, the formula produces 'rmp'."""
+    def test_eval_mode_default_is_mm_when_env_unset(self, monkeypatch):
+        """When ENVECTOR_EVAL_MODE is not set, the formula produces 'mm'."""
         monkeypatch.delenv("ENVECTOR_EVAL_MODE", raising=False)
-        result = os.getenv("ENVECTOR_EVAL_MODE", "rmp").lower()
-        assert result == "rmp"
-
-    def test_eval_mode_reads_mm_from_env(self, monkeypatch):
-        """When ENVECTOR_EVAL_MODE=MM, the formula produces 'mm'."""
-        monkeypatch.setenv("ENVECTOR_EVAL_MODE", "MM")
-        result = os.getenv("ENVECTOR_EVAL_MODE", "rmp").lower()
+        result = os.getenv("ENVECTOR_EVAL_MODE", "mm").lower()
         assert result == "mm"
+
+    def test_eval_mode_reads_rmp_from_env(self, monkeypatch):
+        """When ENVECTOR_EVAL_MODE=RMP, the formula produces 'rmp'."""
+        monkeypatch.setenv("ENVECTOR_EVAL_MODE", "RMP")
+        result = os.getenv("ENVECTOR_EVAL_MODE", "mm").lower()
+        assert result == "rmp"
 
 
 class TestEvalModePassedToEvInit:
