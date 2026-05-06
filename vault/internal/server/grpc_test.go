@@ -103,10 +103,10 @@ func newTestVault(t *testing.T) *Vault {
 	return NewVault(cfg, store, nil, audit)
 }
 
-func TestGetPublicKeyInvalidToken(t *testing.T) {
+func TestGetAgentManifestInvalidToken(t *testing.T) {
 	v := newTestVault(t)
 	srv := NewVaultGRPC(v)
-	resp, err := srv.GetPublicKey(context.Background(), &pb.GetPublicKeyRequest{
+	resp, err := srv.GetAgentManifest(context.Background(), &pb.GetAgentManifestRequest{
 		Token: "evt_ffffffffffffffffffffffffffffffff",
 	})
 	if status.Code(err) != codes.Unauthenticated {

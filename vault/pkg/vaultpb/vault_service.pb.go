@@ -22,7 +22,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type GetPublicKeyRequest struct {
+type GetAgentManifestRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Auth token. Required, Fixed 36 chars (evt_ + 32 hex).
 	Token         string `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
@@ -30,20 +30,20 @@ type GetPublicKeyRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetPublicKeyRequest) Reset() {
-	*x = GetPublicKeyRequest{}
+func (x *GetAgentManifestRequest) Reset() {
+	*x = GetAgentManifestRequest{}
 	mi := &file_vault_service_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetPublicKeyRequest) String() string {
+func (x *GetAgentManifestRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetPublicKeyRequest) ProtoMessage() {}
+func (*GetAgentManifestRequest) ProtoMessage() {}
 
-func (x *GetPublicKeyRequest) ProtoReflect() protoreflect.Message {
+func (x *GetAgentManifestRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_vault_service_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -55,41 +55,41 @@ func (x *GetPublicKeyRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetPublicKeyRequest.ProtoReflect.Descriptor instead.
-func (*GetPublicKeyRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetAgentManifestRequest.ProtoReflect.Descriptor instead.
+func (*GetAgentManifestRequest) Descriptor() ([]byte, []int) {
 	return file_vault_service_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *GetPublicKeyRequest) GetToken() string {
+func (x *GetAgentManifestRequest) GetToken() string {
 	if x != nil {
 		return x.Token
 	}
 	return ""
 }
 
-type GetPublicKeyResponse struct {
+type GetAgentManifestResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// JSON string: {"EncKey.json": "...", "EvalKey.json": "...", "index_name": "..."}
-	KeyBundleJson string `protobuf:"bytes,1,opt,name=key_bundle_json,json=keyBundleJson,proto3" json:"key_bundle_json,omitempty"`
+	// JSON string: {"EncKey.json": "...", "index_name": "...", "agent_id": "...", ...}
+	ManifestJson  string `protobuf:"bytes,1,opt,name=manifest_json,json=manifestJson,proto3" json:"manifest_json,omitempty"`
 	Error         string `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"` // Non-empty on error
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetPublicKeyResponse) Reset() {
-	*x = GetPublicKeyResponse{}
+func (x *GetAgentManifestResponse) Reset() {
+	*x = GetAgentManifestResponse{}
 	mi := &file_vault_service_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetPublicKeyResponse) String() string {
+func (x *GetAgentManifestResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetPublicKeyResponse) ProtoMessage() {}
+func (*GetAgentManifestResponse) ProtoMessage() {}
 
-func (x *GetPublicKeyResponse) ProtoReflect() protoreflect.Message {
+func (x *GetAgentManifestResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_vault_service_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -101,19 +101,19 @@ func (x *GetPublicKeyResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetPublicKeyResponse.ProtoReflect.Descriptor instead.
-func (*GetPublicKeyResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetAgentManifestResponse.ProtoReflect.Descriptor instead.
+func (*GetAgentManifestResponse) Descriptor() ([]byte, []int) {
 	return file_vault_service_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *GetPublicKeyResponse) GetKeyBundleJson() string {
+func (x *GetAgentManifestResponse) GetManifestJson() string {
 	if x != nil {
-		return x.KeyBundleJson
+		return x.ManifestJson
 	}
 	return ""
 }
 
-func (x *GetPublicKeyResponse) GetError() string {
+func (x *GetAgentManifestResponse) GetError() string {
 	if x != nil {
 		return x.Error
 	}
@@ -407,11 +407,11 @@ var File_vault_service_proto protoreflect.FileDescriptor
 
 const file_vault_service_proto_rawDesc = "" +
 	"\n" +
-	"\x13vault_service.proto\x12\rrune.vault.v1\x1a\x1bbuf/validate/validate.proto\"6\n" +
-	"\x13GetPublicKeyRequest\x12\x1f\n" +
-	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\"T\n" +
-	"\x14GetPublicKeyResponse\x12&\n" +
-	"\x0fkey_bundle_json\x18\x01 \x01(\tR\rkeyBundleJson\x12\x14\n" +
+	"\x13vault_service.proto\x12\rrune.vault.v1\x1a\x1bbuf/validate/validate.proto\":\n" +
+	"\x17GetAgentManifestRequest\x12\x1f\n" +
+	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\"U\n" +
+	"\x18GetAgentManifestResponse\x12#\n" +
+	"\rmanifest_json\x18\x01 \x01(\tR\fmanifestJson\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\"\x8f\x01\n" +
 	"\x14DecryptScoresRequest\x12\x1f\n" +
 	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\x125\n" +
@@ -431,9 +431,9 @@ const file_vault_service_proto_rawDesc = "" +
 	"\x17encrypted_metadata_list\x18\x02 \x03(\tB\x11\xbaH\x0e\x92\x01\v\b\x01\x10\xe8\a\"\x04r\x02\x10\x01R\x15encryptedMetadataList\"^\n" +
 	"\x17DecryptMetadataResponse\x12-\n" +
 	"\x12decrypted_metadata\x18\x01 \x03(\tR\x11decryptedMetadata\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error2\xa5\x02\n" +
-	"\fVaultService\x12W\n" +
-	"\fGetPublicKey\x12\".rune.vault.v1.GetPublicKeyRequest\x1a#.rune.vault.v1.GetPublicKeyResponse\x12Z\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error2\xb1\x02\n" +
+	"\fVaultService\x12c\n" +
+	"\x10GetAgentManifest\x12&.rune.vault.v1.GetAgentManifestRequest\x1a'.rune.vault.v1.GetAgentManifestResponse\x12Z\n" +
 	"\rDecryptScores\x12#.rune.vault.v1.DecryptScoresRequest\x1a$.rune.vault.v1.DecryptScoresResponse\x12`\n" +
 	"\x0fDecryptMetadata\x12%.rune.vault.v1.DecryptMetadataRequest\x1a&.rune.vault.v1.DecryptMetadataResponseb\x06proto3"
 
@@ -451,20 +451,20 @@ func file_vault_service_proto_rawDescGZIP() []byte {
 
 var file_vault_service_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_vault_service_proto_goTypes = []any{
-	(*GetPublicKeyRequest)(nil),     // 0: rune.vault.v1.GetPublicKeyRequest
-	(*GetPublicKeyResponse)(nil),    // 1: rune.vault.v1.GetPublicKeyResponse
-	(*DecryptScoresRequest)(nil),    // 2: rune.vault.v1.DecryptScoresRequest
-	(*ScoreEntry)(nil),              // 3: rune.vault.v1.ScoreEntry
-	(*DecryptScoresResponse)(nil),   // 4: rune.vault.v1.DecryptScoresResponse
-	(*DecryptMetadataRequest)(nil),  // 5: rune.vault.v1.DecryptMetadataRequest
-	(*DecryptMetadataResponse)(nil), // 6: rune.vault.v1.DecryptMetadataResponse
+	(*GetAgentManifestRequest)(nil),  // 0: rune.vault.v1.GetAgentManifestRequest
+	(*GetAgentManifestResponse)(nil), // 1: rune.vault.v1.GetAgentManifestResponse
+	(*DecryptScoresRequest)(nil),     // 2: rune.vault.v1.DecryptScoresRequest
+	(*ScoreEntry)(nil),               // 3: rune.vault.v1.ScoreEntry
+	(*DecryptScoresResponse)(nil),    // 4: rune.vault.v1.DecryptScoresResponse
+	(*DecryptMetadataRequest)(nil),   // 5: rune.vault.v1.DecryptMetadataRequest
+	(*DecryptMetadataResponse)(nil),  // 6: rune.vault.v1.DecryptMetadataResponse
 }
 var file_vault_service_proto_depIdxs = []int32{
 	3, // 0: rune.vault.v1.DecryptScoresResponse.results:type_name -> rune.vault.v1.ScoreEntry
-	0, // 1: rune.vault.v1.VaultService.GetPublicKey:input_type -> rune.vault.v1.GetPublicKeyRequest
+	0, // 1: rune.vault.v1.VaultService.GetAgentManifest:input_type -> rune.vault.v1.GetAgentManifestRequest
 	2, // 2: rune.vault.v1.VaultService.DecryptScores:input_type -> rune.vault.v1.DecryptScoresRequest
 	5, // 3: rune.vault.v1.VaultService.DecryptMetadata:input_type -> rune.vault.v1.DecryptMetadataRequest
-	1, // 4: rune.vault.v1.VaultService.GetPublicKey:output_type -> rune.vault.v1.GetPublicKeyResponse
+	1, // 4: rune.vault.v1.VaultService.GetAgentManifest:output_type -> rune.vault.v1.GetAgentManifestResponse
 	4, // 5: rune.vault.v1.VaultService.DecryptScores:output_type -> rune.vault.v1.DecryptScoresResponse
 	6, // 6: rune.vault.v1.VaultService.DecryptMetadata:output_type -> rune.vault.v1.DecryptMetadataResponse
 	4, // [4:7] is the sub-list for method output_type

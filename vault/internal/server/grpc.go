@@ -18,7 +18,7 @@ import (
 	pb "github.com/CryptoLabInc/rune-admin/vault/pkg/vaultpb"
 )
 
-// MaxMessageSize bounds gRPC frames. EvalKey alone can be tens of MB.
+// MaxMessageSize bounds gRPC frames.
 const MaxMessageSize = 256 * 1024 * 1024
 
 // Vault is the runtime container shared by all RPC handlers and the
@@ -79,9 +79,9 @@ type VaultGRPC struct {
 
 func NewVaultGRPC(v *Vault) *VaultGRPC { return &VaultGRPC{v: v} }
 
-// ── GetPublicKey ──────────────────────────────────────────────────
+// ── GetAgentManifest ─────────────────────────────────────────────
 
-func (s *VaultGRPC) GetPublicKey(ctx context.Context, req *pb.GetPublicKeyRequest) (*pb.GetPublicKeyResponse, error) {
+func (s *VaultGRPC) GetAgentManifest(ctx context.Context, req *pb.GetAgentManifestRequest) (*pb.GetAgentManifestResponse, error) {
 	start := time.Now()
 	user := s.v.tokens.GetUsername(req.GetToken())
 	if user == "" {
@@ -91,21 +91,21 @@ func (s *VaultGRPC) GetPublicKey(ctx context.Context, req *pb.GetPublicKeyReques
 	statusStr := "success"
 	var errDetail *string
 	defer func() {
-		s.emit(ctx, "get_public_key", user, nil, resultCount, statusStr, errDetail, time.Since(start))
+		s.emit(ctx, "get_agent_manifest", user, nil, resultCount, statusStr, errDetail, time.Since(start))
 	}()
 
 	username, role, err := s.v.tokens.Validate(req.GetToken())
 	if err != nil {
 		st, msg := mapTokenError(err)
 		statusStr, errDetail = errStatus(err)
-		return &pb.GetPublicKeyResponse{Error: msg}, status.Error(st, msg)
+		return &pb.GetAgentManifestResponse{Error: msg}, status.Error(st, msg)
 	}
 	user = username
 	if err := role.CheckScope("get_public_key"); err != nil {
 		statusStr = "denied"
 		ed := err.Error()
 		errDetail = &ed
-		return &pb.GetPublicKeyResponse{Error: err.Error()}, status.Error(codes.PermissionDenied, err.Error())
+		return &pb.GetAgentManifestResponse{Error: err.Error()}, status.Error(codes.PermissionDenied, err.Error())
 	}
 
 	bundle, err := s.v.buildBundle(req.GetToken())
@@ -113,30 +113,29 @@ func (s *VaultGRPC) GetPublicKey(ctx context.Context, req *pb.GetPublicKeyReques
 		statusStr = "error"
 		ed := err.Error()
 		errDetail = &ed
-		return &pb.GetPublicKeyResponse{Error: err.Error()}, status.Error(codes.Internal, err.Error())
+		return &pb.GetAgentManifestResponse{Error: err.Error()}, status.Error(codes.Internal, err.Error())
 	}
 	js, err := json.Marshal(bundle)
 	if err != nil {
 		statusStr = "error"
 		ed := err.Error()
 		errDetail = &ed
-		return &pb.GetPublicKeyResponse{Error: err.Error()}, status.Error(codes.Internal, err.Error())
+		return &pb.GetAgentManifestResponse{Error: err.Error()}, status.Error(codes.Internal, err.Error())
 	}
 	resultCount = 1
-	return &pb.GetPublicKeyResponse{KeyBundleJson: string(js)}, nil
+	return &pb.GetAgentManifestResponse{ManifestJson: string(js)}, nil
 }
 
-// buildBundle assembles the per-token JSON bundle returned by GetPublicKey.
+// buildBundle assembles the per-token JSON manifest returned by GetAgentManifest.
 // Order of keys is irrelevant — clients parse by name.
 func (s *Vault) buildBundle(token string) (map[string]any, error) {
-	pub, err := crypto.ReadPublicKeyBundle(s.bundleParams)
+	encKey, err := crypto.ReadEncKey(s.bundleParams)
 	if err != nil {
 		return nil, err
 	}
 	bundle := map[string]any{
-		"EncKey.json":  pub.EncKey,
-		"EvalKey.json": pub.EvalKey,
-		"key_id":       s.bundleParams.KeyID,
+		"EncKey.json": encKey,
+		"key_id":      s.bundleParams.KeyID,
 	}
 	if s.cfg.Keys.IndexName != "" {
 		bundle["index_name"] = s.cfg.Keys.IndexName

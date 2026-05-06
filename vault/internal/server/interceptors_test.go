@@ -52,8 +52,8 @@ func vaultMethodInfo(name string) *grpc.UnaryServerInfo {
 
 func TestInterceptorPassesValidRequest(t *testing.T) {
 	ic := mustInterceptor(t)
-	req := &pb.GetPublicKeyRequest{Token: "evt_0123456789abcdef0123456789abcdef"}
-	out, err := ic(context.Background(), req, vaultMethodInfo("GetPublicKey"), noopHandler)
+	req := &pb.GetAgentManifestRequest{Token: "evt_0123456789abcdef0123456789abcdef"}
+	out, err := ic(context.Background(), req, vaultMethodInfo("GetAgentManifest"), noopHandler)
 	if err != nil {
 		t.Fatalf("err = %v, want nil", err)
 	}
@@ -65,8 +65,8 @@ func TestInterceptorPassesValidRequest(t *testing.T) {
 func TestInterceptorRejectsBadProtovalidate(t *testing.T) {
 	ic := mustInterceptor(t)
 	// Token shorter than 36 fails the proto-level constraint.
-	req := &pb.GetPublicKeyRequest{Token: "too_short"}
-	_, err := ic(context.Background(), req, vaultMethodInfo("GetPublicKey"), noopHandler)
+	req := &pb.GetAgentManifestRequest{Token: "too_short"}
+	_, err := ic(context.Background(), req, vaultMethodInfo("GetAgentManifest"), noopHandler)
 	if err == nil {
 		t.Fatal("err = nil, want validation error")
 	}
@@ -79,11 +79,11 @@ func TestInterceptorRejectsControlCharToken(t *testing.T) {
 	ic := mustInterceptor(t)
 	// 36-char token containing a control byte (\x00) inside.
 	// protovalidate only checks length, so the runtime layer catches this.
-	req := &pb.GetPublicKeyRequest{Token: "evt_0123456789abcdef0123456789abc\x00ef"}
+	req := &pb.GetAgentManifestRequest{Token: "evt_0123456789abcdef0123456789abc\x00ef"}
 	if len(req.Token) != 36 {
 		t.Fatalf("test setup: token length = %d, want 36", len(req.Token))
 	}
-	_, err := ic(context.Background(), req, vaultMethodInfo("GetPublicKey"), noopHandler)
+	_, err := ic(context.Background(), req, vaultMethodInfo("GetAgentManifest"), noopHandler)
 	if err == nil {
 		t.Fatal("err = nil, want runtime error")
 	}
@@ -97,7 +97,7 @@ func TestInterceptorAllowsNonVaultMethod(t *testing.T) {
 	// Whitespace-around token would normally fail runtime check, but
 	// non-Vault methods skip runtime checks (and the proto for this
 	// dummy message doesn't apply).
-	req := &pb.GetPublicKeyRequest{Token: "evt_0123456789abcdef0123456789abcdef"}
+	req := &pb.GetAgentManifestRequest{Token: "evt_0123456789abcdef0123456789abcdef"}
 	info := &grpc.UnaryServerInfo{FullMethod: "/grpc.health.v1.Health/Check"}
 	if _, err := ic(context.Background(), req, info, noopHandler); err != nil {
 		t.Errorf("non-vault method blocked: %v", err)

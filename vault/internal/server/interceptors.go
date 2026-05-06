@@ -19,9 +19,9 @@ import (
 // vaultMethods enumerates the gRPC method paths owned by VaultService.
 // Other services routed through the same gRPC server bypass runtime checks.
 var vaultMethods = map[string]bool{
-	"/rune.vault.v1.VaultService/GetPublicKey":    true,
-	"/rune.vault.v1.VaultService/DecryptScores":   true,
-	"/rune.vault.v1.VaultService/DecryptMetadata": true,
+	"/rune.vault.v1.VaultService/GetAgentManifest": true,
+	"/rune.vault.v1.VaultService/DecryptScores":    true,
+	"/rune.vault.v1.VaultService/DecryptMetadata":  true,
 }
 
 // NewValidationInterceptor returns a unary server interceptor that runs
@@ -55,7 +55,7 @@ func NewValidationInterceptor() (grpc.UnaryServerInterceptor, error) {
 func runtimeCheckToken(req any) error {
 	var token string
 	switch r := req.(type) {
-	case *pb.GetPublicKeyRequest:
+	case *pb.GetAgentManifestRequest:
 		token = r.GetToken()
 	case *pb.DecryptScoresRequest:
 		token = r.GetToken()

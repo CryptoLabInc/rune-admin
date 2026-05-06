@@ -86,26 +86,14 @@ func (f *EnvectorKeys) Decrypt(blob []byte) (scores [][]float64, shardIdx []int3
 	return f.keys.Decrypt(blob)
 }
 
-// PublicKeyBundle reads EncKey.json and EvalKey.json file contents from
-// disk. The strings are returned verbatim for inclusion in the GetPublicKey
-// gRPC response — clients re-parse them with their own SDK.
-type PublicKeyBundle struct {
-	EncKey  string
-	EvalKey string
-}
-
-func ReadPublicKeyBundle(p KeysParams) (*PublicKeyBundle, error) {
-	encPath := filepath.Join(p.keyDir(), "EncKey.json")
-	evalPath := filepath.Join(p.keyDir(), "EvalKey.json")
-	enc, err := os.ReadFile(encPath)
+// ReadEncKey reads EncKey.json from disk and returns its contents verbatim
+// for inclusion in the GetAgentManifest gRPC response.
+func ReadEncKey(p KeysParams) (string, error) {
+	enc, err := os.ReadFile(filepath.Join(p.keyDir(), "EncKey.json"))
 	if err != nil {
-		return nil, fmt.Errorf("crypto: read EncKey.json: %w", err)
+		return "", fmt.Errorf("crypto: read EncKey.json: %w", err)
 	}
-	eval, err := os.ReadFile(evalPath)
-	if err != nil {
-		return nil, fmt.Errorf("crypto: read EvalKey.json: %w", err)
-	}
-	return &PublicKeyBundle{EncKey: string(enc), EvalKey: string(eval)}, nil
+	return string(enc), nil
 }
 
 func (f *EnvectorKeys) Close() error {

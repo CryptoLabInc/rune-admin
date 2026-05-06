@@ -19,9 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	VaultService_GetPublicKey_FullMethodName    = "/rune.vault.v1.VaultService/GetPublicKey"
-	VaultService_DecryptScores_FullMethodName   = "/rune.vault.v1.VaultService/DecryptScores"
-	VaultService_DecryptMetadata_FullMethodName = "/rune.vault.v1.VaultService/DecryptMetadata"
+	VaultService_GetAgentManifest_FullMethodName = "/rune.vault.v1.VaultService/GetAgentManifest"
+	VaultService_DecryptScores_FullMethodName    = "/rune.vault.v1.VaultService/DecryptScores"
+	VaultService_DecryptMetadata_FullMethodName  = "/rune.vault.v1.VaultService/DecryptMetadata"
 )
 
 // VaultServiceClient is the client API for VaultService service.
@@ -31,8 +31,8 @@ const (
 // Rune-Vault gRPC service.
 // Holds the FHE secret key and performs all decryption operations.
 type VaultServiceClient interface {
-	// Returns the public key bundle (EncKey, EvalKey, optional team index name).
-	GetPublicKey(ctx context.Context, in *GetPublicKeyRequest, opts ...grpc.CallOption) (*GetPublicKeyResponse, error)
+	// Returns the agent manifest (EncKey, agent credentials, optional team index name).
+	GetAgentManifest(ctx context.Context, in *GetAgentManifestRequest, opts ...grpc.CallOption) (*GetAgentManifestResponse, error)
 	// Decrypts FHE-encrypted similarity scores and applies Top-K filtering.
 	DecryptScores(ctx context.Context, in *DecryptScoresRequest, opts ...grpc.CallOption) (*DecryptScoresResponse, error)
 	// Decrypts a list of AES-encrypted metadata strings.
@@ -47,10 +47,10 @@ func NewVaultServiceClient(cc grpc.ClientConnInterface) VaultServiceClient {
 	return &vaultServiceClient{cc}
 }
 
-func (c *vaultServiceClient) GetPublicKey(ctx context.Context, in *GetPublicKeyRequest, opts ...grpc.CallOption) (*GetPublicKeyResponse, error) {
+func (c *vaultServiceClient) GetAgentManifest(ctx context.Context, in *GetAgentManifestRequest, opts ...grpc.CallOption) (*GetAgentManifestResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetPublicKeyResponse)
-	err := c.cc.Invoke(ctx, VaultService_GetPublicKey_FullMethodName, in, out, cOpts...)
+	out := new(GetAgentManifestResponse)
+	err := c.cc.Invoke(ctx, VaultService_GetAgentManifest_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -84,8 +84,8 @@ func (c *vaultServiceClient) DecryptMetadata(ctx context.Context, in *DecryptMet
 // Rune-Vault gRPC service.
 // Holds the FHE secret key and performs all decryption operations.
 type VaultServiceServer interface {
-	// Returns the public key bundle (EncKey, EvalKey, optional team index name).
-	GetPublicKey(context.Context, *GetPublicKeyRequest) (*GetPublicKeyResponse, error)
+	// Returns the agent manifest (EncKey, agent credentials, optional team index name).
+	GetAgentManifest(context.Context, *GetAgentManifestRequest) (*GetAgentManifestResponse, error)
 	// Decrypts FHE-encrypted similarity scores and applies Top-K filtering.
 	DecryptScores(context.Context, *DecryptScoresRequest) (*DecryptScoresResponse, error)
 	// Decrypts a list of AES-encrypted metadata strings.
@@ -100,8 +100,8 @@ type VaultServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedVaultServiceServer struct{}
 
-func (UnimplementedVaultServiceServer) GetPublicKey(context.Context, *GetPublicKeyRequest) (*GetPublicKeyResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetPublicKey not implemented")
+func (UnimplementedVaultServiceServer) GetAgentManifest(context.Context, *GetAgentManifestRequest) (*GetAgentManifestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAgentManifest not implemented")
 }
 func (UnimplementedVaultServiceServer) DecryptScores(context.Context, *DecryptScoresRequest) (*DecryptScoresResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DecryptScores not implemented")
@@ -130,20 +130,20 @@ func RegisterVaultServiceServer(s grpc.ServiceRegistrar, srv VaultServiceServer)
 	s.RegisterService(&VaultService_ServiceDesc, srv)
 }
 
-func _VaultService_GetPublicKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetPublicKeyRequest)
+func _VaultService_GetAgentManifest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAgentManifestRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VaultServiceServer).GetPublicKey(ctx, in)
+		return srv.(VaultServiceServer).GetAgentManifest(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VaultService_GetPublicKey_FullMethodName,
+		FullMethod: VaultService_GetAgentManifest_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VaultServiceServer).GetPublicKey(ctx, req.(*GetPublicKeyRequest))
+		return srv.(VaultServiceServer).GetAgentManifest(ctx, req.(*GetAgentManifestRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -192,8 +192,8 @@ var VaultService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*VaultServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetPublicKey",
-			Handler:    _VaultService_GetPublicKey_Handler,
+			MethodName: "GetAgentManifest",
+			Handler:    _VaultService_GetAgentManifest_Handler,
 		},
 		{
 			MethodName: "DecryptScores",

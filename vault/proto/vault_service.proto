@@ -7,8 +7,8 @@ import "buf/validate/validate.proto";
 // Rune-Vault gRPC service.
 // Holds the FHE secret key and performs all decryption operations.
 service VaultService {
-  // Returns the public key bundle (EncKey, EvalKey, optional team index name).
-  rpc GetPublicKey(GetPublicKeyRequest) returns (GetPublicKeyResponse);
+  // Returns the agent manifest (EncKey, agent credentials, optional team index name).
+  rpc GetAgentManifest(GetAgentManifestRequest) returns (GetAgentManifestResponse);
 
   // Decrypts FHE-encrypted similarity scores and applies Top-K filtering.
   rpc DecryptScores(DecryptScoresRequest) returns (DecryptScoresResponse);
@@ -17,16 +17,16 @@ service VaultService {
   rpc DecryptMetadata(DecryptMetadataRequest) returns (DecryptMetadataResponse);
 }
 
-// ─── GetPublicKey ──────────────────────────────────────────────────
+// ─── GetAgentManifest ─────────────────────────────────────────────
 
-message GetPublicKeyRequest {
+message GetAgentManifestRequest {
   // Auth token. Required, Fixed 36 chars (evt_ + 32 hex).
   string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
 }
 
-message GetPublicKeyResponse {
-  // JSON string: {"EncKey.json": "...", "EvalKey.json": "...", "index_name": "..."}
-  string key_bundle_json = 1;
+message GetAgentManifestResponse {
+  // JSON string: {"EncKey.json": "...", "index_name": "...", "agent_id": "...", ...}
+  string manifest_json = 1;
   string error = 2;  // Non-empty on error
 }
 

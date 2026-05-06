@@ -27,10 +27,10 @@ func TestOpenSecretKeyMissingReturnsError(t *testing.T) {
 	}
 }
 
-func TestReadPublicKeyBundleMissingReturnsError(t *testing.T) {
+func TestReadEncKeyMissingReturnsError(t *testing.T) {
 	p := KeysParams{Root: t.TempDir(), KeyID: "vault-key", Dim: 1024}
-	if _, err := ReadPublicKeyBundle(p); err == nil {
-		t.Error("ReadPublicKeyBundle on missing keys returned nil error")
+	if _, err := ReadEncKey(p); err == nil {
+		t.Error("ReadEncKey on missing keys returned nil error")
 	}
 }
 
