@@ -49,12 +49,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: "1.0"
+          memory: 10G
+          cpus: "2.0"
         reservations:
           memory: 512M
           cpus: "0.5"
-
 
 networks:
   vault-net:
