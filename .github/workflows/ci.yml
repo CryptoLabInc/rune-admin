@@ -7,18 +7,18 @@ on:
       - "docs/**"
       - "*.md"
       - "deployment/**"
-      - ".github/workflows/docker-publish.yml"
       - "LICENSE"
       - ".githooks/**"
+      - ".github/workflows/**"
   push:
     branches: [main]
     paths-ignore:
       - "docs/**"
       - "*.md"
       - "deployment/**"
-      - ".github/workflows/docker-publish.yml"
       - "LICENSE"
       - ".githooks/**"
+      - ".github/workflows/**"
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
@@ -26,12 +26,12 @@ concurrency:
 
 jobs:
   check:
-    runs-on: [self-hosted, vault-ci]
+    runs-on: ubuntu-latest
+    env:
+      MISE_ENV: ci
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
-        env:
-          MISE_ENV: ci
       - run: mise run setup
       - name: Clean previous fixtures
         run: rm -rf tests/fixtures/
@@ -39,35 +39,14 @@ jobs:
         env:
           FIXTURES_GPG_PASSPHRASE: ${{ secrets.FIXTURES_GPG_PASSPHRASE_ALT }}
         run: mise run fixtures:decrypt
-      - name: Format check
-        run: mise run format:check
-      - name: Lint
-        run: mise run lint
-      - name: Test (unit + integration)
-        run: mise run test
+      - name: Check (gofmt + vet + unit tests)
+        run: mise run check
+      - name: Build
+        run: |
+          VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+          VERSION=$VERSION mise run go:build
+      - name: E2E tests
+        run: mise run go:test:e2e
       - name: Clean up fixtures
         if: always()
         run: rm -rf tests/fixtures/
-
-  build-image:
-    if: github.event_name == 'push'
-    needs: check
-    runs-on: [self-hosted, vault-ci]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build
-        run: |
-          docker build -t rune-vault:ci-${{ github.sha }} vault/
-      - name: Smoke test
-        run: |
-          docker run -d --name vault-ci-${{ github.run_id }} \
-            -e VAULT_TLS_DISABLE=true \
-            rune-vault:ci-${{ github.sha }}
-          timeout 60 bash -c 'until docker exec vault-ci-${{ github.run_id }} \
-            curl -sf http://localhost:8081/health 2>/dev/null; do sleep 2; done'
-      - name: Teardown
-        if: always()
-        run: |
-          docker rm -f vault-ci-${{ github.run_id }} || true
-          docker rmi rune-vault:ci-${{ github.sha }} || true
-          docker system prune -f

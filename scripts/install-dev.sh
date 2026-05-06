@@ -1,865 +1,680 @@
-#!/bin/bash
-# Rune-Vault Interactive Server Setup — Local Development Version
-# Uses files from the local working tree instead of downloading from GitHub.
-# Usage: sudo bash scripts/install-dev.sh
+#!/usr/bin/env bash
 #
-# Build the Docker image first:
-#   mise run build dev
+# Rune-Vault dev installer (sibling of install.sh).
+#
+# Installs the runevault daemon from your local working tree — never from a
+# published release. Use this to verify in-progress source code on your local
+# machine or on a CSP VM (AWS, GCP, OCI) before cutting a release.
+#
+# Usage:
+#   sudo bash scripts/install-dev.sh [options]
+#
+# Options:
+#   --target <local|aws|gcp|oci>  Install/uninstall target (default: prompt if TTY, else local)
+#   --install-dir <path>          CSP install dir (default: $HOME/rune-vault-<csp>)
+#   --prefix <dir>                Local-only: rootless test prefix
+#   --non-interactive             Skip all prompts; supply secrets via env vars
+#   --uninstall                   Forward uninstall to install.sh (local or CSP target)
+#   --force                       Forwarded to install.sh (local target only)
+#
+# Differences from install.sh:
+#   - Always installs from the local working tree (no GitHub release download).
+#   - For CSP targets, builds linux/amd64 in Docker (golang:1.25-bookworm) with
+#     --platform linux/amd64 — works on any host arch via qemu emulation.
+#   - cloud-init-dev / startup-script-dev only prepare the VM; install.sh runs
+#     over SSH after cloud-init finishes.
+#
+# Non-interactive env vars (CSP install — operator workstation):
+#   RUNEVAULT_ENVECTOR_ENDPOINT      enVector endpoint URL (required)
+#   RUNEVAULT_ENVECTOR_API_KEY       enVector API key (required)
+#   RUNEVAULT_TEAM_NAME              Team name (required)
+#   RUNEVAULT_TARGET                 Pre-select target without interactive menu
+#   RUNEVAULT_INSTALL_DIR            Pre-set CSP install directory
+#   RUNEVAULT_CSP_REGION             Cloud region
+#   RUNEVAULT_GCP_PROJECT_ID         GCP: project ID (required for GCP)
+#   RUNEVAULT_OCI_COMPARTMENT_ID     OCI: compartment OCID (required for OCI)
 
 set -euo pipefail
 
-# ─── Root privilege check ─────────────────────────────────────────────────────
+# ── Constants ──────────────────────────────────────────────────────────────────
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+LOCAL_BINARY_HOST="${REPO_ROOT}/vault/bin/runevault"
+TARGET_OS=linux
+TARGET_ARCH=amd64
+LINUX_BINARY="${REPO_ROOT}/vault/bin/runevault-${TARGET_OS}-${TARGET_ARCH}"
+BUILDER_IMAGE="golang:1.25-bookworm"
+GRPC_PORT=50051
 
-if [ "$(id -u)" -ne 0 ]; then
-    echo "Error: This script must be run as root. Use: sudo bash scripts/install-dev.sh"
-    exit 1
+# Overridable by env (mirrors install.sh)
+TARGET="${RUNEVAULT_TARGET:-}"
+INSTALL_DIR_CSP="${RUNEVAULT_INSTALL_DIR:-}"
+CSP_PUBLIC_IP=""
+
+# CSP config (populated by dev_csp_prompt_config)
+TEAM_NAME=""
+ENVECTOR_ENDPOINT=""
+ENVECTOR_API_KEY=""
+CSP_REGION=""
+GCP_PROJECT_ID=""
+OCI_COMPARTMENT_ID=""
+
+# ── Color helpers (copied from install.sh) ─────────────────────────────────────
+if [[ -t 1 ]]; then
+  _RED='\033[0;31m' _GRN='\033[0;32m' _BLU='\033[0;34m' _YLW='\033[0;33m' _RST='\033[0m'
+else
+  _RED='' _GRN='' _BLU='' _YLW='' _RST=''
 fi
+die()     { printf "${_RED}ERROR:${_RST} %s\n" "$*" >&2; exit 1; }
+info()    { printf "${_BLU}==>${_RST} %s\n" "$*"; }
+success() { printf "${_GRN}✓${_RST} %s\n" "$*"; }
+warn()    { printf "${_YLW}WARNING:${_RST} %s\n" "$*" >&2; }
 
-# ─── Resolve repo root ──────────────────────────────────────────────────────
+# ── Argument parsing ───────────────────────────────────────────────────────────
+PREFIX=""
+NON_INTERACTIVE=0
+UNINSTALL=0
+PASSTHROUGH_ARGS=()
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --target)          TARGET="$2"; shift 2 ;;
+    --install-dir)     INSTALL_DIR_CSP="$2"; shift 2 ;;
+    --prefix)          PREFIX="$2"; shift 2 ;;
+    --non-interactive) NON_INTERACTIVE=1; PASSTHROUGH_ARGS+=("$1"); shift ;;
+    --uninstall)       UNINSTALL=1; shift ;;
+    --force)           PASSTHROUGH_ARGS+=("$1"); shift ;;
+    *)                 PASSTHROUGH_ARGS+=("$1"); shift ;;
+  esac
+done
 
-if [ ! -f "$REPO_ROOT/install.sh" ]; then
-    echo "Error: Cannot find repo root. Run from the repository directory:"
-    echo "  sudo bash scripts/install-dev.sh"
-    exit 1
-fi
+# Auto-set non-interactive when stdin is not a TTY
+[[ -t 0 ]] || NON_INTERACTIVE=1
 
-# ─── Resolve Docker tag from git state ───────────────────────────────────────
+# ── Platform detection ─────────────────────────────────────────────────────────
+case "$(uname -s)" in
+  Linux)  HOST_OS=linux ;;
+  Darwin) HOST_OS=darwin ;;
+  *)      die "Unsupported host OS: $(uname -s). Only Linux and macOS are supported." ;;
+esac
+case "$(uname -m)" in
+  x86_64|amd64)  HOST_ARCH=amd64 ;;
+  arm64|aarch64) HOST_ARCH=arm64 ;;
+  *)             die "Unsupported host architecture: $(uname -m)." ;;
+esac
 
-DOCKER_IMAGE="ghcr.io/cryptolabinc/rune-vault"
-GIT_BRANCH="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD | sed 's|/|-|g')"
-GIT_COMMIT="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
-DOCKER_TAG="${GIT_BRANCH}-${GIT_COMMIT}"
-_user_home="${SUDO_USER:+$(eval echo ~"$SUDO_USER")}"
-DEFAULT_INSTALL_DIR="${_user_home:-$HOME}/rune-vault-dev"
-VAULT_PUBLIC_IP=""
-CSP_CA_CERT_LOCAL=""
-
-# ─── Colors & output helpers ─────────────────────────────────────────────────
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-BOLD='\033[1m'
-NC='\033[0m'
-
-print_header() {
-    echo -e "\n${BLUE}================================================${NC}"
-    echo -e "${BLUE}  $1${NC}"
-    echo -e "${BLUE}================================================${NC}\n"
+# ── Banner ─────────────────────────────────────────────────────────────────────
+print_banner() {
+  local commit
+  commit=$(cd "$REPO_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown)
+  printf '\n'
+  printf '  ╭───────────────────────────────────────────────────────────────────╮\n'
+  printf '  │  Rune-Vault dev installer                                         │\n'
+  printf '  │  Source: local working tree (not a published release)             │\n'
+  printf '  │  Commit: %-56s │\n' "$commit"
+  printf '  ╰───────────────────────────────────────────────────────────────────╯\n'
+  printf '\n'
 }
 
-print_info()  { echo -e "${GREEN}✓${NC} $1"; }
-print_warn()  { echo -e "${YELLOW}⚠${NC} $1"; }
-print_error() { echo -e "${RED}✗${NC} $1"; }
-print_step()  { echo -e "\n${BOLD}▸ $1${NC}\n"; }
-
-# ─── Cleanup trap ─────────────────────────────────────────────────────────────
-
-CLEANUP_DIR=""
-cleanup() {
-    printf '\033[?25h' >&2 2>/dev/null || true
-    if [ -n "$CLEANUP_DIR" ] && [ -d "$CLEANUP_DIR" ]; then
-        rm -rf "$CLEANUP_DIR"
-    fi
-}
-trap cleanup EXIT
-
-# ─── Prompt helper ────────────────────────────────────────────────────────────
-
-prompt() {
-    local varname="$1" message="$2" default="${3:-}"
-    if [ -n "$default" ]; then
-        printf "${BOLD}%s${NC} [%s]: " "$message" "$default" >&2
-    else
-        printf "${BOLD}%s${NC}: " "$message" >&2
-    fi
-    local value
-    read -r value
-    value="${value:-$default}"
-    eval "$varname=\"\$value\""
+# ── Helpers (mirror install.sh) ───────────────────────────────────────────────
+_prompt() {
+  local varname=$1 label=$2 default=${3:-}
+  [[ -n "${!varname:-}" ]] && return 0
+  local val
+  if [[ -n "$default" ]]; then
+    read -r -p "${label} [${default}]: " val
+    printf -v "$varname" '%s' "${val:-$default}"
+  else
+    read -r -p "${label}: " val
+    printf -v "$varname" '%s' "$val"
+  fi
 }
 
-prompt_yn() {
-    local message="$1" default="${2:-y}"
-    local value
-    if [ "$default" = "y" ]; then
-        printf "${BOLD}%s${NC} [Y/n]: " "$message" >&2
-    else
-        printf "${BOLD}%s${NC} [y/N]: " "$message" >&2
-    fi
-    read -r value
-    value="${value:-$default}"
-    case "$value" in
-        [Yy]*) return 0 ;;
-        *) return 1 ;;
+# Escape for embedding inside a double-quoted Terraform string.
+escape_tf() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+# Escape for embedding inside a single-quoted shell argument.
+# Replaces every ' with '\''.
+escape_single() {
+  local s=$1
+  printf '%s' "${s//\'/\'\\\'\'}"
+}
+
+# ── Target resolution (mirror install.sh:198–226) ─────────────────────────────
+resolve_target() {
+  if [[ -n "${TARGET:-}" ]]; then
+    case "$TARGET" in
+      local|aws|gcp|oci) ;;
+      *) die "Invalid --target value: ${TARGET}. Valid: local, aws, gcp, oci." ;;
     esac
-}
-
-# ─── Arrow-key menu selector ────────────────────────────────────────────────
-
-select_menu() {
-    local options=("$@")
-    local count=${#options[@]}
-    local _sel=0
-
-    # Fallback: plain number input when terminal is dumb or unset
-    if [ -z "${TERM:-}" ] || [ "$TERM" = "dumb" ]; then
-        local i
-        for i in "${!options[@]}"; do
-            printf "  %d) %s\n" "$((i + 1))" "${options[$i]}" >&2
-        done
-        echo "" >&2
-        local choice
-        printf "${BOLD}Select${NC} [1]: " >&2
-        read -r choice
-        choice="${choice:-1}"
-        if [ "$choice" -ge 1 ] 2>/dev/null && [ "$choice" -le "$count" ] 2>/dev/null; then
-            echo "$((choice - 1))"
-        else
-            print_error "Invalid selection."; exit 1
-        fi
-        return
-    fi
-
-    # ── Draw the menu ──
-    _draw_menu() {
-        local i
-        for i in "${!options[@]}"; do
-            if [ "$i" -eq "$_sel" ]; then
-                printf "  ${GREEN}${BOLD}> %s${NC}\n" "${options[$i]}" >&2
-            else
-                printf "    %s\n" "${options[$i]}" >&2
-            fi
-        done
-    }
-
-    # ── Move cursor up to redraw ──
-    _erase_menu() {
-        local i
-        for (( i = 0; i < count; i++ )); do
-            printf '\033[1A\033[2K' >&2
-        done
-    }
-
-    printf '\033[?25l' >&2          # hide cursor
-    printf "  ${BOLD}↑↓ move  Enter confirm${NC}\n" >&2
-    _draw_menu
-
-    while true; do
-        local key=""
-        IFS= read -rsn1 key
-        if [ "$key" = $'\x1b' ]; then
-            local seq=""
-            IFS= read -rsn2 -t 1 seq || true
-            case "$seq" in
-                '[A') # Up arrow
-                    if [ "$_sel" -gt 0 ]; then
-                        _sel=$((_sel - 1))
-                    else
-                        _sel=$((count - 1))
-                    fi
-                    ;;
-                '[B') # Down arrow
-                    if [ "$_sel" -lt $((count - 1)) ]; then
-                        _sel=$((_sel + 1))
-                    else
-                        _sel=0
-                    fi
-                    ;;
-            esac
-            _erase_menu
-            _draw_menu
-        elif [ "$key" = "" ]; then
-            # Enter key
-            break
-        elif [ "$key" -ge 1 ] 2>/dev/null && [ "$key" -le "$count" ] 2>/dev/null; then
-            # Number key direct jump
-            _sel=$((key - 1))
-            _erase_menu
-            _draw_menu
-        fi
-    done
-
-    printf '\033[?25h' >&2          # show cursor
-
-    echo "$_sel"
-}
-
-# ─── Local file copy helper (replaces download_file) ────────────────────────
-
-copy_local_file() {
-    local src="$1" dest="$2"
-    if [ ! -f "$src" ]; then
-        print_error "Local file not found: $src"
-        exit 1
-    fi
-    cp "$src" "$dest"
-}
-
-# ─── Prerequisite checks ─────────────────────────────────────────────────────
-
-check_command() {
-    local cmd="$1" install_hint="$2"
-    if ! command -v "$cmd" &>/dev/null; then
-        print_error "'$cmd' is not installed."
-        echo "  Install: $install_hint"
-        return 1
-    fi
-    print_info "$cmd found"
     return 0
-}
-
-check_prerequisites_local() {
-    print_step "Checking prerequisites..."
-    local missing=0
-    check_command mise "https://mise.jdx.dev" || missing=1
-    check_command docker "https://docs.docker.com/get-docker/" || missing=1
-    check_command openssl "apt install openssl / brew install openssl" || missing=1
-
-    # docker compose (v2 plugin)
-    if ! docker compose version &>/dev/null 2>&1; then
-        print_error "'docker compose' (v2 plugin) is not available."
-        echo "  Install: https://docs.docker.com/compose/install/"
-        missing=1
-    else
-        print_info "docker compose found"
-    fi
-
-    if [ "$missing" -eq 1 ]; then
-        echo ""
-        print_error "Please install the missing prerequisites and re-run."
-        exit 1
-    fi
-
-    # Check Docker daemon
-    if ! docker info &>/dev/null 2>&1; then
-        print_error "Cannot connect to Docker daemon. Is Docker running?"
-        echo "  Fix: systemctl start docker"
-        exit 1
-    fi
-
-    (cd "$REPO_ROOT" && mise trust)
-}
-
-check_prerequisites_csp() {
-    local provider="$1"
-    print_step "Checking prerequisites..."
-
-    local missing=0
-    check_command mise "https://mise.jdx.dev" || missing=1
-    check_command terraform "https://developer.hashicorp.com/terraform/install" || missing=1
-    check_command openssl "apt install openssl / brew install openssl" || missing=1
-    check_command gh "https://cli.github.com/" || missing=1
-    check_command docker "https://docs.docker.com/get-docker/" || missing=1
-
-    case "$provider" in
-        aws) check_command aws "https://aws.amazon.com/cli/" || missing=1 ;;
-        gcp) check_command gcloud "https://cloud.google.com/sdk/docs/install" || missing=1 ;;
-        oci) check_command oci "https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm" || missing=1 ;;
+  fi
+  if [[ "$NON_INTERACTIVE" -eq 0 && -t 0 ]]; then
+    local action="install"
+    [[ "$UNINSTALL" -eq 1 ]] && action="uninstall"
+    printf '  Select %s target:\n' "$action"
+    printf '    1) Local (this machine)\n'
+    printf '    2) AWS\n'
+    printf '    3) GCP\n'
+    printf '    4) OCI\n'
+    printf '\n'
+    local choice
+    read -r -p "  Choice [1]: " choice
+    case "${choice:-1}" in
+      1|local) TARGET=local ;;
+      2|aws)   TARGET=aws ;;
+      3|gcp)   TARGET=gcp ;;
+      4|oci)   TARGET=oci ;;
+      *) die "Invalid choice: ${choice}" ;;
     esac
-
-    if [ "$missing" -eq 1 ]; then
-        echo ""
-        print_error "Please install the missing prerequisites and re-run."
-        exit 1
-    fi
-
-    (cd "$REPO_ROOT" && mise trust)
+  else
+    TARGET=local
+  fi
 }
 
-# ─── Interactive prompts ─────────────────────────────────────────────────────
+# ── Preflight ──────────────────────────────────────────────────────────────────
+dev_preflight() {
+  info "Running dev preflight checks..."
 
-choose_deploy_target() {
-    print_step "Select deployment target"
-    local options=("Local (This machine)" "AWS (requires GHCR access)" "GCP (requires GHCR access)" "OCI (requires GHCR access)")
-    local targets=("local" "aws" "gcp" "oci")
-    local selected
-    selected=$(select_menu "${options[@]}")
-    DEPLOY_TARGET="${targets[$selected]}"
-    print_info "Deployment target: ${DEPLOY_TARGET}"
+  # Rootless local test (--prefix) is the one path that doesn't require sudo.
+  if [[ "$TARGET" != "local" || -z "$PREFIX" ]]; then
+    [[ "$(id -u)" -eq 0 ]] || die "This installer must be run as root (use sudo)."
+  fi
+
+  [[ -d "${REPO_ROOT}/vault" ]] \
+    || die "vault/ directory not found under ${REPO_ROOT}. Run from a clone of rune-admin."
+
+  local missing=()
+  for tool in git mise; do
+    command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
+  done
+  [[ ${#missing[@]} -gt 0 ]] && die "Missing required tools: ${missing[*]}"
+
+  if [[ "$TARGET" != "local" ]]; then
+    [[ -z "$PREFIX" ]] || die "--prefix is local-only."
+    dev_check_docker
+  fi
+
+  success "Preflight passed."
 }
 
-prompt_install_dir() {
-    print_step "Installation directory"
-    local default_dir="$DEFAULT_INSTALL_DIR"
-    if [ "$DEPLOY_TARGET" != "local" ]; then
-        default_dir="$HOME/rune-vault-${DEPLOY_TARGET}"
-        echo "  Terraform files, state, and SSH keys are stored here."
-        echo "  Keep this directory to manage (update/destroy) your deployment."
-        echo ""
-    fi
-    prompt INSTALL_DIR "Directory" "$default_dir"
+dev_check_docker() {
+  command -v docker >/dev/null 2>&1 \
+    || die "docker is required for CSP targets. Install Docker Desktop / Docker Engine and retry."
+
+  local docker_user="${SUDO_USER:-$(id -un)}"
+  if ! sudo -u "$docker_user" -H bash -lc 'docker info' >/dev/null 2>&1; then
+    die "docker daemon is not reachable for user '${docker_user}'. Start Docker (Docker Desktop / 'colima start' / 'systemctl start docker') and retry."
+  fi
+
+  # Cross-arch builder probe — fails fast if binfmt handlers are missing.
+  if ! sudo -u "$docker_user" -H bash -lc \
+    "docker run --rm --platform ${TARGET_OS}/${TARGET_ARCH} alpine:latest true" >/dev/null 2>&1; then
+    die "docker cannot run ${TARGET_OS}/${TARGET_ARCH} images. Install qemu binfmt handlers:
+       docker run --rm --privileged tonistiigi/binfmt --install all"
+  fi
 }
 
-prompt_tls_mode() {
-    print_step "TLS configuration"
-    local options=("Generate self-signed certificate" "No TLS (not recommended)")
-    local modes=("self-signed" "none")
-    local selected
-    selected=$(select_menu "${options[@]}")
-    TLS_MODE="${modes[$selected]}"
-
-    if [ "$TLS_MODE" = "self-signed" ]; then
-        echo ""
-        prompt TLS_HOSTNAME "Domain name for the certificate (leave empty if none)" ""
-    fi
-
-    if [ "$TLS_MODE" = "none" ]; then
-        print_warn "Running without TLS. gRPC traffic will be unencrypted."
-        print_warn "This is NOT recommended for production."
-    fi
-
-    print_info "TLS mode: ${TLS_MODE}"
+# ── Build ──────────────────────────────────────────────────────────────────────
+dev_build_local_binary() {
+  info "Building runevault for host (${HOST_OS}/${HOST_ARCH})..."
+  local build_user="${SUDO_USER:-$(id -un)}"
+  (cd "$REPO_ROOT" && sudo -u "$build_user" -H bash -lc 'mise run go:build')
+  [[ -x "$LOCAL_BINARY_HOST" ]] || die "Build did not produce ${LOCAL_BINARY_HOST}."
+  success "Built: ${LOCAL_BINARY_HOST}"
 }
 
-prompt_envector_config() {
-    print_step "enVector Cloud configuration"
-    echo "  Create your enVector cluster at https://envector.io before proceeding."
-    echo "  You will need the endpoint URL and API key from the dashboard."
-    echo "  Index name is used to store and retrieve your team's organizational memory."
-    echo ""
-    prompt ENVECTOR_ENDPOINT "enVector endpoint (e.g. cluster-id.clusters.envector.io)"
-    prompt ENVECTOR_API_KEY "enVector API key (e.g. aBcDE_12345_xxxxx)"
-    prompt VAULT_INDEX_NAME "Index name" "runecontext"
+dev_build_linux_binary() {
+  info "Building runevault for ${TARGET_OS}/${TARGET_ARCH} via Docker (${BUILDER_IMAGE})..."
+  local build_user="${SUDO_USER:-$(id -un)}"
+  local user_home commit version date pkg
+  user_home="${SUDO_USER:+$(eval echo ~"${SUDO_USER}")}"
+  user_home="${user_home:-$HOME}"
+  commit=$(cd "$REPO_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo none)
+  version=dev
+  date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  pkg="github.com/CryptoLabInc/rune-admin/vault/internal/commands"
 
-    if [ -z "$ENVECTOR_ENDPOINT" ] || [ -z "$ENVECTOR_API_KEY" ]; then
-        print_error "enVector endpoint and API key are required."
-        exit 1
-    fi
-    if [ -z "$VAULT_INDEX_NAME" ]; then
-        print_error "Index name is required."
-        exit 1
-    fi
-    print_info "enVector endpoint: ${ENVECTOR_ENDPOINT}"
+  local ldflags="-X '${pkg}.buildVersion=${version}' -X '${pkg}.buildCommit=${commit}' -X '${pkg}.buildDate=${date}'"
+  local out_rel="bin/runevault-${TARGET_OS}-${TARGET_ARCH}"
+
+  mkdir -p "${user_home}/go/pkg/mod"
+  mkdir -p "${REPO_ROOT}/vault/bin"
+  [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "${REPO_ROOT}/vault/bin"
+
+  # Run docker as the invoking user so written files are owned correctly and
+  # the user's go module cache is reused for speed.
+  sudo -u "$build_user" -H docker run --rm \
+    --platform "${TARGET_OS}/${TARGET_ARCH}" \
+    -v "${REPO_ROOT}/vault:/src" \
+    -v "${user_home}/go/pkg/mod:/go/pkg/mod" \
+    -w /src \
+    -e CGO_ENABLED=1 \
+    -e LDFLAGS="$ldflags" \
+    -e OUTPUT="$out_rel" \
+    "${BUILDER_IMAGE}" \
+    bash -c '
+      set -e
+      apt-get update -qq && apt-get install -y -qq libssl-dev >/dev/null
+      go build -ldflags "$LDFLAGS" -o "$OUTPUT" ./cmd
+    ' || die "Docker build failed."
+
+  [[ -x "$LINUX_BINARY" ]] || die "Build did not produce ${LINUX_BINARY}."
+  success "Built: ${LINUX_BINARY}"
 }
 
-prompt_csp_config() {
-    prompt TEAM_NAME "Team name (used for resource naming)" "default"
+# ── Local config prompts (mirror dev_csp_prompt_config) ───────────────────────
+dev_local_prompt_config() {
+  if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
+    printf '\n'
+    printf '══════════════════════════════════════════════════════════\n'
+    printf '  Local install configuration (dev mode)\n'
+    printf '══════════════════════════════════════════════════════════\n'
+    printf '\n'
 
-    case "$DEPLOY_TARGET" in
-        aws)
-            prompt CSP_REGION "AWS region" "us-east-1"
-            ;;
-        gcp)
-            prompt CSP_REGION "GCP region" "us-central1"
-            prompt GCP_PROJECT_ID "GCP project ID"
-            if [ -z "$GCP_PROJECT_ID" ]; then
-                print_error "GCP project ID is required."; exit 1
-            fi
-            ;;
-        oci)
-            prompt CSP_REGION "OCI region" "us-ashburn-1"
-            prompt OCI_COMPARTMENT_ID "OCI compartment OCID"
-            if [ -z "$OCI_COMPARTMENT_ID" ]; then
-                print_error "OCI compartment OCID is required."; exit 1
-            fi
-            ;;
+    _prompt RUNEVAULT_TEAM_NAME         "Team name"         "devteam"
+    _prompt RUNEVAULT_ENVECTOR_ENDPOINT "enVector endpoint" ""
+    _prompt RUNEVAULT_ENVECTOR_API_KEY  "enVector API key"  ""
+    printf '\n'
+
+    [[ -n "${RUNEVAULT_ENVECTOR_ENDPOINT:-}" ]] || die "enVector endpoint is required."
+    [[ -n "${RUNEVAULT_ENVECTOR_API_KEY:-}" ]]  || die "enVector API key is required."
+  else
+    RUNEVAULT_TEAM_NAME="${RUNEVAULT_TEAM_NAME:-devteam}"
+    RUNEVAULT_ENVECTOR_ENDPOINT="${RUNEVAULT_ENVECTOR_ENDPOINT:-https://envector.example.com}"
+    RUNEVAULT_ENVECTOR_API_KEY="${RUNEVAULT_ENVECTOR_API_KEY:-dev-api-key-placeholder}"
+  fi
+}
+
+# ── Local install branch ──────────────────────────────────────────────────────
+dev_local_install() {
+  dev_build_local_binary
+  dev_local_prompt_config
+
+  export RUNEVAULT_LOCAL_BINARY="$LOCAL_BINARY_HOST"
+  export RUNEVAULT_TEAM_NAME
+  export RUNEVAULT_ENVECTOR_ENDPOINT
+  export RUNEVAULT_ENVECTOR_API_KEY
+
+  if [[ -n "$PREFIX" ]]; then
+    export RUNEVAULT_INSTALL_PREFIX="$PREFIX"
+    export RUNEVAULT_BINARY_PATH="${PREFIX}/runevault"
+    export RUNEVAULT_SKIP_SERVICE=1
+  fi
+
+  exec bash "${REPO_ROOT}/install.sh" --target local "${PASSTHROUGH_ARGS[@]+"${PASSTHROUGH_ARGS[@]}"}"
+}
+
+# ── Uninstall forward ─────────────────────────────────────────────────────────
+# install-dev.sh defers all uninstall logic to install.sh. install.sh handles
+# both local (service + files) and CSP (terraform destroy + dir cleanup).
+dev_forward_uninstall() {
+  info "Forwarding uninstall to install.sh (target: ${TARGET})..."
+  local args=(--uninstall --target "$TARGET")
+  [[ -n "$INSTALL_DIR_CSP" ]] && args+=(--install-dir "$INSTALL_DIR_CSP")
+  [[ "$NON_INTERACTIVE" -eq 1 ]] && args+=(--non-interactive)
+
+  if [[ "$TARGET" = "local" && -n "$PREFIX" ]]; then
+    export RUNEVAULT_INSTALL_PREFIX="$PREFIX"
+    export RUNEVAULT_BINARY_PATH="${PREFIX}/runevault"
+  fi
+
+  exec bash "${REPO_ROOT}/install.sh" "${args[@]}"
+}
+
+# ── CSP preflight (mirror install.sh:228–285) ─────────────────────────────────
+dev_csp_preflight() {
+  local csp=$1
+  info "Running CSP preflight checks for ${csp}..."
+
+  command -v terraform >/dev/null 2>&1 \
+    || die "terraform is not installed. Install it (https://developer.hashicorp.com/terraform/install) and retry."
+
+  local csp_cli auth_cmd auth_setup
+  case "$csp" in
+    aws)
+      csp_cli=aws
+      auth_cmd='aws sts get-caller-identity'
+      auth_setup='aws configure'
+      ;;
+    gcp)
+      csp_cli=gcloud
+      auth_cmd='gcloud auth application-default print-access-token'
+      auth_setup='gcloud auth application-default login'
+      ;;
+    oci)
+      csp_cli=oci
+      auth_cmd='oci iam region list'
+      auth_setup='oci setup config'
+      ;;
+  esac
+
+  local tf_user="${SUDO_USER:-$(id -un)}"
+
+  if ! sudo -u "$tf_user" -H bash -lc "command -v ${csp_cli}" >/dev/null 2>&1; then
+    die "'${csp_cli}' CLI not found in PATH for user '${tf_user}'. Install it and re-run."
+  fi
+
+  if ! sudo -u "$tf_user" -H bash -lc "${auth_cmd}" >/dev/null 2>&1; then
+    die "'${csp_cli}' is not authenticated for user '${tf_user}'. Authenticate and re-run: ${auth_setup}"
+  fi
+
+  success "CSP preflight passed."
+}
+
+# ── CSP config prompts (mirror install.sh:287–347) ────────────────────────────
+dev_csp_prompt_config() {
+  local csp=$1
+
+  if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
+    printf '\n'
+    printf '══════════════════════════════════════════════════════════\n'
+    printf '  Cloud deployment configuration (dev mode)\n'
+    printf '══════════════════════════════════════════════════════════\n'
+    printf '\n'
+
+    _prompt TEAM_NAME          "Team name"          "devteam"
+    _prompt ENVECTOR_ENDPOINT  "enVector endpoint"  ""
+    _prompt ENVECTOR_API_KEY   "enVector API key"   ""
+
+    case "$csp" in
+      aws) _prompt CSP_REGION "AWS region"   "us-east-1"   ;;
+      gcp)
+        _prompt CSP_REGION    "GCP region"   "us-central1"
+        _prompt GCP_PROJECT_ID "GCP project ID" ""
+        ;;
+      oci)
+        _prompt CSP_REGION         "OCI region"          "us-ashburn-1"
+        _prompt OCI_COMPARTMENT_ID "OCI compartment OCID" ""
+        ;;
     esac
+    printf '\n'
+  else
+    TEAM_NAME="${RUNEVAULT_TEAM_NAME:-}"
+    ENVECTOR_ENDPOINT="${RUNEVAULT_ENVECTOR_ENDPOINT:-}"
+    ENVECTOR_API_KEY="${RUNEVAULT_ENVECTOR_API_KEY:-}"
+    CSP_REGION="${RUNEVAULT_CSP_REGION:-}"
+    GCP_PROJECT_ID="${RUNEVAULT_GCP_PROJECT_ID:-}"
+    OCI_COMPARTMENT_ID="${RUNEVAULT_OCI_COMPARTMENT_ID:-}"
+
+    local missing=()
+    [[ -z "$TEAM_NAME" ]]         && missing+=("RUNEVAULT_TEAM_NAME")
+    [[ -z "$ENVECTOR_ENDPOINT" ]] && missing+=("RUNEVAULT_ENVECTOR_ENDPOINT")
+    [[ -z "$ENVECTOR_API_KEY" ]]  && missing+=("RUNEVAULT_ENVECTOR_API_KEY")
+    [[ "$csp" = gcp && -z "$GCP_PROJECT_ID" ]]      && missing+=("RUNEVAULT_GCP_PROJECT_ID")
+    [[ "$csp" = oci && -z "$OCI_COMPARTMENT_ID" ]]  && missing+=("RUNEVAULT_OCI_COMPARTMENT_ID")
+    if [[ ${#missing[@]} -gt 0 ]]; then
+      printf 'ERROR: Missing required env vars:\n' >&2
+      for v in "${missing[@]}"; do printf '  %s\n' "$v" >&2; done
+      exit 1
+    fi
+  fi
+
+  [[ -n "$TEAM_NAME" ]]          || die "Team name is required."
+  [[ -n "$ENVECTOR_ENDPOINT" ]]  || die "enVector endpoint is required."
+  [[ -n "$ENVECTOR_API_KEY" ]]   || die "enVector API key is required."
+  if [[ "$csp" = gcp ]]; then
+    [[ -n "$GCP_PROJECT_ID" ]]     || die "GCP project ID is required."
+  fi
+  if [[ "$csp" = oci ]]; then
+    [[ -n "$OCI_COMPARTMENT_ID" ]] || die "OCI compartment OCID is required."
+  fi
 }
 
-generate_team_secret() {
-    VAULT_TEAM_SECRET_VALUE="evt_$(openssl rand -hex 32)"
-    print_info "Team secret generated."
+# ── SSH key (identical to install.sh:349–361) ─────────────────────────────────
+dev_csp_generate_ssh_key() {
+  local key_path="${INSTALL_DIR_CSP}/ssh_key"
+  if [[ -f "$key_path" ]]; then
+    info "SSH key already exists: ${key_path}"
+    return 0
+  fi
+  ssh-keygen -t ed25519 -N '' -f "$key_path" -q
+  chmod 0600 "$key_path"
+  chmod 0644 "${key_path}.pub"
+  [[ -n "${SUDO_USER:-}" ]] \
+    && chown "${SUDO_USER}" "$key_path" "${key_path}.pub"
+  success "SSH key generated: ${key_path}"
 }
 
-generate_config_files() {
-    local dir="$1"
+# ── Terraform files (mirror install.sh:373–399, swap to *-dev variants) ──────
+dev_csp_copy_terraform_files() {
+  local csp=$1
+  local tf_src="${REPO_ROOT}/deployment/${csp}"
+  local tf_dest="${INSTALL_DIR_CSP}/deployment"
+  mkdir -p "$tf_dest"
 
-    cat > "$dir/vault-roles.yml" <<'ROLESEOF'
-roles:
-  admin:
-    scope: [get_public_key, decrypt_scores, decrypt_metadata, manage_tokens]
-    top_k: 50
-    rate_limit: 150/60s
-  member:
-    scope: [get_public_key, decrypt_scores, decrypt_metadata]
-    top_k: 10
-    rate_limit: 30/60s
-ROLESEOF
+  cp "${tf_src}/main.tf" "${tf_dest}/main.tf"
 
-    cat > "$dir/vault-tokens.yml" <<'TOKENSEOF'
-tokens: []
-TOKENSEOF
+  # Use the *-dev variant of cloud-init / startup-script, but rename to the
+  # canonical filename so main.tf's templatefile() reference keeps working
+  # without Terraform changes.
+  case "$csp" in
+    aws)
+      [[ -f "${tf_src}/cloud-init-dev.yaml" ]] \
+        || die "Missing ${tf_src}/cloud-init-dev.yaml."
+      cp "${tf_src}/cloud-init-dev.yaml" "${tf_dest}/cloud-init.yaml"
+      ;;
+    gcp|oci)
+      [[ -f "${tf_src}/startup-script-dev.sh" ]] \
+        || die "Missing ${tf_src}/startup-script-dev.sh."
+      cp "${tf_src}/startup-script-dev.sh" "${tf_dest}/startup-script.sh"
+      ;;
+  esac
 
-    chmod 600 "$dir/vault-roles.yml" "$dir/vault-tokens.yml"
-    print_info "Token/role config files created."
+  printf '*.tfvars\nterraform.tfstate*\n.terraform/\n' > "${INSTALL_DIR_CSP}/.gitignore"
+  [[ -n "${SUDO_USER:-}" ]] && chown -R "${SUDO_USER}" "$tf_dest" "${INSTALL_DIR_CSP}/.gitignore"
+  success "Terraform files (dev variant) ready: ${tf_dest}"
 }
 
-setup_runevault_alias() {
-    if [ -z "${SUDO_USER:-}" ]; then
-        return
+# ── tfvars (mirror install.sh:403–439) ────────────────────────────────────────
+dev_csp_render_tfvars() {
+  local csp=$1
+  local tf_dir="${INSTALL_DIR_CSP}/deployment"
+  local tfvars="${tf_dir}/terraform.tfvars"
+  local public_key=""
+
+  if [[ -f "${tf_dir}/terraform.tfstate" ]]; then
+    if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
+      local answer=n
+      read -r -p "terraform.tfstate already exists in ${tf_dir}. Re-apply? [y/N] " answer
+      [[ "$answer" =~ ^[Yy] ]] || { info "Aborted."; exit 0; }
+    else
+      warn "terraform.tfstate exists — re-applying (idempotent)."
     fi
+  fi
 
-    # Add user to docker group
-    if command -v usermod >/dev/null 2>&1; then
-        usermod -aG docker "$SUDO_USER" 2>/dev/null || true
-    fi
+  [[ -f "${INSTALL_DIR_CSP}/ssh_key.pub" ]] \
+    && public_key=$(cat "${INSTALL_DIR_CSP}/ssh_key.pub")
 
-    # Detect shell config
-    local user_home
-    user_home="$(eval echo ~"$SUDO_USER")"
-    local shell_rc=""
-    if [ -f "$user_home/.zshrc" ]; then
-        shell_rc="$user_home/.zshrc"
-    elif [ -f "$user_home/.bashrc" ]; then
-        shell_rc="$user_home/.bashrc"
-    fi
-
-    if [ -n "$shell_rc" ]; then
-        if ! grep -q 'alias runevault=' "$shell_rc" 2>/dev/null; then
-            echo '' >> "$shell_rc"
-            echo '# Rune-Vault admin CLI' >> "$shell_rc"
-            echo 'alias runevault="docker exec -it rune-vault python3 /app/vault_admin_cli.py"' >> "$shell_rc"
-            print_info "runevault alias added to ${shell_rc}"
-            print_warn "Run 'exec \$SHELL' to reload your shell and enable the runevault command."
-        fi
-    fi
-}
-
-# ─── Confirmation summary ────────────────────────────────────────────────────
-
-show_confirmation() {
-    print_header "Configuration Summary (DEV — local build)"
-    echo "  Deployment target : ${DEPLOY_TARGET}"
-    echo "  Install directory : ${INSTALL_DIR}"
-    echo "  Docker image      : ${DOCKER_IMAGE}:${DOCKER_TAG} (local)"
-    echo "  Repo root         : ${REPO_ROOT}"
-    echo "  TLS mode          : ${TLS_MODE}"
-    [ -n "${TLS_HOSTNAME:-}" ] && echo "  TLS domain        : ${TLS_HOSTNAME}"
-    echo "  Team secret       : (auto-generated in .env)"
-    echo "  enVector endpoint : ${ENVECTOR_ENDPOINT}"
-    echo "  Index name        : ${VAULT_INDEX_NAME}"
-    if [ "$DEPLOY_TARGET" != "local" ]; then
-        echo "  Team name         : ${TEAM_NAME}"
-        echo "  Region            : ${CSP_REGION}"
-        [ "${DEPLOY_TARGET}" = "gcp" ] && echo "  GCP project       : ${GCP_PROJECT_ID}"
-        [ "${DEPLOY_TARGET}" = "oci" ] && echo "  OCI compartment   : ${OCI_COMPARTMENT_ID}"
-    fi
-    echo ""
-
-    if ! prompt_yn "Proceed with deployment?"; then
-        print_warn "Aborted."
-        exit 0
-    fi
-}
-
-# ─── TLS handling ─────────────────────────────────────────────────────────────
-
-setup_tls() {
-    local certs_dir="$INSTALL_DIR/certs"
-    mkdir -p "$certs_dir"
-
-    case "$TLS_MODE" in
-        self-signed)
-            print_step "Generating self-signed certificates..."
-            copy_local_file "$REPO_ROOT/scripts/generate-certs.sh" "$certs_dir/generate-certs.sh"
-            chmod +x "$certs_dir/generate-certs.sh"
-            (cd "$certs_dir" && bash generate-certs.sh . "${TLS_HOSTNAME:-localhost}")
-            TLS_CERT_PATH="$certs_dir/server.pem"
-            TLS_KEY_PATH="$certs_dir/server.key"
-            TLS_CA_PATH="$certs_dir/ca.pem"
-            print_info "Self-signed certificates generated in ${certs_dir}/"
-            ;;
-        none)
-            print_warn "Skipping TLS setup."
-            TLS_CERT_PATH=""
-            TLS_KEY_PATH=""
-            TLS_CA_PATH=""
-            ;;
+  {
+    printf 'team_name          = "%s"\n' "$(escape_tf "${TEAM_NAME:-default}")"
+    printf 'tls_mode           = "self-signed"\n'
+    printf 'envector_endpoint  = "%s"\n' "$(escape_tf "${ENVECTOR_ENDPOINT}")"
+    printf 'envector_api_key   = "%s"\n' "$(escape_tf "${ENVECTOR_API_KEY}")"
+    printf 'runevault_version  = "dev"\n'
+    printf 'public_key         = "%s"\n' "$(escape_tf "${public_key}")"
+    printf 'region             = "%s"\n' "$(escape_tf "${CSP_REGION}")"
+    case "$csp" in
+      gcp) printf 'project_id         = "%s"\n' "$(escape_tf "${GCP_PROJECT_ID}")" ;;
+      oci) printf 'compartment_id     = "%s"\n' "$(escape_tf "${OCI_COMPARTMENT_ID}")" ;;
     esac
+  } > "$tfvars"
+
+  chmod 0600 "$tfvars"
+  [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "$tfvars"
+  success "terraform.tfvars written: ${tfvars}"
 }
 
-# ─── Generate .env file ──────────────────────────────────────────────────────
+# ── Terraform apply (mirror install.sh:441–453) ───────────────────────────────
+dev_csp_run_terraform() {
+  local tf_dir="${INSTALL_DIR_CSP}/deployment"
+  local tf_user="${SUDO_USER:-$(id -un)}"
 
-generate_env_file() {
-    local env_file="$INSTALL_DIR/.env"
+  info "Running terraform init..."
+  (cd "$tf_dir" && sudo -u "$tf_user" terraform init -input=false)
+  info "Running terraform apply..."
+  (cd "$tf_dir" && sudo -u "$tf_user" terraform apply -auto-approve -input=false)
 
-    cat > "$env_file" <<ENVEOF
-# Rune-Vault configuration — generated by install-dev.sh
-VAULT_TEAM_SECRET=${VAULT_TEAM_SECRET_VALUE}
-VAULT_INDEX_NAME=${VAULT_INDEX_NAME}
-ENVECTOR_ENDPOINT=${ENVECTOR_ENDPOINT}
-ENVECTOR_API_KEY=${ENVECTOR_API_KEY}
-EMBEDDING_DIM=768
-RUNE_VAULT_TAG=${DOCKER_TAG}
-ENVEOF
-
-    if [ "$TLS_MODE" = "none" ]; then
-        echo "VAULT_TLS_DISABLE=true" >> "$env_file"
-    else
-        cat >> "$env_file" <<TLSEOF
-VAULT_TLS_CERT=/app/certs/server.pem
-VAULT_TLS_KEY=/app/certs/server.key
-TLSEOF
-    fi
-
-    chmod 600 "$env_file"
-    print_info ".env file created (mode 600)."
+  chmod 0600 "${tf_dir}/terraform.tfstate" 2>/dev/null || true
+  chmod 0600 "${tf_dir}/terraform.tfstate.backup" 2>/dev/null || true
+  success "Terraform apply complete."
 }
 
-# ─── Local deployment ─────────────────────────────────────────────────────────
+# ── Upload + remote install (replaces csp_post_deploy for dev mode) ───────────
+dev_csp_upload_and_install() {
+  local csp=$1
+  local tf_dir="${INSTALL_DIR_CSP}/deployment"
+  local tf_user="${SUDO_USER:-$(id -un)}"
+  local key_path="${INSTALL_DIR_CSP}/ssh_key"
+  local ssh_user=ubuntu
 
-deploy_local() {
-    print_header "Deploying Rune-Vault (Local — DEV)"
+  local public_ip
+  public_ip=$(cd "$tf_dir" && sudo -u "$tf_user" terraform output -raw vault_public_ip 2>/dev/null) \
+    || die "Could not read vault_public_ip from terraform output."
+  CSP_PUBLIC_IP="$public_ip"
 
-    # Clean up existing installation
-    if [ -d "$INSTALL_DIR" ]; then
-        print_warn "Existing installation found at ${INSTALL_DIR}"
-        if prompt_yn "Remove existing installation and reinstall?" "n"; then
-            print_step "Removing existing installation..."
-            (cd "$INSTALL_DIR" && docker compose down -v 2>/dev/null) || true
-            rm -rf "$INSTALL_DIR"
-            print_info "Previous installation removed."
-        else
-            print_warn "Aborted."
-            exit 0
-        fi
+  local ssh_opts="-o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15"
+  local ssh_prefix="sudo -u ${tf_user}"
+
+  # 1. Wait for SSH on the VM.
+  info "Waiting for SSH on ${ssh_user}@${public_ip} (up to 30 min)..."
+  local timeout_secs=1800
+  local deadline=$(( $(date +%s) + timeout_secs ))
+  local ssh_ready=0
+  while [[ $(date +%s) -lt $deadline ]]; do
+    # shellcheck disable=SC2086
+    if $ssh_prefix ssh $ssh_opts -i "$key_path" "${ssh_user}@${public_ip}" true 2>/dev/null; then
+      ssh_ready=1
+      break
     fi
-    # Clean up orphaned container/network/volume
-    local project
-    project="$(basename "$INSTALL_DIR")"
-    if docker container inspect rune-vault &>/dev/null; then
-        print_step "Removing existing rune-vault container..."
-        docker rm -f rune-vault >/dev/null 2>&1 || true
-        print_info "Container removed."
+    sleep 15
+  done
+  [[ "$ssh_ready" -eq 1 ]] \
+    || die "Timed out waiting for SSH. ssh -i ${key_path} ${ssh_user}@${public_ip}"
+  success "SSH reachable."
+
+  # 2. Wait for cloud-init-dev to finish — sentinel file is touched at end of runcmd.
+  info "Waiting for cloud-init-dev to finish (apt prereqs + sentinel)..."
+  deadline=$(( $(date +%s) + 600 ))
+  local prereqs_ready=0
+  while [[ $(date +%s) -lt $deadline ]]; do
+    # shellcheck disable=SC2086
+    if $ssh_prefix ssh $ssh_opts -i "$key_path" "${ssh_user}@${public_ip}" \
+         "test -e /var/run/runevault-dev-ready" 2>/dev/null; then
+      prereqs_ready=1
+      break
     fi
-    docker network rm "${project}_vault-net" >/dev/null 2>&1 || true
-    docker volume rm "${project}_vault-keys" >/dev/null 2>&1 || true
+    sleep 10
+  done
+  [[ "$prereqs_ready" -eq 1 ]] \
+    || die "Timed out waiting for cloud-init-dev. SSH in to debug: ssh -i ${key_path} ${ssh_user}@${public_ip}"
+  success "Cloud-init-dev complete."
 
-    # Create directory structure
-    mkdir -p "$INSTALL_DIR"/{certs,backups,logs}
-    print_info "Directory structure created: ${INSTALL_DIR}/"
+  # 3. SCP install.sh + linux/amd64 binary to /tmp.
+  info "Uploading install.sh and runevault binary to ${public_ip}..."
+  # shellcheck disable=SC2086
+  $ssh_prefix scp $ssh_opts -i "$key_path" \
+    "${REPO_ROOT}/install.sh" \
+    "${LINUX_BINARY}" \
+    "${ssh_user}@${public_ip}:/tmp/" \
+    || die "SCP upload failed."
+  success "Artifacts uploaded."
 
-    # Copy docker-compose.yml from local repo
-    print_step "Copying docker-compose.yml from local repo..."
-    copy_local_file "$REPO_ROOT/vault/docker-compose.yml" "$INSTALL_DIR/docker-compose.yml"
-    # Pin image to the local build tag
-    sed -i.bak "s|image:.*rune-vault:.*|image: ${DOCKER_IMAGE}:${DOCKER_TAG}|" "$INSTALL_DIR/docker-compose.yml"
-    rm -f "$INSTALL_DIR/docker-compose.yml.bak"
-    print_info "docker-compose.yml copied."
+  # 4. Run install.sh on the VM with dev hooks.
+  info "Running install.sh on the VM..."
+  local tn ee ek
+  tn=$(escape_single "$TEAM_NAME")
+  ee=$(escape_single "$ENVECTOR_ENDPOINT")
+  ek=$(escape_single "$ENVECTOR_API_KEY")
+  local remote_cmd
+  remote_cmd="sudo \
+    RUNEVAULT_LOCAL_BINARY=/tmp/runevault-${TARGET_OS}-${TARGET_ARCH} \
+    RUNEVAULT_TEAM_NAME='${tn}' \
+    RUNEVAULT_ENVECTOR_ENDPOINT='${ee}' \
+    RUNEVAULT_ENVECTOR_API_KEY='${ek}' \
+    bash /tmp/install.sh --target local --non-interactive --version dev"
 
-    # TLS
-    setup_tls
+  # shellcheck disable=SC2086
+  $ssh_prefix ssh $ssh_opts -i "$key_path" "${ssh_user}@${public_ip}" "$remote_cmd" \
+    || die "Remote install.sh failed. SSH in to debug: ssh -i ${key_path} ${ssh_user}@${public_ip}"
+  success "Remote install complete."
 
-    # Generate .env and config files
-    generate_env_file
-    generate_config_files "$INSTALL_DIR"
-
-    # Restore ownership to the invoking user (files were created as root via sudo)
-    if [ -n "${SUDO_USER:-}" ]; then
-        chown -R "$SUDO_USER" "$INSTALL_DIR"
-    fi
-
-    # Build Docker image from local source
-    print_step "Building Docker image (tag: ${DOCKER_TAG})..."
-    (cd "$REPO_ROOT" && mise run build "${DOCKER_TAG}")
-    print_info "Image built: ${DOCKER_IMAGE}:${DOCKER_TAG}"
-
-    # Start container
-    print_step "Starting Rune-Vault..."
-    (cd "$INSTALL_DIR" && docker compose up -d)
-    print_info "Container started."
-
-    # Health check
-    print_step "Waiting for Vault to become healthy..."
-    local elapsed=0
-    local timeout=60
-    while [ $elapsed -lt $timeout ]; do
-        if docker exec rune-vault curl -sf http://localhost:8081/health 2>/dev/null; then
-            print_info "Vault is healthy!"
-
-            # Set up runevault alias for admin CLI
-            setup_runevault_alias
-            return 0
-        fi
-        sleep 2
-        elapsed=$((elapsed + 2))
-        printf "."
-    done
-
-    echo ""
-    print_error "Vault did not become healthy within ${timeout}s."
-    print_warn "Container logs:"
-    docker logs rune-vault 2>&1 | tail -30
-    exit 1
+  # 5. Pull CA cert back to the operator workstation.
+  info "Fetching CA certificate..."
+  mkdir -p "${INSTALL_DIR_CSP}/certs"
+  [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "${INSTALL_DIR_CSP}/certs"
+  # shellcheck disable=SC2086
+  $ssh_prefix scp $ssh_opts -i "$key_path" \
+    "${ssh_user}@${public_ip}:/opt/runevault/certs/ca.pem" \
+    "${INSTALL_DIR_CSP}/certs/ca.pem" \
+    || die "CA cert fetch failed."
+  success "CA certificate saved: ${INSTALL_DIR_CSP}/certs/ca.pem"
 }
 
-# ─── CSP deployment ───────────────────────────────────────────────────────────
+# ── Summary (mirror install.sh:491–518 + dev banner) ──────────────────────────
+dev_csp_summary() {
+  local csp=$1
+  local tf_dir="${INSTALL_DIR_CSP}/deployment"
+  local key_path="${INSTALL_DIR_CSP}/ssh_key"
+  local public_ip="${CSP_PUBLIC_IP:-<unknown>}"
+  local commit
+  commit=$(cd "$REPO_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown)
 
-deploy_csp() {
-    local provider="$DEPLOY_TARGET"
-    print_header "Deploying Rune-Vault (${provider} — DEV)"
-
-    local tf_dir="$INSTALL_DIR/deployment"
-    mkdir -p "$tf_dir"
-    # Ensure the original user owns the deployment directory for terraform
-    if [ -n "${SUDO_USER:-}" ]; then
-        chown -R "$SUDO_USER" "$INSTALL_DIR"
-    fi
-
-    # Build and push Docker image to GHCR (remote servers pull from registry)
-    # Requires GHCR push access to the CryptoLabInc organization.
-    print_step "Building and pushing Docker image to GHCR..."
-    echo "  CSP deployments pull the image from GHCR, so a push is required."
-    echo "  This requires GHCR push access to the CryptoLabInc organization."
-    echo ""
-    if ! gh auth status &>/dev/null; then
-        print_error "GitHub CLI not authenticated. Run: gh auth login"
-        exit 1
-    fi
-    (cd "$REPO_ROOT" && mise run push "${DOCKER_TAG}")
-    print_info "Image pushed: ${DOCKER_IMAGE}:${DOCKER_TAG}"
-
-    # Copy Terraform files from local repo
-    print_step "Copying Terraform configuration from local repo..."
-    copy_local_file "$REPO_ROOT/deployment/${provider}/main.tf" "$tf_dir/main.tf"
-    if [ "$provider" = "aws" ]; then
-        copy_local_file "$REPO_ROOT/deployment/${provider}/cloud-init.yaml" "$tf_dir/cloud-init.yaml"
-        sed -i.bak "s|image:.*rune-vault:.*|image: ${DOCKER_IMAGE}:${DOCKER_TAG}|" "$tf_dir/cloud-init.yaml"
-        rm -f "$tf_dir/cloud-init.yaml.bak"
-    else
-        copy_local_file "$REPO_ROOT/deployment/${provider}/startup-script.sh" "$tf_dir/startup-script.sh"
-        sed -i.bak "s|image:.*rune-vault:.*|image: ${DOCKER_IMAGE}:${DOCKER_TAG}|" "$tf_dir/startup-script.sh"
-        rm -f "$tf_dir/startup-script.sh.bak"
-    fi
-    print_info "Terraform files copied."
-
-    # Generate SSH key pair for EC2 access
-    local ssh_key_path="$INSTALL_DIR/ssh_key"
-    if [ ! -f "$ssh_key_path" ]; then
-        print_step "Generating SSH key pair..."
-        ssh-keygen -t ed25519 -f "$ssh_key_path" -N "" -q
-        chmod 600 "$ssh_key_path"
-        chmod 644 "${ssh_key_path}.pub"
-        print_info "SSH key generated: ${ssh_key_path}"
-    fi
-    local public_key
-    public_key=$(cat "${ssh_key_path}.pub")
-
-    # Generate terraform.tfvars (use printf to avoid heredoc escaping issues)
-    print_step "Generating terraform.tfvars..."
-    escape_tf() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
-    {
-        printf 'team_secret        = "%s"\n' "$(escape_tf "$VAULT_TEAM_SECRET_VALUE")"
-        printf 'team_name          = "%s"\n' "$(escape_tf "$TEAM_NAME")"
-        printf 'region             = "%s"\n' "$(escape_tf "$CSP_REGION")"
-        printf 'tls_mode           = "%s"\n' "$(escape_tf "$TLS_MODE")"
-        printf 'tls_hostname       = "%s"\n' "$(escape_tf "${TLS_HOSTNAME:-}")"
-        printf 'envector_endpoint  = "%s"\n' "$(escape_tf "$ENVECTOR_ENDPOINT")"
-        printf 'envector_api_key   = "%s"\n' "$(escape_tf "$ENVECTOR_API_KEY")"
-        printf 'vault_index_name   = "%s"\n' "$(escape_tf "$VAULT_INDEX_NAME")"
-        printf 'public_key         = "%s"\n' "$(escape_tf "$public_key")"
-        case "$provider" in
-            gcp) printf 'project_id         = "%s"\n' "$(escape_tf "$GCP_PROJECT_ID")" ;;
-            oci) printf 'compartment_id     = "%s"\n' "$(escape_tf "$OCI_COMPARTMENT_ID")" ;;
-        esac
-    } > "$tf_dir/terraform.tfvars"
-
-    chmod 600 "$tf_dir/terraform.tfvars"
-    if [ -n "${SUDO_USER:-}" ]; then
-        chown -R "$SUDO_USER" "$INSTALL_DIR"
-    fi
-    print_info "terraform.tfvars created."
-
-    # Terraform init & apply (run as the original user to preserve CLI auth)
-    print_step "Running Terraform..."
-    local tf_run="terraform"
-    if [ -n "${SUDO_USER:-}" ]; then
-        tf_run="sudo -u $SUDO_USER terraform"
-    fi
-    (cd "$tf_dir" && $tf_run init)
-    (cd "$tf_dir" && $tf_run apply -auto-approve)
-
-    # Capture outputs
-    VAULT_PUBLIC_IP=$(cd "$tf_dir" && $tf_run output -raw vault_public_ip 2>/dev/null) || true
-    local vault_url
-    vault_url=$(cd "$tf_dir" && $tf_run output -raw vault_url 2>/dev/null) || true
-
-    print_info "Infrastructure provisioned."
-
-    # Health polling — wait for cloud-init to finish and Vault to start
-    if [ -n "$VAULT_PUBLIC_IP" ]; then
-        print_step "Waiting for Vault to become reachable (up to 10 min)..."
-        local elapsed=0
-        local timeout=600
-        while [ $elapsed -lt $timeout ]; do
-            if bash -c "echo >/dev/tcp/${VAULT_PUBLIC_IP}/50051" 2>/dev/null; then
-                print_info "Vault is reachable at ${VAULT_PUBLIC_IP}:50051!"
-
-                # Download ca.pem from remote server
-                if [ "$TLS_MODE" = "self-signed" ]; then
-                    mkdir -p "$INSTALL_DIR/certs"
-                    if [ -n "${SUDO_USER:-}" ]; then
-                        chown -R "$SUDO_USER" "$INSTALL_DIR/certs"
-                    fi
-                    local scp_opts="-i $ssh_key_path -o StrictHostKeyChecking=no -o ConnectTimeout=15 -o BatchMode=yes"
-                    local scp_prefix=""
-                    if [ -n "${SUDO_USER:-}" ]; then
-                        scp_prefix="sudo -u $SUDO_USER"
-                    fi
-                    # Retry SCP (SSH may not be ready immediately)
-                    local downloaded=0
-                    for attempt in 1 2 3; do
-                        sleep 10
-                        for ssh_user in ubuntu opc; do
-                            if $scp_prefix scp $scp_opts \
-                                "${ssh_user}@${VAULT_PUBLIC_IP}:/opt/rune/certs/ca.pem" \
-                                "$INSTALL_DIR/certs/ca.pem" 2>/dev/null; then
-                                downloaded=1; break 2
-                            fi
-                        done
-                    done
-                    if [ "$downloaded" -eq 1 ]; then
-                        CSP_CA_CERT_LOCAL="$INSTALL_DIR/certs/ca.pem"
-                        print_info "CA certificate downloaded to ${CSP_CA_CERT_LOCAL}"
-                    else
-                        print_warn "Could not download ca.pem via SSH. Retrieve manually:"
-                        echo "  scp -i ${ssh_key_path} ubuntu@${VAULT_PUBLIC_IP}:/opt/rune/certs/ca.pem ${INSTALL_DIR}/certs/"
-                    fi
-                fi
-
-                break
-            fi
-            sleep 10
-            elapsed=$((elapsed + 10))
-            printf "."
-        done
-        echo ""
-        if [ $elapsed -ge $timeout ]; then
-            print_error "Vault not reachable within ${timeout}s. Cloud-init may still be running."
-            echo ""
-            echo "  Debug via SSH:"
-            echo "  ssh -i ${ssh_key_path} ubuntu@${VAULT_PUBLIC_IP} 'cloud-init status --wait && docker ps'"
-            echo ""
-            echo "  Terraform directory: ${tf_dir}"
-            echo "  To destroy resources: cd ${tf_dir} && terraform destroy"
-            exit 1
-        fi
-    fi
+  printf '\n'
+  success "Rune-Vault deployed to $(printf '%s' "$csp" | tr 'a-z' 'A-Z') (dev mode)."
+  printf '\n'
+  printf '  Endpoint:  %s:%s\n' "$public_ip" "$GRPC_PORT"
+  printf '  CA cert:   %s\n'    "${INSTALL_DIR_CSP}/certs/ca.pem"
+  printf '  SSH:       ssh -i %s ubuntu@%s\n' "$key_path" "$public_ip"
+  printf '  Terraform: %s\n'    "$tf_dir"
+  printf '  Source:    local working tree (commit %s)\n' "$commit"
+  printf '\n'
+  printf 'Tear down:\n'
+  printf '  cd %s && terraform destroy -auto-approve\n' "$tf_dir"
+  printf '\n'
+  printf 'Next steps (SSH into the VM, then run on the VM):\n'
+  printf '  ssh -i %s ubuntu@%s\n' "$key_path" "$public_ip"
+  printf '\n'
+  printf '  Issue a token:  runevault token issue --user <name> --role member\n'
+  printf '  Check status:   runevault status\n'
+  printf '  View logs:      runevault logs\n'
+  printf '  Manage daemon:  sudo systemctl start|stop|restart runevault\n'
+  printf '\n'
+  warn "BACKUP: Keep this safe — it cannot be recovered if lost:"
+  warn "  Terraform state: ${tf_dir}/terraform.tfstate"
 }
 
-# ─── Summary ──────────────────────────────────────────────────────────────────
+# ── CSP dispatch (mirror install.sh:520–549) ──────────────────────────────────
+dev_csp_dispatch() {
+  local csp="$TARGET"
+  local user_home="${SUDO_USER:+$(eval echo ~"${SUDO_USER}")}"
+  user_home="${user_home:-$HOME}"
+  INSTALL_DIR_CSP="${INSTALL_DIR_CSP:-${user_home}/rune-vault-${csp}}"
+  mkdir -p "$INSTALL_DIR_CSP"
+  [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "$INSTALL_DIR_CSP"
 
-show_summary() {
-    local endpoint
-    if [ "$DEPLOY_TARGET" = "local" ]; then
-        if [ "$TLS_MODE" = "none" ]; then
-            endpoint="localhost:50051"
-        else
-            endpoint="localhost:50051 (TLS)"
-        fi
-    else
-        local ip="${VAULT_PUBLIC_IP:-<public-ip>}"
-        endpoint="${ip}:50051"
-    fi
-
-    print_header "Deployment Complete (DEV)"
-    echo "  Vault Endpoint  : ${endpoint}"
-    echo "  Docker Image    : ${DOCKER_IMAGE}:${DOCKER_TAG} (local build)"
-    echo "  Team Secret     : (stored in ${INSTALL_DIR}/.env)"
-    echo "  TLS Mode        : ${TLS_MODE}"
-    if [ "$TLS_MODE" = "self-signed" ] && [ "$DEPLOY_TARGET" = "local" ]; then
-        echo "  CA Certificate  : ${INSTALL_DIR}/certs/ca.pem"
-    fi
-    echo ""
-    echo -e "${BOLD}Share with your team:${NC}"
-    echo ""
-    echo "  Team members will need the following credentials when installing the"
-    echo "  Rune plugin/extension. Share them securely (e.g. encrypted channel):"
-    echo ""
-    if [ -n "${TLS_HOSTNAME:-}" ]; then
-        echo "  Endpoint : ${TLS_HOSTNAME}:50051"
-    elif [ "$DEPLOY_TARGET" != "local" ] && [ -n "${VAULT_PUBLIC_IP:-}" ]; then
-        echo "  Endpoint : ${VAULT_PUBLIC_IP}:50051"
-    else
-        echo "  Endpoint : <public-ip>:50051"
-    fi
-    echo ""
-    echo "  Issue per-user tokens with:"
-    echo "    runevault token issue --user <name> --role member --expires 90d"
-    echo ""
-    if [ "$DEPLOY_TARGET" = "local" ]; then
-        echo "  Reload your shell before using the runevault command:"
-        echo "    exec \$SHELL"
-        echo ""
-    fi
-    echo "  Each team member uses their individual token for authentication."
-    echo "  Team Secret (above) is only needed for DEK derivation — keep it secure."
-    if [ "$TLS_MODE" = "self-signed" ]; then
-        echo ""
-        echo "  Your vault uses a self-signed CA. Team members also need the CA"
-        echo "  certificate file below. Share this file directly — they will be"
-        echo "  prompted to provide its path during plugin/extension setup."
-        echo ""
-        if [ -n "${CSP_CA_CERT_LOCAL}" ]; then
-            echo "  CA Cert  : ${CSP_CA_CERT_LOCAL}"
-        elif [ "$DEPLOY_TARGET" = "local" ]; then
-            echo "  CA Cert  : ${INSTALL_DIR}/certs/ca.pem"
-        else
-            echo "  CA Cert  : /opt/rune/certs/ca.pem (on the remote server)"
-        fi
-    fi
-    if [ "$DEPLOY_TARGET" != "local" ]; then
-        echo ""
-        echo -e "${BOLD}Next steps:${NC}"
-        echo "  1. Point your domain DNS to ${VAULT_PUBLIC_IP:-<public-ip>}"
-        echo "  2. To use custom TLS certificates, replace files in /opt/rune/certs/ on the server"
-        echo "     and restart: ssh -i ${INSTALL_DIR}/ssh_key ubuntu@${VAULT_PUBLIC_IP:-<public-ip>} 'cd /opt/rune && docker compose restart'"
-        echo ""
-        echo "  SSH access: ssh -i ${INSTALL_DIR}/ssh_key ubuntu@${VAULT_PUBLIC_IP:-<public-ip>}"
-    fi
-    echo ""
-    echo "Install directory: ${INSTALL_DIR}"
-    echo ""
+  dev_csp_preflight "$csp"
+  dev_csp_prompt_config "$csp"
+  dev_csp_generate_ssh_key
+  dev_build_linux_binary
+  dev_csp_copy_terraform_files "$csp"
+  dev_csp_render_tfvars "$csp"
+  dev_csp_run_terraform
+  dev_csp_upload_and_install "$csp"
+  dev_csp_summary "$csp"
+  exit 0
 }
 
-# ─── main() ──────────────────────────────────────────────────────────────────
+# ── Main ───────────────────────────────────────────────────────────────────────
+print_banner
+resolve_target
 
-main() {
-    print_header "Rune-Vault Interactive Setup (DEV)"
-    echo "Local development installer — uses files from the working tree."
-    echo "Repo: ${REPO_ROOT}"
-    echo ""
+[[ "$UNINSTALL" -eq 1 ]] && dev_forward_uninstall
 
-    # 1. Deployment target
-    choose_deploy_target
+dev_preflight
 
-    # 2. Prerequisites
-    if [ "$DEPLOY_TARGET" = "local" ]; then
-        check_prerequisites_local
-    else
-        check_prerequisites_csp "$DEPLOY_TARGET"
-    fi
-
-    # 3. Install directory
-    prompt_install_dir
-
-    # 4. Common settings
-    prompt_tls_mode
-    generate_team_secret
-    prompt_envector_config
-
-    # 5. CSP-specific settings
-    if [ "$DEPLOY_TARGET" != "local" ]; then
-        prompt_csp_config
-    fi
-
-    # 6. Confirm
-    show_confirmation
-
-    # 7. Deploy
-    if [ "$DEPLOY_TARGET" = "local" ]; then
-        deploy_local
-    else
-        deploy_csp
-    fi
-
-    # 8. Summary
-    show_summary
-}
-
-main "$@"
+if [[ "$TARGET" = "local" ]]; then
+  dev_local_install
+else
+  dev_csp_dispatch
+fi

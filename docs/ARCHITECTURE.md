@@ -73,10 +73,10 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 
 ## Port Summary
 
-| Port | Protocol | Purpose | Exposure |
-|------|----------|---------|----------|
-| 50051 | gRPC + TLS | Vault service, health check, reflection | Public (team members) |
-| 8081 | HTTP | Admin token/role CRUD + health check | Container-internal only |
+| Endpoint | Protocol | Purpose | Exposure |
+|----------|----------|---------|----------|
+| `:50051` | gRPC + TLS | Vault service, health check, reflection | Public (team members) |
+| `/opt/runevault/admin.sock` | Unix domain socket (mode 0600) | Admin token/role CRUD + status | Local only — `runevault` CLI |
 
 ## Component Details
 
@@ -91,20 +91,21 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 - **On-Premise** (Self-hosted)
 
 **Runtime**:
-- Python 3.12 gRPC server
+- Single-binary Go gRPC daemon (`runevault`) — no runtime dependencies beyond TLS
 - gRPC server on port 50051 (used by envector-mcp-server)
 - gRPC health check via `grpc.health.v1` protocol
-- Internal admin HTTP API on port 8081 (container-local only)
+- Admin Unix domain socket at `/opt/runevault/admin.sock` (mode 0600, vault-user owned)
+- Registered as a native systemd unit (`runevault.service`) on Linux or a launchd job (`com.cryptolabinc.runevault`) on macOS
 
-**Key Storage** (`vault_keys/vault-key/`):
+**Key Storage** (`/opt/runevault/vault-keys/<key-id>/`, default `<key-id>` = `vault-key`):
 ```
-vault_keys/vault-key/
+/opt/runevault/vault-keys/vault-key/
 ├── EncKey.json      # Public encryption key (distributed to agents)
 ├── EvalKey.json     # Public evaluation key (for FHE operations)
 └── SecKey.json      # Secret decryption key (NEVER leaves Vault)
 ```
 
-Keys are auto-generated on first startup via `ensure_vault()`.
+Keys are auto-generated on first startup by `EnsureVault` (in `vault/internal/server/ensure_vault.go`).
 
 **Security Properties**:
 - Secret key stored encrypted at rest (filesystem encryption)
@@ -119,11 +120,10 @@ Defined in `proto/vault_service.proto` (`rune.vault.v1.VaultService`).
 
 **Server Configuration**:
 - Max message size: 256 MB (for EvalKey transfer)
-- Thread pool: 4 workers
-- Interceptor chain: `ValidationInterceptor` (protovalidate + runtime checks)
+- Interceptor chain: validation (protovalidate + runtime checks) → auth/RBAC → audit
 - gRPC reflection enabled (for grpcurl discovery)
 - gRPC health checking (`grpc.health.v1`) enabled
-- TLS required by default (disable via `VAULT_TLS_DISABLE=true`)
+- TLS required by default (`server.grpc.tls.disable: true` is dev only — never in production)
 
 **`GetPublicKey()`**
 - Returns: JSON bundle containing EncKey, EvalKey, index_name, key_id, agent_id, agent_dek (per-user derived encryption key)
@@ -146,15 +146,15 @@ Defined in `proto/vault_service.proto` (`rune.vault.v1.VaultService`).
 
 ### 3. Authentication & Access Control
 
-**Token Format**: `evt_` prefix + 32 hex characters (total 36 chars), generated via `secrets.token_hex(16)`.
+**Token Format**: `evt_` prefix + 32 hex characters (total 36 chars), generated from `crypto/rand`.
 - Example: `evt_a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6`
 - Proto-level validation enforces exactly 36 characters.
 
-**Per-User RBAC** (managed by `TokenStore`):
+**Per-User RBAC** (managed by the `tokens` package):
 - Each user gets their own token assigned to a role.
-- `validate()` returns `(username, Role)` tuple.
+- Validation returns the matched user and role.
 - Checks: token existence, expiration, rate limit (per-user sliding window).
-- Scope checked separately per gRPC method.
+- Scope is checked separately per gRPC method.
 
 **Default Roles:**
 
@@ -163,42 +163,47 @@ Defined in `proto/vault_service.proto` (`rune.vault.v1.VaultService`).
 | admin | get_public_key, decrypt_scores, decrypt_metadata, manage_tokens | 50 | 150/60s |
 | member | get_public_key, decrypt_scores, decrypt_metadata | 10 | 30/60s |
 
-Custom roles can be created via the Admin API or CLI.
+Custom roles can be created via `runevault role create`.
 
 **Token Lifecycle:**
 - Issue: `runevault token issue --user alice --role member --expires 90d`
-- Rotate: `runevault token rotate --user alice` (atomic revoke + reissue)
+- Rotate: `runevault token rotate --user alice` (atomic revoke + reissue) or `--all`
 - Revoke: `runevault token revoke --user alice`
-- Persistence: async YAML writes to `vault-tokens.yml` / `vault-roles.yml` (atomic via temp file + `os.replace`)
+- Persistence: atomic YAML writes to the files referenced by `tokens.tokens_file` and `tokens.roles_file` in `runevault.conf` (defaults: `/opt/runevault/configs/{tokens,roles}.yml`).
 
-**Configuration Priority** (at startup):
-1. YAML config files (`vault-roles.yml`, `vault-tokens.yml`)
-2. Legacy env var (`VAULT_TOKENS`)
-3. Demo mode (auto-generated demo token)
+**Configuration Source**: `runevault.conf` (YAML) is the single source of truth — no env-var fallback or migration helper. Lookup order:
+1. `--config <path>` CLI flag
+2. `/opt/runevault/configs/runevault.conf`
+3. `./runevault.conf` (cwd, dev only)
 
-### 4. Admin Server & CLI
+Secret YAML fields (`tokens.team_secret`, `envector.api_key`) accept a sibling `*_file` key for KMS-backed deployments.
 
-**Admin Server** (`admin_server.py`):
-- HTTP on `127.0.0.1:8081` (not exposed via Docker; access via `docker exec`)
-- No authentication (protected by container isolation)
-- REST API for token and role CRUD operations
+### 4. Admin Socket & CLI
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | /health | Health check (queries gRPC health servicer) |
-| GET | /tokens | List all tokens |
-| POST | /tokens | Issue new token |
-| DELETE | /tokens/{user} | Revoke token |
-| POST | /tokens/{user}/rotate | Rotate single token |
-| POST | /tokens/_rotate_all | Rotate all tokens |
-| GET | /roles | List all roles |
-| POST | /roles | Create role |
-| PUT | /roles/{name} | Update role |
-| DELETE | /roles/{name} | Delete role |
+**Admin Socket** (`vault/internal/server/admin.go`):
+- Unix domain socket at `/opt/runevault/admin.sock` (mode 0600, vault-user owned)
+- Filesystem permissions are the only authorization gate; never expose externally
+- Used by the `runevault` CLI and by the daemon's lifecycle hooks (e.g. `ErrRestartRequested` after token rotation)
 
-**CLI** (`vault_admin_cli.py` / `runevault`):
-- Wraps the Admin HTTP API for operator convenience
-- Available inside the container
+**CLI** (`runevault`):
+
+| Command | Purpose |
+|---------|---------|
+| `runevault status` | Daemon health and socket liveness |
+| `runevault logs` | Tail audit log output |
+| `runevault token issue --user <name> --role <role> [--expires 90d]` | Issue a new per-user token |
+| `runevault token list` | List issued tokens |
+| `runevault token rotate --user <name>` / `--all` | Atomic revoke + reissue |
+| `runevault token revoke --user <name>` | Revoke a token |
+| `runevault role list` | List configured roles |
+| `runevault role create --name <name> --scope a,b,c --top-k N --rate-limit N/Ts` | Create a custom role |
+| `runevault role update --name <name> [--scope] [--top-k] [--rate-limit]` | Update an existing role |
+| `runevault role delete --name <name>` | Delete a role |
+| `runevault version` | Print build version (works without daemon or socket) |
+
+The `daemon start` subcommand is invoked by systemd / launchd; operators
+control lifecycle via `systemctl … runevault` (Linux) or
+`launchctl … system/com.cryptolabinc.runevault` (macOS) rather than directly.
 
 ### 5. Input Validation
 
@@ -214,7 +219,7 @@ Non-Vault methods (health check, reflection) pass through untouched.
 Each agent gets a unique 32-byte AES-256 DEK (Data Encryption Key):
 
 ```
-DEK = HKDF-SHA256(key=VAULT_TEAM_SECRET, info=agent_id)
+DEK = HKDF-SHA256(key=tokens.team_secret, info=agent_id)
 agent_id = SHA256(token)[:32]
 ```
 
@@ -225,20 +230,19 @@ agent_id = SHA256(token)[:32]
 
 ### 7. Audit Logging
 
-Structured JSON logging for all gRPC operations (`audit.py`):
+Structured JSON logging for all gRPC operations (`vault/internal/server/audit.go`):
 
 - One JSON line per request: timestamp, user_id, method, top_k, result_count, status, source_ip, latency_ms, error
-- Source IP extracted from gRPC `context.peer()`
+- Source IP extracted from the gRPC peer context
+- File output uses `lumberjack` for size-based rotation
 
-**Configuration** (via `VAULT_AUDIT_LOG` env var):
+**Configuration** in `runevault.conf`:
 
-| Value | Behavior |
-|-------|----------|
-| *(empty)* | Disabled |
-| `file` | `/var/log/rune-vault/audit.log` (daily rotation, 30-day retention) |
-| `file:/path` | Custom file path |
-| `stdout` | JSON lines to stdout (for cloud log aggregators) |
-| `file+stdout` | Both |
+```yaml
+audit:
+  mode: file+stdout         # one of: "" (disabled), file, stdout, file+stdout
+  path: /opt/runevault/logs/audit.log
+```
 
 ## Data Flow
 
@@ -377,90 +381,80 @@ EvalKey: Distributed to all team members (safe to share, FHE operations)
 
 ### Cloud Deployment (Terraform)
 
+`install.sh --target <aws|gcp|oci>` wraps Terraform end-to-end:
+preflight checks → `terraform apply` → cloud-init bootstrap → CA-cert SCP
+poll → remote `install.sh` execution.
+
 ```
 Terraform Configuration
     │
-    ├── deployment/oci/main.tf    # Oracle Cloud
     ├── deployment/aws/main.tf    # Amazon Web Services
-    └── deployment/gcp/main.tf    # Google Cloud Platform
+    ├── deployment/gcp/main.tf    # Google Cloud Platform
+    └── deployment/oci/main.tf    # Oracle Cloud Infrastructure
         │
         ▼
 Cloud Resources Created
     │
     ├── Compute Instance (VM)
-    │   ├── OS: Ubuntu 22.04 LTS
-    │   ├── Shape: 2 OCPU, 8GB RAM, 50GB disk
-    │   └── Software:
-    │       ├── Python 3.12
-    │       └── pyenvector (FHE SDK)
+    │   ├── OS: Ubuntu 24.04 LTS
+    │   └── Software (installed via cloud-init startup script):
+    │       ├── runevault binary (SHA256SUMS-verified)
+    │       └── runevault.service (systemd) registered
     │
     ├── Networking
     │   ├── Public IP address
-    │   ├── Security group (allow 50051/gRPC)
-    │   └── DNS: vault-{team}.oci.envector.io
+    │   └── Security group / list / firewall rule (allow 50051/gRPC)
     │
     ├── Storage
-    │   ├── /vault_keys/ (encrypted volume)
-    │   └── Backup to cloud storage (optional)
+    │   └── /opt/runevault/vault-keys/<key-id>/  (FHE keys)
     │
     └── Audit Logging
-        └── /var/log/rune-vault/audit.log
+        └── /opt/runevault/logs/audit.log
 ```
 
-### High Availability (Optional)
+Common Terraform variables across all CSPs: `team_name`, `tls_mode`,
+`envector_endpoint`, `envector_api_key`, `runevault_version`,
+`public_key`, `region`. CSP-specific: `instance_type` (AWS),
+`project_id` / `zone` / `machine_type` (GCP), `oci_profile` /
+`compartment_id` (OCI). Output: `vault_public_ip`.
 
-```
-Load Balancer (HTTPS)
-    │
-    ├── Vault Instance 1 (Primary)
-    ├── Vault Instance 2 (Standby)
-    └── Vault Instance N (Standby)
-        │
-        └── Shared Storage (NFS/EFS)
-            └── /vault_keys/ (same keys across instances)
-```
-
-**Setup**:
-```bash
-cd deployment/oci
-terraform apply -var="ha_enabled=true" \
-                -var="instance_count=3"
-```
-
-**Failover**:
-- Health checks every 10s
-- Auto-failover <30s
-- Shared keys (no key synchronization needed)
+Horizontal scaling and multi-instance HA are not currently supported.
+For higher capacity, re-provision with a larger VM shape via your cloud
+provider.
 
 ## Operational Considerations
 
 ### Backup & Recovery
 
 **Critical Assets**:
-- `/vault_keys/vault-key/SecKey.json` - **MUST backup** (cannot regenerate)
-- `VAULT_TEAM_SECRET` - **MUST backup** (needed for DEK re-derivation)
-- Vault token - Rotatable via CLI
+- `/opt/runevault/vault-keys/<key-id>/SecKey.json` — **MUST backup** (cannot regenerate)
+- `tokens.team_secret` from `runevault.conf` — **MUST backup** (needed for DEK re-derivation)
+- Per-user tokens — rotatable via `runevault token rotate`
 
 **Backup Strategy**:
 ```bash
-# Manually back up vault keys
-tar czf vault_keys_backup_$(date +%Y-%m-%d).tar.gz vault/vault_keys/
+# Manually back up vault keys (run on the VM)
+sudo tar czf vault-keys_backup_$(date +%Y-%m-%d).tar.gz -C /opt/runevault vault-keys/
 
-# Store in:
-# 1. Offline (USB drive in safe)
-# 2. Cloud (different provider, encrypted)
-# 3. Password manager (1Password secure notes)
+# Also archive runevault.conf or at minimum the tokens.team_secret value
+# Store in: offline media, a different cloud provider, or a password manager
 ```
 
 **Recovery Procedure**:
 ```bash
-# If Vault VM fails
-cd deployment/oci
-terraform apply -var="restore_from_backup=true" \
-                -var="backup_path=/path/to/backup.tar.gz.enc"
+# 1. Re-provision a fresh VM via the installer
+sudo bash install.sh --target <aws|gcp|oci>
 
-# Vault restarts with same keys
-# Team members continue without reconfiguration
+# 2. Stop the daemon before restoring keys
+sudo systemctl stop runevault
+
+# 3. Restore vault-keys and team_secret
+sudo tar xzf vault-keys_backup_YYYY-MM-DD.tar.gz -C /opt/runevault
+# Edit /opt/runevault/configs/runevault.conf and restore tokens.team_secret
+
+# 4. Bring the daemon back up
+sudo systemctl start runevault
+# Team members continue without reconfiguration.
 ```
 
 ### Token Rotation
@@ -472,61 +466,54 @@ runevault token rotate --user alice
 # Rotate all tokens
 runevault token rotate --all
 
-# Distribute new tokens to team members via secure channel
+# Distribute new tokens to team members via a secure channel
 ```
 
-### Scaling Strategies
+### Scaling Strategy
 
-**Vertical Scaling** (increase VM size):
-```bash
-terraform apply -var="instance_shape=VM.Standard.E4.Flex" \
-                -var="instance_ocpu=4" \
-                -var="instance_memory_gb=16"
-```
+Re-provision with a larger VM shape via your cloud provider's console or
+by editing the relevant `instance_type` (AWS) / `machine_type` (GCP) /
+shape configuration (OCI) and re-running `terraform apply` from your
+install directory.
 
-**Horizontal Scaling** (add more instances):
-```bash
-terraform apply -var="ha_enabled=true" \
-                -var="instance_count=3"
-```
-
-**When to Scale**:
-- CPU >80% sustained → Add OCPU or scale out
-- Latency P95 >200ms → Add instances
-- Error rate >1% → Investigate (likely config issue, not scale)
+When to scale:
+- CPU >80% sustained
+- Latency P95 >200ms
+- Error rate >1% (investigate first — usually a config issue, not scale)
 
 ## Module Reference
 
-| Module | Purpose |
-|--------|---------|
-| `vault_core.py` | Core business logic: key management, decryption, DEK derivation |
-| `vault_grpc_server.py` | gRPC server, TLS, entrypoint, orchestrates all subsystems |
-| `token_store.py` | Per-user RBAC: Token/Role dataclasses, validation, rate limiting, YAML persistence |
-| `admin_server.py` | Internal HTTP admin API for token/role CRUD |
-| `validation_interceptor.py` | gRPC interceptor: protovalidate + runtime input checks |
-| `request_validator.py` | Runtime validation rules (control chars, whitespace) |
-| `audit.py` | Structured JSON audit logging with file rotation |
-| `vault_admin_cli.py` | CLI for token/role management (`runevault` command) |
+| Package | Purpose |
+|---------|---------|
+| `vault/cmd` | Binary entry point — wires Cobra root command and runs `Execute()` |
+| `vault/internal/commands` | CLI subcommands (`daemon`, `token`, `role`, `status`, `logs`, `version`) and admin-socket client |
+| `vault/internal/server` | gRPC server, config loader, audit logger, admin UDS, `EnsureVault` startup hook, interceptors |
+| `vault/internal/tokens` | Per-user RBAC store: tokens, roles, validation, rate limiting, YAML persistence |
+| `vault/internal/crypto` | FHE key management + HKDF/AES wrappers around `envector-go-sdk` |
+| `vault/internal/tests` | E2E tests gated by build tag `e2e` (decrypt pipeline + CLI smoke) |
+| `vault/pkg/vaultpb` | Generated gRPC stubs from `vault/proto/*.proto` |
 
 ## Troubleshooting
 
 ### Issue: High Latency
 
-**Symptoms**: decrypt_scores() taking >200ms
+**Symptoms**: `DecryptScores` taking >200ms
 
 **Diagnosis**:
 ```bash
 # Check Vault CPU on the server
-ssh admin@vault-yourteam.oci.envector.io
+ssh ubuntu@<vault-host>     # or ec2-user@... / opc@... depending on CSP
 top
 
-# Check audit log for latency
-docker exec rune-vault tail -20 /var/log/rune-vault/audit.log
+# Tail the audit log for latency
+sudo tail -20 /opt/runevault/logs/audit.log
+# Or use the CLI from the host:
+runevault logs
 ```
 
 **Solutions**:
-- CPU bottleneck → Scale up (add OCPU)
-- Large Top-K → Reduce max results
+- CPU bottleneck → Re-provision with a larger VM shape
+- Large Top-K → Reduce max results (or tighten role `top_k`)
 - High dimension → Acceptable (dim=1024 is standard)
 
 ### Issue: Authentication Failures
@@ -535,37 +522,40 @@ docker exec rune-vault tail -20 /var/log/rune-vault/audit.log
 
 **Diagnosis**:
 ```bash
-# Check token is correct
-echo $RUNEVAULT_TOKEN
+# Verify the daemon is up
+runevault status
 
-# Verify Vault sees requests
-ssh admin@vault-yourteam.oci.envector.io
-sudo journalctl -u vault | grep "denied"
+# Inspect server logs for denied requests
+sudo journalctl -u runevault | grep -i "denied\|unauthenticated"
 ```
 
 **Solutions**:
-- Wrong token → Re-share correct token
-- Token rotated → Distribute new token to all team members
-- Token expired → Issue new token via `runevault token issue`
-- Rate limited → Wait for window reset or adjust role rate_limit
-- Firewall → Check security group allows 50051 from team IPs
+- Wrong token → Re-share the correct token
+- Token rotated → Distribute the new token to all team members
+- Token expired → Issue a fresh token via `runevault token issue`
+- Rate limited → Wait for the window to reset, or adjust the role's `rate_limit`
+- Firewall → Check the security group allows 50051 from team IPs
 
 ### Issue: Vault Crashed
 
-**Symptoms**: Health check fails, 503 Service Unavailable
+**Symptoms**: Health check fails, daemon not responsive
 
 **Diagnosis**:
 ```bash
-ssh admin@vault-yourteam.oci.envector.io
-sudo systemctl status vault
-sudo journalctl -u vault -n 100
+# Linux
+sudo systemctl status runevault
+sudo journalctl -u runevault -n 100
+
+# macOS
+sudo launchctl print system/com.cryptolabinc.runevault
+sudo log show --predicate 'process == "runevault"' --last 10m
 ```
 
 **Solutions**:
 - OOM killer → Increase VM memory
-- Disk full → Rotate logs (`logrotate`)
-- Crashed process → Restart (`systemctl restart vault`)
-- Persistent crash → Redeploy with backup keys
+- Disk full → Rotate logs (`lumberjack` handles size-based rotation, but free disk first)
+- Crashed process → `sudo systemctl restart runevault` (Linux) / `sudo launchctl kickstart -k system/com.cryptolabinc.runevault` (macOS)
+- Persistent crash → Re-provision with `install.sh --uninstall` then `install.sh --target <provider>`, restoring `vault-keys/` from backup before first start
 
 ## Next Steps
 

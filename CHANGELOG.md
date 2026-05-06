@@ -5,6 +5,37 @@ All notable changes to Rune-Vault will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### ⚠ BREAKING CHANGES
+
+- **Vault rewritten in Go as the single binary `runevault`** (#61). YAML config (`runevault.conf`) is now the only configuration source — env-var fallback removed, no migration helper, no deprecation banners. Existing Python-based deployments must be reinstalled via `install.sh`.
+
+### Added
+
+- Production installer `install.sh` with `--target local|aws|gcp|oci`, SHA256SUMS checksum verification, systemd/launchd service registration, and `--uninstall` flow
+- Dev installer `scripts/install-dev.sh` (structural sibling of `install.sh`) for local/CSP testing without GitHub releases
+- CSP provisioning via Terraform for AWS, GCP, and OCI: preflight CLI/auth checks, cloud-init bootstrap, CA-cert SCP polling
+- CSP uninstall flow that wraps `terraform destroy`
+- `runevault status` (daemon + admin-socket health) and `runevault logs` (audit log tail) subcommands
+- `runevault` group lets members run the CLI without `sudo`
+- Multi-platform release pipeline (linux/darwin × amd64/arm64) with `SHA256SUMS` checksum manifest
+- `EnsureVault` startup hook to activate keys and ensure index on first run
+
+### Changed
+
+- Cloud VM images bumped to Ubuntu 24.04 LTS
+- OCI SCP user is now `ubuntu`
+- Daemon lifecycle delegated to the OS service manager (systemd / launchd) instead of Docker
+- Admin transport: HTTP on `127.0.0.1:8081` → Unix domain socket at `/opt/runevault/admin.sock` (mode 0600)
+- Token / role storage: standalone `vault-tokens.yml` / `vault-roles.yml` → fields under `runevault.conf` with `*_file` indirection support
+
+### Removed
+
+- Python sources, `docker-compose.yml`, `Dockerfile`, GHCR-published Docker image
+- `pyenvector` runtime dependency
+- Env-var configuration fallback (`VAULT_TLS_DISABLE`, `VAULT_TEAM_SECRET`, `VAULT_AUDIT_LOG`, etc.)
+
 ## [0.3.0] - 2026-04-07
 
 ### ⚠ BREAKING CHANGES

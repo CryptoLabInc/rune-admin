@@ -1,0 +1,7 @@
+#cloud-config
+# Dev mode: installs prereqs only. install.sh is injected via SCP by install-dev.sh.
+package_update: true
+packages: [ca-certificates, curl, openssl]
+
+runcmd:
+  - touch /var/run/runevault-dev-ready

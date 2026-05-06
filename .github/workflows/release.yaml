@@ -1,0 +1,150 @@
+name: Release Binaries
+
+on:
+  release:
+    types: [prereleased]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — skip GitHub Release upload'
+        required: false
+        default: 'true'
+        type: boolean
+
+concurrency:
+  group: release-binaries-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}/${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest,    os: linux,  arch: amd64 }
+          - { runner: ubuntu-24.04-arm, os: linux,  arch: arm64 }
+          - { runner: macos-14,         os: darwin, arch: arm64 }
+          - { runner: macos-14,         os: darwin, arch: amd64 }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jdx/mise-action@v2
+
+      - name: Bootstrap (modules + proto stubs)
+        run: mise run setup
+
+      - name: Install OpenSSL (Linux)
+        if: matrix.os == 'linux'
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Install OpenSSL arm64 (macOS)
+        if: matrix.os == 'darwin'
+        run: brew install openssl@3
+
+      - name: Install Intel Homebrew + OpenSSL x86_64 (macOS amd64 cross)
+        if: matrix.os == 'darwin' && matrix.arch == 'amd64'
+        run: |
+          if ! [ -x /usr/local/bin/brew ]; then
+            NONINTERACTIVE=1 arch -x86_64 /bin/bash -c \
+              "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          fi
+          arch -x86_64 /usr/local/bin/brew install openssl@3
+
+      - name: Check (gofmt + go vet + unit tests)
+        run: mise run check
+
+      - name: Resolve version
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "archive=runevault_${VERSION}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          PKG="github.com/CryptoLabInc/rune-admin/vault/internal/commands"
+          COMMIT=$(git rev-parse --short HEAD)
+          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          if [ "${{ matrix.os }}" = "darwin" ] && [ "${{ matrix.arch }}" = "amd64" ]; then
+            SDKROOT=$(xcrun -sdk macosx --show-sdk-path)
+            export CC="clang -arch x86_64 -isysroot ${SDKROOT}"
+            export CGO_CFLAGS="-arch x86_64 -I/usr/local/opt/openssl@3/include"
+            export CGO_LDFLAGS="-arch x86_64 -L/usr/local/opt/openssl@3/lib"
+          fi
+          cd vault && go build \
+            -trimpath \
+            -ldflags "-s -w -X '${PKG}.buildVersion=${VERSION}' -X '${PKG}.buildCommit=${COMMIT}' -X '${PKG}.buildDate=${DATE}'" \
+            -o bin/runevault \
+            ./cmd
+
+      - name: Smoke test
+        run: |
+          if [ "${{ matrix.os }}" = "darwin" ] && [ "${{ matrix.arch }}" = "amd64" ]; then
+            arch -x86_64 ./vault/bin/runevault version
+          else
+            ./vault/bin/runevault version
+          fi
+
+      - name: Package
+        run: |
+          mkdir -p _dist
+          cp vault/bin/runevault _dist/
+          cp LICENSE _dist/
+          tar -czf "${{ steps.meta.outputs.archive }}" -C _dist .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.archive }}
+          path: ${{ steps.meta.outputs.archive }}
+          retention-days: 7
+
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: Resolve version
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "version=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(git describe --tags --always 2>/dev/null || echo dev)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate SHA256SUMS
+        working-directory: dist/
+        run: sha256sum *.tar.gz > SHA256SUMS
+
+      - name: Upload to GitHub Release
+        if: github.event_name == 'release'
+        working-directory: dist/
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            *.tar.gz \
+            SHA256SUMS \
+            --repo "${{ github.repository }}"
