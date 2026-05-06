@@ -25,6 +25,8 @@ services:
       - ENVECTOR_ENDPOINT=${ENVECTOR_ENDPOINT:-}
       - ENVECTOR_API_KEY=${ENVECTOR_API_KEY:-}
       - EMBEDDING_DIM=${EMBEDDING_DIM:-1024}
+      - ENVECTOR_EVAL_MODE=${ENVECTOR_EVAL_MODE:-mm}
+      - ENVECTOR_TLS=${ENVECTOR_TLS:-true}
       - VAULT_AUDIT_LOG=${VAULT_AUDIT_LOG:-file}
 
     networks:
@@ -47,12 +49,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: "1.0"
+          memory: 10G
+          cpus: "2.0"
         reservations:
           memory: 512M
           cpus: "0.5"
-
 
 networks:
   vault-net:

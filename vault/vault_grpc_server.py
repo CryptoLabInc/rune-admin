@@ -44,7 +44,9 @@ except ImportError:
 
 logger = logging.getLogger("rune.vault.grpc")
 
-MAX_MESSAGE_LENGTH = 256 * 1024 * 1024  # 256 MB (EvalKey can be tens of MB)
+MAX_MESSAGE_LENGTH = (
+    2000 * 1024 * 1024
+)  # ~1.95 GB (kept under INT32_MAX; EvalKey in pyenvector >= 1.4.0 reaches ~1.2 GB)
 
 
 def _emit_audit(method, user, top_k, result_count, status, error_detail, duration, context):

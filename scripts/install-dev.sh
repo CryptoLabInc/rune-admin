@@ -326,6 +326,18 @@ prompt_envector_config() {
     prompt ENVECTOR_API_KEY "enVector API key (e.g. aBcDE_12345_xxxxx)"
     prompt VAULT_INDEX_NAME "Index name" "runecontext"
 
+    print_step "enVector eval mode"
+    local eval_selected
+    eval_selected=$(select_menu "mm" "rmp")
+    ENVECTOR_EVAL_MODE=$([ "$eval_selected" -eq 0 ] && echo "mm" || echo "rmp")
+    print_info "Eval mode: ${ENVECTOR_EVAL_MODE}"
+
+    print_step "enVector TLS"
+    local tls_selected
+    tls_selected=$(select_menu "true (managed cloud)" "false (self-hosted, no TLS)")
+    ENVECTOR_TLS=$([ "$tls_selected" -eq 0 ] && echo "true" || echo "false")
+    print_info "enVector TLS: ${ENVECTOR_TLS}"
+
     if [ -z "$ENVECTOR_ENDPOINT" ] || [ -z "$ENVECTOR_API_KEY" ]; then
         print_error "enVector endpoint and API key are required."
         exit 1
@@ -484,7 +496,9 @@ VAULT_TEAM_SECRET=${VAULT_TEAM_SECRET_VALUE}
 VAULT_INDEX_NAME=${VAULT_INDEX_NAME}
 ENVECTOR_ENDPOINT=${ENVECTOR_ENDPOINT}
 ENVECTOR_API_KEY=${ENVECTOR_API_KEY}
-EMBEDDING_DIM=768
+ENVECTOR_EVAL_MODE=${ENVECTOR_EVAL_MODE}
+ENVECTOR_TLS=${ENVECTOR_TLS}
+EMBEDDING_DIM=1024
 RUNE_VAULT_TAG=${DOCKER_TAG}
 ENVEOF
 

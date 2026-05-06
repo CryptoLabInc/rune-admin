@@ -11,6 +11,7 @@ import heapq
 import json
 import logging
 import os
+import shutil
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
@@ -37,6 +38,9 @@ KEY_SUBDIR = os.path.join(KEY_DIR, KEY_ID)
 ENVECTOR_ENDPOINT = os.getenv("ENVECTOR_ENDPOINT", "").strip() or None
 ENVECTOR_API_KEY = os.getenv("ENVECTOR_API_KEY", "").strip() or None
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1024"))
+_VALID_EVAL_MODES = {"rmp", "mm"}
+EVAL_MODE = os.getenv("ENVECTOR_EVAL_MODE", "mm").lower()
+ENVECTOR_TLS = os.getenv("ENVECTOR_TLS", "").strip().lower() not in ("false", "0", "no")
 
 # Team index name (set by admin, distributed to all team members via get_public_key)
 VAULT_INDEX_NAME = os.getenv("VAULT_INDEX_NAME", "").strip() or None
@@ -50,15 +54,32 @@ def ensure_vault():
        (SDK handles key registration → loading)
     3. Create the team index if it doesn't exist
     """
+    if EVAL_MODE not in _VALID_EVAL_MODES:
+        raise ValueError(
+            f"Invalid ENVECTOR_EVAL_MODE={EVAL_MODE!r}. "
+            f"Must be one of: {sorted(_VALID_EVAL_MODES)}. "
+            "If you changed this value, delete vault_keys/ and restart Vault."
+        )
+
     import pyenvector as ev
 
     # Phase 1: local key generation
     enc_key = os.path.join(KEY_SUBDIR, "EncKey.json")
     if not os.path.exists(enc_key):
+        if os.path.exists(KEY_SUBDIR) and any(os.scandir(KEY_SUBDIR)):
+            logger.warning(
+                f"Incomplete key state found in {KEY_SUBDIR} (EncKey.json missing). "
+                "Cleaning up and regenerating..."
+            )
+            shutil.rmtree(KEY_SUBDIR)
         logger.info(f"Generating keys in {KEY_SUBDIR}...")
         os.makedirs(KEY_SUBDIR, exist_ok=True)
         keygen = KeyGenerator(
-            key_path=KEY_SUBDIR, key_id=KEY_ID, dim_list=[DIM], metadata_encryption=False
+            key_path=KEY_SUBDIR,
+            key_id=KEY_ID,
+            dim_list=[DIM],
+            metadata_encryption=False,
+            eval_mode=EVAL_MODE,
         )
         keygen.generate_keys()
     else:
@@ -76,10 +97,11 @@ def ensure_vault():
             key_path=KEY_DIR,
             key_id=KEY_ID,
             dim=EMBEDDING_DIM,
-            eval_mode="rmp",
+            eval_mode=EVAL_MODE,
             auto_key_setup=True,
             access_token=ENVECTOR_API_KEY,
             query_encryption="plain",
+            secure=ENVECTOR_TLS,
         )
         logger.info("Key registered on enVector Cloud (auto_key_setup).")
     except Exception as e:
@@ -90,10 +112,11 @@ def ensure_vault():
             key_path=KEY_DIR,
             key_id=KEY_ID,
             dim=EMBEDDING_DIM,
-            eval_mode="rmp",
+            eval_mode=EVAL_MODE,
             auto_key_setup=False,
             access_token=ENVECTOR_API_KEY,
             query_encryption="plain",
+            secure=ENVECTOR_TLS,
         )
         logger.info("Connected to enVector Cloud (auto_key_setup=False).")
 
@@ -229,6 +252,7 @@ def _get_public_key_impl(token: str) -> str:
     # enVector Cloud credentials — agents receive these from Vault instead of user input
     bundle["envector_endpoint"] = ENVECTOR_ENDPOINT
     bundle["envector_api_key"] = ENVECTOR_API_KEY
+    bundle["envector_secure"] = ENVECTOR_TLS
 
     return json.dumps(bundle)
 
