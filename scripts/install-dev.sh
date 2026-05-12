@@ -328,8 +328,8 @@ prompt_envector_config() {
 
     print_step "enVector eval mode"
     local eval_selected
-    eval_selected=$(select_menu "mm" "rmp")
-    ENVECTOR_EVAL_MODE=$([ "$eval_selected" -eq 0 ] && echo "mm" || echo "rmp")
+    eval_selected=$(select_menu "mm32" "rmp")
+    ENVECTOR_EVAL_MODE=$([ "$eval_selected" -eq 0 ] && echo "mm32" || echo "rmp")
     print_info "Eval mode: ${ENVECTOR_EVAL_MODE}"
 
     print_step "enVector TLS"
