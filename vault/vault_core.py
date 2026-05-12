@@ -38,8 +38,8 @@ KEY_SUBDIR = os.path.join(KEY_DIR, KEY_ID)
 ENVECTOR_ENDPOINT = os.getenv("ENVECTOR_ENDPOINT", "").strip() or None
 ENVECTOR_API_KEY = os.getenv("ENVECTOR_API_KEY", "").strip() or None
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1024"))
-_VALID_EVAL_MODES = {"rmp", "mm"}
-EVAL_MODE = os.getenv("ENVECTOR_EVAL_MODE", "mm").lower()
+_VALID_EVAL_MODES = {"rmp", "mm32"}
+EVAL_MODE = os.getenv("ENVECTOR_EVAL_MODE", "mm32").lower()
 ENVECTOR_TLS = os.getenv("ENVECTOR_TLS", "").strip().lower() not in ("false", "0", "no")
 
 # Team index name (set by admin, distributed to all team members via get_public_key)
@@ -138,7 +138,7 @@ def ensure_vault():
             ev.create_index(
                 index_name=VAULT_INDEX_NAME,
                 dim=EMBEDDING_DIM,
-                index_params={"index_type": "FLAT"},
+                index_params={"index_type": "IVF_VCT"},
                 query_encryption="plain",
                 metadata_encryption=False,
                 # workaround: skip deepcopy metadata_key property access (pyenvector#247)

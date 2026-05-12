@@ -2,8 +2,8 @@
 Unit tests for ENVECTOR_EVAL_MODE configuration (PR #59 test plan).
 
 Test plan coverage:
-- Item 1: EVAL_MODE defaults to "mm" when env var is not set
-- Item 2: ev.init() is called with "mm" when ENVECTOR_EVAL_MODE=mm
+- Item 1: EVAL_MODE defaults to "mm32" when env var is not set
+- Item 2: ev.init() is called with "mm32" when ENVECTOR_EVAL_MODE=mm32
 - Item 3: invalid EVAL_MODE propagates to SDK (no vault-level validation guard)
 """
 import sys
@@ -23,7 +23,7 @@ class TestEvalModeEnvVar:
 
     def test_eval_mode_reflects_env_at_load_time(self):
         """EVAL_MODE at module level matches what os.getenv would return."""
-        expected = os.getenv("ENVECTOR_EVAL_MODE", "mm").lower()
+        expected = os.getenv("ENVECTOR_EVAL_MODE", "mm32").lower()
         assert vault_core.EVAL_MODE == expected
 
     def test_eval_mode_is_lowercased(self, monkeypatch):
@@ -32,16 +32,16 @@ class TestEvalModeEnvVar:
         # Simulate what the module does: os.getenv(...).lower()
         assert vault_core.EVAL_MODE.lower() == "rmp"
 
-    def test_eval_mode_default_is_mm_when_env_unset(self, monkeypatch):
-        """When ENVECTOR_EVAL_MODE is not set, the formula produces 'mm'."""
+    def test_eval_mode_default_is_mm32_when_env_unset(self, monkeypatch):
+        """When ENVECTOR_EVAL_MODE is not set, the formula produces 'mm32'."""
         monkeypatch.delenv("ENVECTOR_EVAL_MODE", raising=False)
-        result = os.getenv("ENVECTOR_EVAL_MODE", "mm").lower()
-        assert result == "mm"
+        result = os.getenv("ENVECTOR_EVAL_MODE", "mm32").lower()
+        assert result == "mm32"
 
     def test_eval_mode_reads_rmp_from_env(self, monkeypatch):
         """When ENVECTOR_EVAL_MODE=RMP, the formula produces 'rmp'."""
         monkeypatch.setenv("ENVECTOR_EVAL_MODE", "RMP")
-        result = os.getenv("ENVECTOR_EVAL_MODE", "mm").lower()
+        result = os.getenv("ENVECTOR_EVAL_MODE", "mm32").lower()
         assert result == "rmp"
 
 
@@ -75,9 +75,9 @@ class TestEvalModePassedToEvInit:
         else:
             sys.modules.pop("pyenvector", None)
 
-    def test_ensure_vault_passes_eval_mode_mm_to_ev_init(self, monkeypatch, tmp_path):
-        """ensure_vault() calls ev.init(eval_mode='mm') when EVAL_MODE is 'mm'."""
-        self._setup_offline_patches(monkeypatch, tmp_path, eval_mode="mm")
+    def test_ensure_vault_passes_eval_mode_mm32_to_ev_init(self, monkeypatch, tmp_path):
+        """ensure_vault() calls ev.init(eval_mode='mm32') when EVAL_MODE is 'mm32'."""
+        self._setup_offline_patches(monkeypatch, tmp_path, eval_mode="mm32")
 
         mock_ev = MagicMock()
         original = self._patch_pyenvector(mock_ev)
@@ -91,7 +91,7 @@ class TestEvalModePassedToEvInit:
             key_path=str(tmp_path),
             key_id="vault-key",
             dim=1024,
-            eval_mode="mm",
+            eval_mode="mm32",
             auto_key_setup=True,
             access_token="test-key",
             query_encryption="plain",
