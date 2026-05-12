@@ -8,4 +8,4 @@ ruff = "0.15"
 
 [env]
 _.python.venv = { path = ".venv", create = true }
-PYTHONPATH = "{{config_root}}/vault/proto:{{config_root}}/vault"
+PYTHONPATH = "{{config_root}}/vault/_proto:{{config_root}}/vault"

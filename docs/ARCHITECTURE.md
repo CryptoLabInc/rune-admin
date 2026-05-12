@@ -115,7 +115,7 @@ Keys are auto-generated on first startup via `ensure_vault()`.
 
 ### 2. gRPC Service (API)
 
-Defined in `proto/vault_service.proto` (`rune.vault.v1.VaultService`).
+Defined in `_proto/vault_service.proto` (`rune.vault.v1.VaultService`).
 
 **Server Configuration**:
 - Max message size: 256 MB (for EvalKey transfer)

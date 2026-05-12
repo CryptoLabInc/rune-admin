@@ -9,7 +9,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../vault'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../vault/proto'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../vault/_proto'))
 
 protovalidate = pytest.importorskip("protovalidate")
 pb2 = pytest.importorskip("vault_service_pb2")
