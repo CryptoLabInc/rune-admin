@@ -14,12 +14,12 @@ from concurrent import futures
 from datetime import datetime, timezone
 
 import grpc
-import vault_service_pb2 as pb2
-import vault_service_pb2_grpc as pb2_grpc
 from admin_server import start_admin_server
 from grpc_health.v1 import health_pb2, health_pb2_grpc
 from grpc_health.v1.health import HealthServicer
 from grpc_reflection.v1alpha import reflection
+from proto import vault_service_pb2 as pb2
+from proto import vault_service_pb2_grpc as pb2_grpc
 from token_store import (
     RateLimitError,
     ScopeError,
