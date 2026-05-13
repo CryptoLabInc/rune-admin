@@ -138,7 +138,7 @@ def ensure_vault():
             ev.create_index(
                 index_name=VAULT_INDEX_NAME,
                 dim=EMBEDDING_DIM,
-                index_params={"index_type": "IVF_VCT"},
+                index_params={"index_type": "IVF_VCT", "nlist": 256, "default_nprobe": 6},
                 query_encryption="plain",
                 metadata_encryption=False,
                 # workaround: skip deepcopy metadata_key property access (pyenvector#247)
