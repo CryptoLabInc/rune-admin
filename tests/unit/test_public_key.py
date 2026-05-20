@@ -94,3 +94,21 @@ class TestGetPublicKey:
 
         assert bundle.get("envector_endpoint") is None
         assert bundle.get("envector_api_key") is None
+
+    def test_bundle_contains_envector_secure_true(self, test_keys, monkeypatch):
+        """Bundle should propagate ENVECTOR_TLS=true as envector_secure=True."""
+        monkeypatch.setattr('vault_core.ENVECTOR_TLS', True)
+
+        result = get_public_key("evt_0000000000000000000000000000demo")
+        bundle = json.loads(result)
+
+        assert bundle["envector_secure"] is True
+
+    def test_bundle_contains_envector_secure_false(self, test_keys, monkeypatch):
+        """Bundle should propagate ENVECTOR_TLS=false as envector_secure=False."""
+        monkeypatch.setattr('vault_core.ENVECTOR_TLS', False)
+
+        result = get_public_key("evt_0000000000000000000000000000demo")
+        bundle = json.loads(result)
+
+        assert bundle["envector_secure"] is False

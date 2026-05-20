@@ -31,12 +31,12 @@ print(os.path.join(os.path.dirname(grpc_tools.__file__), '_proto'))
 # ── 4. Generate vault_service stubs ─────────────────────────────────
 echo "[proto-gen] Generating vault_service_pb2.py / vault_service_pb2_grpc.py..."
 python3 -m grpc_tools.protoc \
-  -Iproto \
+  -I_proto \
   -I"$DEPS_DIR" \
   -I"$GRPC_PROTO" \
-  --python_out=proto \
-  --grpc_python_out=proto \
-  proto/vault_service.proto
+  --python_out=_proto \
+  --grpc_python_out=_proto \
+  _proto/vault_service.proto
 
 # ── 5. Generate protovalidate runtime stubs ──────────────────────────
 echo "[proto-gen] Generating buf/validate/validate_pb2.py..."

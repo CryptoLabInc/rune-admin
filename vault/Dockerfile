@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir "grpcio-tools>=1.60.2,<=1.71.2" "protobuf>=5.29.0
 
 WORKDIR /build
 COPY buf.yaml buf.lock ./
-COPY proto/vault_service.proto proto/__init__.py proto/
+COPY _proto/vault_service.proto _proto/__init__.py _proto/
 COPY scripts/proto-gen.sh scripts/
 RUN bash scripts/proto-gen.sh
 
@@ -36,7 +36,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY vault_core.py vault_grpc_server.py token_store.py admin_server.py vault_admin_cli.py request_validator.py validation_interceptor.py audit.py ./
-COPY --from=proto-builder /build/proto/ proto/
+COPY --from=proto-builder /build/_proto/ _proto/
 COPY --from=proto-builder /build/buf/ buf/
 COPY docker-entrypoint.sh .
 RUN chmod +x docker-entrypoint.sh vault_admin_cli.py
@@ -44,7 +44,7 @@ RUN chmod +x docker-entrypoint.sh vault_admin_cli.py
 RUN mkdir -p /app/vault_keys /app/certs /app/config /secure/backups /var/log/rune-vault \
     && chown -R vault:vault /app /secure /var/log/rune-vault
 
-ENV PYTHONPATH=/app/proto:/app
+ENV PYTHONPATH=/app/_proto:/app
 
 EXPOSE 50051
 

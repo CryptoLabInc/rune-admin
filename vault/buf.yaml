@@ -1,5 +1,5 @@
 version: v2
 modules:
-  - path: proto
+  - path: _proto
 deps:
   - buf.build/bufbuild/protovalidate

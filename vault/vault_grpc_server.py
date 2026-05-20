@@ -14,12 +14,12 @@ from concurrent import futures
 from datetime import datetime, timezone
 
 import grpc
+import vault_service_pb2 as pb2
+import vault_service_pb2_grpc as pb2_grpc
 from admin_server import start_admin_server
 from grpc_health.v1 import health_pb2, health_pb2_grpc
 from grpc_health.v1.health import HealthServicer
 from grpc_reflection.v1alpha import reflection
-from proto import vault_service_pb2 as pb2
-from proto import vault_service_pb2_grpc as pb2_grpc
 from token_store import (
     RateLimitError,
     ScopeError,
@@ -44,7 +44,9 @@ except ImportError:
 
 logger = logging.getLogger("rune.vault.grpc")
 
-MAX_MESSAGE_LENGTH = 256 * 1024 * 1024  # 256 MB (EvalKey can be tens of MB)
+MAX_MESSAGE_LENGTH = (
+    2000 * 1024 * 1024
+)  # ~1.95 GB (kept under INT32_MAX; EvalKey in pyenvector >= 1.4.0 reaches ~1.2 GB)
 
 
 def _emit_audit(method, user, top_k, result_count, status, error_detail, duration, context):
