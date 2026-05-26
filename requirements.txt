@@ -1,7 +1,7 @@
 # Rune-Admin Dependencies
 
 # FHE Encryption SDK
-pyenvector>=1.2.0
+pyenvector==1.2.2
 
 # HTTP Client
 httpx>=0.24.0

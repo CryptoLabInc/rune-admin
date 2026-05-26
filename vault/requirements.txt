@@ -1,7 +1,7 @@
 # Rune-Vault Dependencies
 
 # FHE Encryption
-pyenvector>=1.2.0
+pyenvector==1.2.2
 numpy>=1.24.0
 
 # Token Management
