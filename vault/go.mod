@@ -4,7 +4,8 @@ go 1.25.9
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260415201107-50325440f8f2.1
-	github.com/CryptoLabInc/envector-go-sdk v0.1.0
+	buf.build/go/protovalidate v1.2.0
+	github.com/CryptoLabInc/envector-go-sdk v0.1.3
 	github.com/spf13/cobra v1.8.1
 	golang.org/x/crypto v0.47.0
 	google.golang.org/grpc v1.80.0
@@ -14,7 +15,6 @@ require (
 )
 
 require (
-	buf.build/go/protovalidate v1.2.0 // indirect
 	cel.dev/expr v0.25.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/google/cel-go v0.28.0 // indirect
