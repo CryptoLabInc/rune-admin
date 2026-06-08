@@ -15,7 +15,7 @@ Before creating an issue:
 2. Collect relevant information:
    - Rune-Admin version
    - Deployment platform (OCI/AWS/GCP)
-   - Python version
+   - Go version (`go version`)
    - Error messages and logs
    - Steps to reproduce
 
@@ -34,11 +34,10 @@ Feature requests should include:
 ### Prerequisites
 
 - [mise](https://mise.jdx.dev): `curl https://mise.jdx.dev/install.sh | sh`
-- [Docker](https://docs.docker.com/get-docker/) (for local Vault and image builds)
 
 **CSP deployment only:**
-- Access to cloud provider (OCI/AWS/GCP)
-- GitHub CLI (`gh`) with GHCR push access to the CryptoLabInc organization
+- Access to a cloud provider (AWS, GCP, or OCI) and the matching CLI authenticated locally
+- Docker (used by `scripts/install-dev.sh` to cross-compile a Linux/amd64 binary for cloud VMs)
 
 ### Local Setup
 
@@ -50,13 +49,13 @@ Feature requests should include:
 
 2. **Install tools and bootstrap**
    ```bash
-   mise install        # Install Python 3.12, buf, ruff, terraform, cloud CLIs
-   mise run setup      # Create venv, install deps, generate proto stubs
+   mise install        # Install Go 1.25, buf, terraform, cloud CLIs
+   mise run setup      # Resolve Go modules, generate proto stubs
    ```
 
 3. **Verify setup**
    ```bash
-   mise run test:unit  # Run unit tests to verify
+   mise run go:test:unit  # Run unit tests to verify
    ```
 
 4. **(Optional) Activate mise in your shell**
@@ -68,47 +67,35 @@ Feature requests should include:
 
 ### Commands
 
-All commands **must** be run via `mise run` to ensure correct tool versions and venv activation.
+All commands **must** be run via `mise run` to ensure correct tool versions.
 
-| Command | Description |
-|---------|-------------|
-| `mise run test` | Unit + integration tests |
-| `mise run test:unit` | Unit tests only |
-| `mise run test:cov` | Tests with coverage report |
-| `mise run lint` | Ruff linter |
-| `mise run lint:fix` | Ruff with auto-fix |
-| `mise run format` | Ruff formatter |
-| `mise run format:check` | Check formatting without modifying |
-| `mise run check` | All checks: format + lint + unit tests |
-| `mise run proto` | Regenerate protobuf/gRPC stubs |
-| `mise run build` | Build Docker image locally |
-| `mise run push` | Build and push multi-platform image to GHCR (requires GHCR access) |
-| `mise run dev` | Start local Vault via Docker Compose |
-| `mise run certs` | Generate self-signed TLS certificates |
+See [CLAUDE.md](CLAUDE.md#commands) (or [AGENTS.md](AGENTS.md#commands)) for the complete task table.
 
 ## Testing
 
 ### Test Structure
 
 ```
-tests/
-├── unit/          # Fast, isolated tests per module
-└── integration/   # End-to-end Vault API tests
+vault/internal/
+├── tokens/        # Token store + role/rate-limit unit tests
+├── crypto/        # HKDF + AES-CTR + envector-go-sdk wrappers
+├── server/        # gRPC handlers, interceptors, audit, admin UDS, config
+├── commands/      # CLI subcommands + admin client
+└── tests/         # E2E (build tag `e2e`): decrypt pipeline (fixture-based) + CLI smoke
 ```
 
 ### Running Tests
 
-All test commands **must** be run via `mise run`:
-
 ```bash
-mise run test         # Unit + integration tests
-mise run test:unit    # Unit tests only
-mise run test:cov     # Tests with coverage report
+mise run go:test:unit     # Unit tests only (E2E excluded by build tag)
+mise run go:build         # Build vault/bin/runevault first…
+mise run go:test:e2e      # …then run E2E against the built binary
+mise run go:test          # All tests including E2E (requires RUNEVAULT_TEST_BINARY)
 ```
 
 ### Test Fixtures
 
-Integration tests use GPG-encrypted fixtures containing FHE keys and ciphertext blobs. See [tests/FIXTURES.md](tests/FIXTURES.md) for the full update procedure, including passphrase rotation and re-encryption steps.
+Integration tests use GPG-encrypted fixtures containing FHE keys and ciphertext blobs. See [tests/FIXTURES.md](tests/FIXTURES.md) for the full update procedure, including passphrase rotation and re-encryption steps. The fixture-based decrypt-pipeline test under `vault/internal/tests/` skips automatically when `tests/fixtures/` is not decrypted.
 
 ### Test Requirements
 
@@ -116,17 +103,16 @@ Integration tests use GPG-encrypted fixtures containing FHE keys and ciphertext 
 - Use fixtures for crypto setup to avoid repeated key generation
 - Mock external dependencies
 - Test both success and error paths
-- New gRPC methods need corresponding unit tests in `tests/unit/`
-- Token/auth changes must update `tests/unit/test_auth.py`
+- New gRPC methods need corresponding unit tests in `vault/internal/server/grpc_test.go`
+- Token/auth changes must update `vault/internal/tokens/store_test.go`
 
 ## Code Style
 
-### Python
+### Go
 
-- Follow PEP 8
-- All public functions need type hints
-- Keep functions focused and testable
-- Format and lint with ruff: `mise run format` and `mise run lint`
+- Run `mise run go:fmt` to format
+- All exported identifiers need a doc comment
+- Tests live alongside the code they test (`*_test.go`)
 - Run `mise run check` before committing
 
 ### Shell Scripts
@@ -160,22 +146,29 @@ Integration tests use GPG-encrypted fixtures containing FHE keys and ciphertext 
 ### Local Testing
 
 ```bash
-mise run dev    # Start local Vault via Docker Compose
-mise run build  # Build Docker image locally
+mise run dev         # Run runevault daemon in foreground (uses vault/dev/runevault.conf)
+mise run go:build    # Build runevault binary to vault/bin/runevault
 ```
 
 ### Testing the Installer Locally
 
-Use `scripts/install-dev.sh` to test the full installation flow using local working tree files instead of downloading from GitHub.
+`scripts/install-dev.sh` is a structural sibling of `install.sh` that
+exercises the full install flow against a locally built binary instead
+of a published GitHub release.
 
 ```bash
-sudo bash scripts/install-dev.sh
+# Local install into a rootless prefix (no service registration)
+RUNEVAULT_SKIP_SERVICE=1 \
+  bash scripts/install-dev.sh --target local --prefix "$HOME/runevault-test"
+
+# Cloud install: cross-compiles linux/amd64 in golang:1.25-bookworm,
+# uploads via SCP, and runs install.sh on the remote VM.
+bash scripts/install-dev.sh --target oci --install-dir "$HOME/rune-vault-oci"
 ```
 
-This script behaves identically to `install.sh` but:
-- Copies `docker-compose.yml`, TLS scripts, and Terraform configs from the local repo
-- Uses a locally built Docker image (`mise run build`) instead of pulling from GHCR
-- Requires no network access to GitHub
+Flags mirror `install.sh`: `--target`, `--install-dir`, `--prefix`,
+`--non-interactive`, `--uninstall`, `--force`. Uninstall is delegated to
+`install.sh --uninstall`.
 
 ## Submitting Changes
 
@@ -248,12 +241,23 @@ Closes #123
 
 ```
 rune-admin/
-├── vault/                  # Rune-Vault gRPC server (see [Architecture](docs/ARCHITECTURE.md))
-├── deployment/            # Terraform configs (OCI, AWS, GCP) + monitoring
+├── vault/
+│   ├── cmd/                       # runevault binary entry point
+│   ├── internal/                  # commands, server, tokens, crypto, tests
+│   ├── pkg/vaultpb/               # generated gRPC stubs
+│   ├── proto/                     # .proto source
+│   └── dev/                       # local dev config (gitignored)
+├── deployment/
+│   ├── aws/  gcp/  oci/           # Terraform per CSP
+│   ├── systemd/runevault.service  # Linux service unit
+│   └── launchd/com.cryptolabinc.runevault.plist  # macOS service
 ├── scripts/
-├── tests/                 # Unit, integration tests
-├── docs/                  # Architecture docs
-└── install.sh             # Interactive installer
+│   ├── install-dev.sh             # Dev sibling of install.sh
+│   ├── generate-certs.sh          # Self-signed TLS certs for dev
+│   └── generate-test-fixtures.py  # Generates GPG-encrypted test fixtures
+├── tests/                         # Encrypted fixture archive (see FIXTURES.md)
+├── docs/ARCHITECTURE.md           # Architecture & data flow
+└── install.sh                     # Production installer (SHA256SUMS-verified)
 ```
 
 ## Vault Architecture
@@ -262,11 +266,11 @@ Core server code is in `vault/`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md
 
 ## Security Considerations
 
-- Secret key (`vault_keys/`) must never be logged, returned in API responses, or leave the server process
-- Admin server binds to `127.0.0.1` only — never expose externally
-- Never commit private keys (SecKey.json)
-- Token secrets must come from environment variables, never hardcoded
-- TLS is required for all cloud deployments
+- Secret key (`vault-keys/<key-id>/SecKey.json`) must never be logged, returned in API responses, or leave the server process
+- Admin transport is a Unix domain socket (mode 0600, vault-user owned) — never expose externally
+- Never commit private keys (`SecKey.json`) or filled-in `runevault.conf` files
+- Token secrets and FHE keys live in `runevault.conf` (mode 0600); secret YAML fields support `*_file` indirection for KMS-backed deployments
+- TLS is required for all cloud deployments (`server.grpc.tls.disable: true` is dev-only)
 - Review security implications of changes
 - Test authentication and authorization
 

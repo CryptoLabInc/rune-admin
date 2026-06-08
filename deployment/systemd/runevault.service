@@ -1,0 +1,38 @@
+[Unit]
+Description=Rune-Vault FHE gRPC Server
+Documentation=https://github.com/CryptoLabInc/rune-admin
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=runevault
+Group=runevault
+ExecStart=/usr/local/bin/runevault daemon start --config /opt/runevault/configs/runevault.conf
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=runevault
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/runevault
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

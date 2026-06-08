@@ -19,14 +19,14 @@ For system architecture and data flow details, see [docs/ARCHITECTURE.md](docs/A
 
 ### Platform
 
-- **macOS** or **Linux** (Windows is not supported — pyenvector requires Unix)
+- **macOS** or **Linux** (Windows is not supported — `runevault` registers a systemd or launchd service)
 
 ### For Administrators
 
 1. **enVector Cloud account** at [https://envector.io](https://envector.io) — Cluster Endpoint and API Key
-2. **Cloud provider account** (OCI, AWS, or GCP) — only needed for cloud deployment
+2. **Cloud provider account** (AWS, GCP, or OCI) — only needed for cloud deployment
 
-The [installer](#quick-start) will automatically check and install required tools (Docker, Terraform, etc.).
+The [installer](#quick-start) auto-checks for the tools it needs (`terraform` and the relevant cloud CLI when targeting a CSP).
 
 ### For Team Members
 
@@ -38,38 +38,47 @@ Team members install [Rune](https://github.com/CryptoLabInc/rune) from Claude Ma
 
 ## Quick Start
 
-### 1. Deploy Rune-Vault
+### 1. Install Rune-Vault
+
+The interactive installer downloads the `runevault` binary, verifies its
+`SHA256SUMS` checksum, renders `runevault.conf`, generates TLS certs,
+and registers a `runevault` service (systemd on Linux, launchd on macOS):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/install.sh -o install.sh && sudo bash install.sh
+# Local install
+curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/install.sh \
+  | sudo bash -s -- --target local
+
+# Cloud install (provisions a VM + bootstraps it via Terraform)
+curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/install.sh \
+  | sudo bash -s -- --target aws    # or gcp, oci
 ```
 
-The installer will interactively guide you through:
-- Cloud provider selection (AWS / GCP / OCI)
-- enVector Cloud credentials
-- TLS certificate generation
-- Terraform-based VM provisioning
+The installer prompts for team name, enVector endpoint, and CSP-specific
+inputs (region, GCP project ID, OCI compartment OCID). Use `--non-interactive`
+plus the `RUNEVAULT_*` env vars listed in [`install.sh`](install.sh) for CI.
 
-**Output**:
-```
-vault_endpoint = "vault-yourteam.oci.envector.io:50051"
-ca.pem downloaded for TLS verification
-```
+If you'd rather inspect the script before running it, download `install.sh`
+and the `SHA256SUMS` file from the release page first, then run `install.sh`
+with the binary it pulls down — see [Release Checksum Verification](#release-checksum-verification).
 
 ### 2. Verify Deployment
 
 ```bash
 # gRPC health check (requires grpcurl: brew install grpcurl)
-grpcurl -cacert ca.pem <your-vault-host>:50051 grpc.health.v1.Health/Check
+grpcurl -cacert /opt/runevault/certs/ca.pem <your-vault-host>:50051 grpc.health.v1.Health/Check
 
 # Expected: { "status": "SERVING" }
+
+# Or use the runevault CLI to query daemon status via the admin socket
+runevault status
 ```
 
 ### 3. Onboard Team Members
 
 ```bash
-# Issue a per-user token
-runevault token issue --user alice --role member
+# Issue a per-user token (90-day expiry)
+sudo runevault token issue --user alice --role member --expires 90d
 
 # Share via secure channel (1Password, Signal, etc.):
 #   - Vault Endpoint
@@ -78,20 +87,54 @@ runevault token issue --user alice --role member
 #   - enVector API Key
 ```
 
+Members of the `runevault` group can run the CLI without `sudo`.
+
 Team members install [Rune](https://github.com/CryptoLabInc/rune) and configure with the provided credentials.
+
+### From Source (development)
+
+```bash
+git clone https://github.com/CryptoLabInc/rune-admin.git
+cd rune-admin
+mise install            # Go 1.25, buf, terraform, cloud CLIs
+mise run setup          # Resolve Go modules + generate proto stubs
+mise run go:build       # Builds vault/bin/runevault
+# Copy + edit a dev config (the vault/dev/ tree is gitignored):
+cp vault/internal/server/testdata/runevault.conf.example vault/dev/runevault.conf
+mise run dev            # Run the daemon in the foreground (uses vault/dev/runevault.conf)
+```
 
 ## Admin Workflows
 
-### Rotate Token
+All admin commands talk to the daemon over a Unix domain socket
+(`/opt/runevault/admin.sock`). Members of the `runevault` group can run
+them without `sudo`.
+
+### Manage Tokens
 
 ```bash
-# Rotate a single user's token
-runevault token rotate --user alice
+runevault token issue   --user alice --role member --expires 90d
+runevault token list
+runevault token rotate  --user alice         # or --all
+runevault token revoke  --user alice
+```
 
-# Rotate all tokens
-runevault token rotate --all
+### Manage Roles
 
-# Distribute new tokens to team members via secure channel
+```bash
+runevault role list
+runevault role create --name <name> --scope a,b,c --top-k 10 --rate-limit 30/60s
+runevault role update --name <name> [--scope ...] [--top-k ...] [--rate-limit ...]
+runevault role delete --name <name>
+```
+
+### Daemon Health & Logs
+
+```bash
+runevault status                              # health + socket liveness
+runevault logs                                # tail audit log
+sudo systemctl restart runevault              # Linux
+sudo launchctl kickstart -k system/com.cryptolabinc.runevault   # macOS
 ```
 
 ## Security
@@ -113,13 +156,42 @@ Vault communications MUST use TLS. The installer automatically configures TLS ce
 - **EncKey/EvalKey**: Safe to distribute (public keys)
 - Per-agent metadata encryption uses HKDF-derived DEKs (no separate key file)
 
+### Release Checksum Verification
+
+Every GitHub release ships a `SHA256SUMS` file alongside the binaries.
+`install.sh` downloads it and runs `sha256sum --check` automatically. To
+verify by hand:
+
+```bash
+sha256sum --check --ignore-missing SHA256SUMS
+```
+
+Trust in the `SHA256SUMS` file itself relies on GitHub's HTTPS download
+of the release page.
+
 ## Deployment Targets
 
-All cloud deployments are handled by the [interactive installer](#quick-start).
+`install.sh --target <provider>` provisions a VM via Terraform and
+bootstraps `runevault` on it end-to-end. Each target lives under
+`deployment/`:
 
-- **OCI** (Oracle Cloud Infrastructure): `deployment/oci/`
 - **AWS** (Amazon Web Services): `deployment/aws/`
 - **GCP** (Google Cloud Platform): `deployment/gcp/`
+- **OCI** (Oracle Cloud Infrastructure): `deployment/oci/`
+
+Service files for native installs are under `deployment/systemd/` and
+`deployment/launchd/`.
+
+## Uninstall
+
+```bash
+# Local: stops the service and removes /opt/runevault (prompts to keep data)
+sudo bash install.sh --uninstall --target local
+
+# Cloud: runs `terraform destroy` against the install dir created earlier
+sudo bash install.sh --uninstall --target aws \
+  --install-dir "$HOME/rune-vault-aws"
+```
 
 ## Development
 
@@ -131,39 +203,42 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, commands, and guid
 
 ```bash
 # Check Vault is reachable
-grpcurl -cacert ca.pem vault-yourteam.oci.envector.io:50051 grpc.health.v1.Health/Check
+grpcurl -cacert /opt/runevault/certs/ca.pem <vault-host>:50051 grpc.health.v1.Health/Check
 
-# Check firewall rules (port 50051 must be open)
-cd deployment/oci
-terraform state show oci_core_security_list.vault
+# Inspect the security group / firewall rule (port 50051 must be open)
+cd "$HOME/rune-vault-<csp>"
+terraform show | grep -A5 -E 'security_(group|list)'
 
-# Verify token — have team member re-enter carefully
+# Verify the token — have the team member re-enter it carefully
 ```
 
 ### Issue: Slow decryption
 
 ```bash
-# Check Vault CPU usage — increase instance resources if >80%
-ssh admin@vault-yourteam.oci.envector.io
+# Check Vault CPU usage — re-provision with a larger VM if >80%
+ssh ubuntu@<vault-host>     # or ec2-user@... / opc@... depending on CSP
 top
 
-# Check audit log for latency (mounted to host ./logs/)
-tail -20 /opt/rune/logs/audit.log
+# Tail audit log for latency
+sudo tail -20 /opt/runevault/logs/audit.log
+# Or via the CLI:
+runevault logs
 ```
 
 ### Issue: Vault crashed
 
 ```bash
-# Check logs
-docker logs rune-vault --tail 100
+# Inspect logs
+sudo journalctl -u runevault -n 100        # Linux
+sudo log show --predicate 'process == "runevault"' --last 10m   # macOS
 
 # Restart
-docker restart rune-vault
+sudo systemctl restart runevault           # Linux
+sudo launchctl kickstart -k system/com.cryptolabinc.runevault   # macOS
 
-# If persistent, redeploy
-cd deployment/oci
-terraform destroy
-terraform apply
+# If persistent, re-provision the VM:
+sudo bash install.sh --uninstall --target <csp> --install-dir "$HOME/rune-vault-<csp>"
+sudo bash install.sh --target <csp>
 ```
 
 ## Documentation

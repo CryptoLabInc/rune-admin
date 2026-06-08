@@ -104,7 +104,7 @@ To run integration tests locally, you need the current passphrase:
 ```bash
 export FIXTURES_GPG_PASSPHRASE="<current passphrase>"
 mise run fixtures:decrypt
-mise run test
+mise run go:test:unit
 ```
 
 ## Fixture Contents

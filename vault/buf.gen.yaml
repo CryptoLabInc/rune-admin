@@ -1,0 +1,13 @@
+version: v2
+clean: true
+plugins:
+  - remote: buf.build/protocolbuffers/go
+    out: pkg/vaultpb
+    opt:
+      - module=github.com/CryptoLabInc/rune-admin/vault/pkg/vaultpb
+      - Mvault_service.proto=github.com/CryptoLabInc/rune-admin/vault/pkg/vaultpb;vaultpb
+  - remote: buf.build/grpc/go
+    out: pkg/vaultpb
+    opt:
+      - module=github.com/CryptoLabInc/rune-admin/vault/pkg/vaultpb
+      - Mvault_service.proto=github.com/CryptoLabInc/rune-admin/vault/pkg/vaultpb;vaultpb
