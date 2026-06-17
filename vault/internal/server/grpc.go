@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/CryptoLabInc/rune-admin/vault/internal/crypto"
+	"github.com/CryptoLabInc/rune-admin/vault/internal/denylist"
 	"github.com/CryptoLabInc/rune-admin/vault/internal/tokens"
 	pb "github.com/CryptoLabInc/rune-admin/vault/pkg/vaultpb"
 )
@@ -25,10 +26,11 @@ const MaxMessageSize = 256 * 1024 * 1024
 // admin UDS server. It owns the long-lived token store, FHE key handle,
 // and audit logger. Construct via NewVault, tear down via Close.
 type Vault struct {
-	cfg    *Config
-	tokens *tokens.Store
-	keys   *crypto.EnvectorKeys
-	audit  *AuditLogger
+	cfg      *Config
+	tokens   *tokens.Store
+	denylist *denylist.Store
+	keys     *crypto.EnvectorKeys
+	audit    *AuditLogger
 
 	// Cached bundle pieces from disk. Re-read on demand to pick up
 	// rotated keys without restarting; kept here for zero-copy reuse.
@@ -36,12 +38,13 @@ type Vault struct {
 }
 
 // NewVault wires all subsystems together. Caller is responsible for Close.
-func NewVault(cfg *Config, tokenStore *tokens.Store, keys *crypto.EnvectorKeys, audit *AuditLogger) *Vault {
+func NewVault(cfg *Config, tokenStore *tokens.Store, denyStore *denylist.Store, keys *crypto.EnvectorKeys, audit *AuditLogger) *Vault {
 	return &Vault{
-		cfg:    cfg,
-		tokens: tokenStore,
-		keys:   keys,
-		audit:  audit,
+		cfg:      cfg,
+		tokens:   tokenStore,
+		denylist: denyStore,
+		keys:     keys,
+		audit:    audit,
 		bundleParams: crypto.KeysParams{
 			Root:  cfg.Keys.Path,
 			KeyID: defaultKeyID(cfg),
@@ -316,6 +319,86 @@ func (s *VaultGRPC) DecryptMetadata(ctx context.Context, req *pb.DecryptMetadata
 	}
 	resultCount = len(out)
 	return &pb.DecryptMetadataResponse{DecryptedMetadata: out}, nil
+}
+
+// ── MarkDeleted ───────────────────────────────────────────────────
+
+func (s *VaultGRPC) MarkDeleted(ctx context.Context, req *pb.MarkDeletedRequest) (*pb.MarkDeletedResponse, error) {
+	start := time.Now()
+	user := s.v.tokens.GetUsername(req.GetToken())
+	if user == "" {
+		user = "unknown"
+	}
+	resultCount := 0
+	statusStr := "success"
+	var errDetail *string
+	defer func() {
+		s.emit(ctx, "mark_deleted", user, nil, resultCount, statusStr, errDetail, time.Since(start))
+	}()
+
+	username, role, err := s.v.tokens.Validate(req.GetToken())
+	if err != nil {
+		st, msg := mapTokenError(err)
+		statusStr, errDetail = errStatus(err)
+		return &pb.MarkDeletedResponse{Error: msg}, status.Error(st, msg)
+	}
+	user = username
+	if err := role.CheckScope("mark_deleted"); err != nil {
+		statusStr = "denied"
+		ed := err.Error()
+		errDetail = &ed
+		return &pb.MarkDeletedResponse{Error: err.Error()}, status.Error(codes.PermissionDenied, err.Error())
+	}
+	if s.v.denylist == nil {
+		statusStr = "error"
+		msg := "deny-list store not configured"
+		errDetail = &msg
+		return &pb.MarkDeletedResponse{Error: msg}, status.Error(codes.Internal, msg)
+	}
+
+	count, version := s.v.denylist.MarkDeleted(req.GetIndexName(), req.GetItemIds())
+	resultCount = len(req.GetItemIds())
+	return &pb.MarkDeletedResponse{Count: count, Version: version}, nil
+}
+
+// ── FilterDeleted ──────────────────────────────────────────────────
+
+func (s *VaultGRPC) FilterDeleted(ctx context.Context, req *pb.FilterDeletedRequest) (*pb.FilterDeletedResponse, error) {
+	start := time.Now()
+	user := s.v.tokens.GetUsername(req.GetToken())
+	if user == "" {
+		user = "unknown"
+	}
+	resultCount := 0
+	statusStr := "success"
+	var errDetail *string
+	defer func() {
+		s.emit(ctx, "filter_deleted", user, nil, resultCount, statusStr, errDetail, time.Since(start))
+	}()
+
+	username, role, err := s.v.tokens.Validate(req.GetToken())
+	if err != nil {
+		st, msg := mapTokenError(err)
+		statusStr, errDetail = errStatus(err)
+		return &pb.FilterDeletedResponse{Error: msg}, status.Error(st, msg)
+	}
+	user = username
+	if err := role.CheckScope("filter_deleted"); err != nil {
+		statusStr = "denied"
+		ed := err.Error()
+		errDetail = &ed
+		return &pb.FilterDeletedResponse{Error: err.Error()}, status.Error(codes.PermissionDenied, err.Error())
+	}
+	if s.v.denylist == nil {
+		statusStr = "error"
+		msg := "deny-list store not configured"
+		errDetail = &msg
+		return &pb.FilterDeletedResponse{Error: msg}, status.Error(codes.Internal, msg)
+	}
+
+	deleted, version := s.v.denylist.FilterDeleted(req.GetIndexName(), req.GetItemIds())
+	resultCount = len(deleted)
+	return &pb.FilterDeletedResponse{DeletedItemIds: deleted, Version: version}, nil
 }
 
 // ── error mapping & audit helpers ────────────────────────────────

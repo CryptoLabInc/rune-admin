@@ -501,6 +501,23 @@ func TestScopeAllowsValidMethod(t *testing.T) {
 	}
 }
 
+func TestDefaultRolesDeleteScopes(t *testing.T) {
+	roles := DefaultRoles()
+	// admin may both mark and filter; member may only filter (recall path).
+	if err := roles["admin"].CheckScope("mark_deleted"); err != nil {
+		t.Errorf("admin mark_deleted: %v", err)
+	}
+	if err := roles["admin"].CheckScope("filter_deleted"); err != nil {
+		t.Errorf("admin filter_deleted: %v", err)
+	}
+	if err := roles["member"].CheckScope("filter_deleted"); err != nil {
+		t.Errorf("member filter_deleted: %v", err)
+	}
+	if err := roles["member"].CheckScope("mark_deleted"); err == nil {
+		t.Error("member mark_deleted: want denied, got nil")
+	}
+}
+
 func TestScopeRejectsInvalidMethod(t *testing.T) {
 	r := &Role{Name: "limited", Scope: []string{"get_public_key"}}
 	err := r.CheckScope("decrypt_scores")

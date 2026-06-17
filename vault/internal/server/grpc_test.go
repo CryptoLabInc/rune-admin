@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/CryptoLabInc/rune-admin/vault/internal/denylist"
 	"github.com/CryptoLabInc/rune-admin/vault/internal/tokens"
 	pb "github.com/CryptoLabInc/rune-admin/vault/pkg/vaultpb"
 )
@@ -100,7 +101,98 @@ func newTestVault(t *testing.T) *Vault {
 	store := tokens.NewStore()
 	store.LoadDefaultsWithDemoToken()
 	audit, _ := NewAuditLogger(AuditConfig{Mode: ""})
-	return NewVault(cfg, store, nil, audit)
+	return NewVault(cfg, store, denylist.NewStore(), nil, audit)
+}
+
+const badToken = "evt_ffffffffffffffffffffffffffffffff"
+
+// ── MarkDeleted / FilterDeleted ───────────────────────────────────
+
+func TestMarkDeletedInvalidToken(t *testing.T) {
+	srv := NewVaultGRPC(newTestVault(t))
+	resp, err := srv.MarkDeleted(context.Background(), &pb.MarkDeletedRequest{
+		Token: badToken, IndexName: "idx", ItemIds: []uint64{1},
+	})
+	if status.Code(err) != codes.Unauthenticated {
+		t.Errorf("code = %v, want Unauthenticated", status.Code(err))
+	}
+	if resp.GetError() == "" {
+		t.Error("response.error is empty")
+	}
+}
+
+func TestFilterDeletedInvalidToken(t *testing.T) {
+	srv := NewVaultGRPC(newTestVault(t))
+	resp, err := srv.FilterDeleted(context.Background(), &pb.FilterDeletedRequest{
+		Token: badToken, IndexName: "idx", ItemIds: []uint64{1},
+	})
+	if status.Code(err) != codes.Unauthenticated {
+		t.Errorf("code = %v, want Unauthenticated", status.Code(err))
+	}
+	if resp.GetError() == "" {
+		t.Error("response.error is empty")
+	}
+}
+
+func TestMarkDeletedScopeDenied(t *testing.T) {
+	v := newTestVault(t)
+	memberTok, err := v.tokens.AddToken("bob", "member", nil)
+	if err != nil {
+		t.Fatalf("AddToken: %v", err)
+	}
+	srv := NewVaultGRPC(v)
+	_, err = srv.MarkDeleted(context.Background(), &pb.MarkDeletedRequest{
+		Token: memberTok.Token, IndexName: "idx", ItemIds: []uint64{1},
+	})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Errorf("code = %v, want PermissionDenied (member lacks mark_deleted)", status.Code(err))
+	}
+}
+
+func TestMarkThenFilterRoundTrip(t *testing.T) {
+	srv := NewVaultGRPC(newTestVault(t))
+	ctx := context.Background()
+
+	mark, err := srv.MarkDeleted(ctx, &pb.MarkDeletedRequest{
+		Token: tokens.DemoToken, IndexName: "idx", ItemIds: []uint64{1, 2, 3},
+	})
+	if err != nil {
+		t.Fatalf("MarkDeleted: %v", err)
+	}
+	if mark.GetCount() != 3 || mark.GetVersion() != 1 {
+		t.Errorf("mark = {count:%d version:%d}, want {3 1}", mark.GetCount(), mark.GetVersion())
+	}
+
+	filt, err := srv.FilterDeleted(ctx, &pb.FilterDeletedRequest{
+		Token: tokens.DemoToken, IndexName: "idx", ItemIds: []uint64{2, 3, 4},
+	})
+	if err != nil {
+		t.Fatalf("FilterDeleted: %v", err)
+	}
+	got := map[uint64]bool{}
+	for _, id := range filt.GetDeletedItemIds() {
+		got[id] = true
+	}
+	if len(got) != 2 || !got[2] || !got[3] {
+		t.Errorf("deleted = %v, want {2,3}", filt.GetDeletedItemIds())
+	}
+	if filt.GetVersion() != 1 {
+		t.Errorf("filter version = %d, want 1", filt.GetVersion())
+	}
+}
+
+func TestFilterDeletedMemberAllowed(t *testing.T) {
+	v := newTestVault(t)
+	memberTok, err := v.tokens.AddToken("carol", "member", nil)
+	if err != nil {
+		t.Fatalf("AddToken: %v", err)
+	}
+	srv := NewVaultGRPC(v)
+	if _, err := srv.FilterDeleted(context.Background(), &pb.FilterDeletedRequest{
+		Token: memberTok.Token, IndexName: "idx", ItemIds: []uint64{1},
+	}); err != nil {
+		t.Errorf("FilterDeleted for member: %v", err)
+	}
 }
 
 func TestGetAgentManifestInvalidToken(t *testing.T) {

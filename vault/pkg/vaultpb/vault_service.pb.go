@@ -403,6 +403,256 @@ func (x *DecryptMetadataResponse) GetError() string {
 	return ""
 }
 
+type MarkDeletedRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Auth token. Required, Fixed 36 chars (evt_ + 32 hex).
+	Token string `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	// enVector index the deny-list belongs to. Required.
+	IndexName string `protobuf:"bytes,2,opt,name=index_name,json=indexName,proto3" json:"index_name,omitempty"`
+	// Stable enVector item_ids to mark deleted. Required, max 10000, deduped server-side.
+	ItemIds       []uint64 `protobuf:"varint,3,rep,packed,name=item_ids,json=itemIds,proto3" json:"item_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MarkDeletedRequest) Reset() {
+	*x = MarkDeletedRequest{}
+	mi := &file_vault_service_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MarkDeletedRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MarkDeletedRequest) ProtoMessage() {}
+
+func (x *MarkDeletedRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_service_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MarkDeletedRequest.ProtoReflect.Descriptor instead.
+func (*MarkDeletedRequest) Descriptor() ([]byte, []int) {
+	return file_vault_service_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *MarkDeletedRequest) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+func (x *MarkDeletedRequest) GetIndexName() string {
+	if x != nil {
+		return x.IndexName
+	}
+	return ""
+}
+
+func (x *MarkDeletedRequest) GetItemIds() []uint64 {
+	if x != nil {
+		return x.ItemIds
+	}
+	return nil
+}
+
+type MarkDeletedResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Total deny-list size for the index after this mark (post-union).
+	Count uint64 `protobuf:"varint,1,opt,name=count,proto3" json:"count,omitempty"`
+	// Monotonic deny-list version for the index after this mark.
+	Version       uint64 `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	Error         string `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"` // Non-empty on error
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MarkDeletedResponse) Reset() {
+	*x = MarkDeletedResponse{}
+	mi := &file_vault_service_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MarkDeletedResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MarkDeletedResponse) ProtoMessage() {}
+
+func (x *MarkDeletedResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_service_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MarkDeletedResponse.ProtoReflect.Descriptor instead.
+func (*MarkDeletedResponse) Descriptor() ([]byte, []int) {
+	return file_vault_service_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *MarkDeletedResponse) GetCount() uint64 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *MarkDeletedResponse) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *MarkDeletedResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type FilterDeletedRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Auth token. Required, Fixed 36 chars (evt_ + 32 hex).
+	Token string `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	// enVector index the deny-list belongs to. Required.
+	IndexName string `protobuf:"bytes,2,opt,name=index_name,json=indexName,proto3" json:"index_name,omitempty"`
+	// Candidate item_ids to check. Required, max 10000.
+	ItemIds       []uint64 `protobuf:"varint,3,rep,packed,name=item_ids,json=itemIds,proto3" json:"item_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FilterDeletedRequest) Reset() {
+	*x = FilterDeletedRequest{}
+	mi := &file_vault_service_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FilterDeletedRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FilterDeletedRequest) ProtoMessage() {}
+
+func (x *FilterDeletedRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_service_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FilterDeletedRequest.ProtoReflect.Descriptor instead.
+func (*FilterDeletedRequest) Descriptor() ([]byte, []int) {
+	return file_vault_service_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *FilterDeletedRequest) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+func (x *FilterDeletedRequest) GetIndexName() string {
+	if x != nil {
+		return x.IndexName
+	}
+	return ""
+}
+
+func (x *FilterDeletedRequest) GetItemIds() []uint64 {
+	if x != nil {
+		return x.ItemIds
+	}
+	return nil
+}
+
+type FilterDeletedResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Subset of the requested item_ids that is on the deny-list.
+	DeletedItemIds []uint64 `protobuf:"varint,1,rep,packed,name=deleted_item_ids,json=deletedItemIds,proto3" json:"deleted_item_ids,omitempty"`
+	// Monotonic deny-list version for the index at read time.
+	Version       uint64 `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	Error         string `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"` // Non-empty on error
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FilterDeletedResponse) Reset() {
+	*x = FilterDeletedResponse{}
+	mi := &file_vault_service_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FilterDeletedResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FilterDeletedResponse) ProtoMessage() {}
+
+func (x *FilterDeletedResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_service_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FilterDeletedResponse.ProtoReflect.Descriptor instead.
+func (*FilterDeletedResponse) Descriptor() ([]byte, []int) {
+	return file_vault_service_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *FilterDeletedResponse) GetDeletedItemIds() []uint64 {
+	if x != nil {
+		return x.DeletedItemIds
+	}
+	return nil
+}
+
+func (x *FilterDeletedResponse) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *FilterDeletedResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
 var File_vault_service_proto protoreflect.FileDescriptor
 
 const file_vault_service_proto_rawDesc = "" +
@@ -431,11 +681,31 @@ const file_vault_service_proto_rawDesc = "" +
 	"\x17encrypted_metadata_list\x18\x02 \x03(\tB\x11\xbaH\x0e\x92\x01\v\b\x01\x10\xe8\a\"\x04r\x02\x10\x01R\x15encryptedMetadataList\"^\n" +
 	"\x17DecryptMetadataResponse\x12-\n" +
 	"\x12decrypted_metadata\x18\x01 \x03(\tR\x11decryptedMetadata\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error2\xb1\x02\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\"\x85\x01\n" +
+	"\x12MarkDeletedRequest\x12\x1f\n" +
+	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\x12&\n" +
+	"\n" +
+	"index_name\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\tindexName\x12&\n" +
+	"\bitem_ids\x18\x03 \x03(\x04B\v\xbaH\b\x92\x01\x05\b\x01\x10\x90NR\aitemIds\"[\n" +
+	"\x13MarkDeletedResponse\x12\x14\n" +
+	"\x05count\x18\x01 \x01(\x04R\x05count\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\x04R\aversion\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\x87\x01\n" +
+	"\x14FilterDeletedRequest\x12\x1f\n" +
+	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\x12&\n" +
+	"\n" +
+	"index_name\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\tindexName\x12&\n" +
+	"\bitem_ids\x18\x03 \x03(\x04B\v\xbaH\b\x92\x01\x05\b\x01\x10\x90NR\aitemIds\"q\n" +
+	"\x15FilterDeletedResponse\x12(\n" +
+	"\x10deleted_item_ids\x18\x01 \x03(\x04R\x0edeletedItemIds\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\x04R\aversion\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error2\xe3\x03\n" +
 	"\fVaultService\x12c\n" +
 	"\x10GetAgentManifest\x12&.rune.vault.v1.GetAgentManifestRequest\x1a'.rune.vault.v1.GetAgentManifestResponse\x12Z\n" +
 	"\rDecryptScores\x12#.rune.vault.v1.DecryptScoresRequest\x1a$.rune.vault.v1.DecryptScoresResponse\x12`\n" +
-	"\x0fDecryptMetadata\x12%.rune.vault.v1.DecryptMetadataRequest\x1a&.rune.vault.v1.DecryptMetadataResponseb\x06proto3"
+	"\x0fDecryptMetadata\x12%.rune.vault.v1.DecryptMetadataRequest\x1a&.rune.vault.v1.DecryptMetadataResponse\x12T\n" +
+	"\vMarkDeleted\x12!.rune.vault.v1.MarkDeletedRequest\x1a\".rune.vault.v1.MarkDeletedResponse\x12Z\n" +
+	"\rFilterDeleted\x12#.rune.vault.v1.FilterDeletedRequest\x1a$.rune.vault.v1.FilterDeletedResponseb\x06proto3"
 
 var (
 	file_vault_service_proto_rawDescOnce sync.Once
@@ -449,7 +719,7 @@ func file_vault_service_proto_rawDescGZIP() []byte {
 	return file_vault_service_proto_rawDescData
 }
 
-var file_vault_service_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_vault_service_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_vault_service_proto_goTypes = []any{
 	(*GetAgentManifestRequest)(nil),  // 0: rune.vault.v1.GetAgentManifestRequest
 	(*GetAgentManifestResponse)(nil), // 1: rune.vault.v1.GetAgentManifestResponse
@@ -458,20 +728,28 @@ var file_vault_service_proto_goTypes = []any{
 	(*DecryptScoresResponse)(nil),    // 4: rune.vault.v1.DecryptScoresResponse
 	(*DecryptMetadataRequest)(nil),   // 5: rune.vault.v1.DecryptMetadataRequest
 	(*DecryptMetadataResponse)(nil),  // 6: rune.vault.v1.DecryptMetadataResponse
+	(*MarkDeletedRequest)(nil),       // 7: rune.vault.v1.MarkDeletedRequest
+	(*MarkDeletedResponse)(nil),      // 8: rune.vault.v1.MarkDeletedResponse
+	(*FilterDeletedRequest)(nil),     // 9: rune.vault.v1.FilterDeletedRequest
+	(*FilterDeletedResponse)(nil),    // 10: rune.vault.v1.FilterDeletedResponse
 }
 var file_vault_service_proto_depIdxs = []int32{
-	3, // 0: rune.vault.v1.DecryptScoresResponse.results:type_name -> rune.vault.v1.ScoreEntry
-	0, // 1: rune.vault.v1.VaultService.GetAgentManifest:input_type -> rune.vault.v1.GetAgentManifestRequest
-	2, // 2: rune.vault.v1.VaultService.DecryptScores:input_type -> rune.vault.v1.DecryptScoresRequest
-	5, // 3: rune.vault.v1.VaultService.DecryptMetadata:input_type -> rune.vault.v1.DecryptMetadataRequest
-	1, // 4: rune.vault.v1.VaultService.GetAgentManifest:output_type -> rune.vault.v1.GetAgentManifestResponse
-	4, // 5: rune.vault.v1.VaultService.DecryptScores:output_type -> rune.vault.v1.DecryptScoresResponse
-	6, // 6: rune.vault.v1.VaultService.DecryptMetadata:output_type -> rune.vault.v1.DecryptMetadataResponse
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	3,  // 0: rune.vault.v1.DecryptScoresResponse.results:type_name -> rune.vault.v1.ScoreEntry
+	0,  // 1: rune.vault.v1.VaultService.GetAgentManifest:input_type -> rune.vault.v1.GetAgentManifestRequest
+	2,  // 2: rune.vault.v1.VaultService.DecryptScores:input_type -> rune.vault.v1.DecryptScoresRequest
+	5,  // 3: rune.vault.v1.VaultService.DecryptMetadata:input_type -> rune.vault.v1.DecryptMetadataRequest
+	7,  // 4: rune.vault.v1.VaultService.MarkDeleted:input_type -> rune.vault.v1.MarkDeletedRequest
+	9,  // 5: rune.vault.v1.VaultService.FilterDeleted:input_type -> rune.vault.v1.FilterDeletedRequest
+	1,  // 6: rune.vault.v1.VaultService.GetAgentManifest:output_type -> rune.vault.v1.GetAgentManifestResponse
+	4,  // 7: rune.vault.v1.VaultService.DecryptScores:output_type -> rune.vault.v1.DecryptScoresResponse
+	6,  // 8: rune.vault.v1.VaultService.DecryptMetadata:output_type -> rune.vault.v1.DecryptMetadataResponse
+	8,  // 9: rune.vault.v1.VaultService.MarkDeleted:output_type -> rune.vault.v1.MarkDeletedResponse
+	10, // 10: rune.vault.v1.VaultService.FilterDeleted:output_type -> rune.vault.v1.FilterDeletedResponse
+	6,  // [6:11] is the sub-list for method output_type
+	1,  // [1:6] is the sub-list for method input_type
+	1,  // [1:1] is the sub-list for extension type_name
+	1,  // [1:1] is the sub-list for extension extendee
+	0,  // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_vault_service_proto_init() }
@@ -485,7 +763,7 @@ func file_vault_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_vault_service_proto_rawDesc), len(file_vault_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -117,7 +117,7 @@ func fixtureVault(t *testing.T, fb *fixtureBundle) *server.Vault {
 		injectFixtureToken(t, store, fb.Config.Token)
 	}
 	audit, _ := server.NewAuditLogger(server.AuditConfig{Mode: ""})
-	return server.NewVault(cfg, store, keys, audit)
+	return server.NewVault(cfg, store, nil, keys, audit)
 }
 
 func injectFixtureToken(t *testing.T, store *tokens.Store, token string) {

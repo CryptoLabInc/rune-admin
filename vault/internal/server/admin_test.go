@@ -26,7 +26,7 @@ func newAdminTestVault(t *testing.T) *Vault {
 	store := tokens.NewStore()
 	store.LoadDefaultsWithDemoToken()
 	audit, _ := NewAuditLogger(AuditConfig{Mode: ""})
-	return NewVault(cfg, store, nil, audit)
+	return NewVault(cfg, store, nil, nil, audit)
 }
 
 func adminTestServer(t *testing.T) (*httptest.Server, *Vault) {

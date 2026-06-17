@@ -35,7 +35,7 @@ func adminUDSFixture(t *testing.T) (socket string, store *tokens.Store, shutdown
 		Keys:   server.KeysConfig{Path: t.TempDir(), EmbeddingDim: 1024},
 	}
 	audit, _ := server.NewAuditLogger(server.AuditConfig{Mode: ""})
-	v := server.NewVault(cfg, store, nil, audit)
+	v := server.NewVault(cfg, store, nil, nil, audit)
 
 	stop, err := server.AdminFromConfig(context.Background(), v)
 	if err != nil {

@@ -80,6 +80,9 @@ type TokensConfig struct {
 	TeamSecretFile string `yaml:"team_secret_file"`
 	RolesFile      string `yaml:"roles_file"`
 	TokensFile     string `yaml:"tokens_file"`
+	// DenyListFile backs the logical-delete deny-list. Optional: when empty
+	// it defaults to deny_list.yml alongside TokensFile (see Resolve).
+	DenyListFile string `yaml:"deny_list_file"`
 }
 
 // AuditConfig.Mode is one of: "", "file", "stdout", "file+stdout".
@@ -165,6 +168,9 @@ func (c *Config) Resolve() error {
 		}
 		c.Tokens.TeamSecret = val
 		c.Tokens.TeamSecretFile = ""
+	}
+	if c.Tokens.DenyListFile == "" && c.Tokens.TokensFile != "" {
+		c.Tokens.DenyListFile = filepath.Join(filepath.Dir(c.Tokens.TokensFile), "deny_list.yml")
 	}
 	return nil
 }

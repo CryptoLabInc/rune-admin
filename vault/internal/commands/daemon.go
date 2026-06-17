@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/CryptoLabInc/rune-admin/vault/internal/crypto"
+	"github.com/CryptoLabInc/rune-admin/vault/internal/denylist"
 	"github.com/CryptoLabInc/rune-admin/vault/internal/server"
 	"github.com/CryptoLabInc/rune-admin/vault/internal/tokens"
 )
@@ -51,6 +52,12 @@ func runDaemonStart(ctx context.Context) error {
 	}
 	defer store.Shutdown()
 
+	denyStore := denylist.NewStore()
+	if err := denyStore.LoadFromFile(cfg.Tokens.DenyListFile); err != nil {
+		return err
+	}
+	defer denyStore.Shutdown()
+
 	keyParams := crypto.KeysParams{
 		Root:  cfg.Keys.Path,
 		KeyID: "vault-key",
@@ -71,7 +78,7 @@ func runDaemonStart(ctx context.Context) error {
 	}
 	defer audit.Close()
 
-	v := server.NewVault(cfg, store, keys, audit)
+	v := server.NewVault(cfg, store, denyStore, keys, audit)
 	defer v.Close()
 
 	slog.Info("vault: starting daemon",

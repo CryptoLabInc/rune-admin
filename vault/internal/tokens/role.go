@@ -48,13 +48,13 @@ func DefaultRoles() map[string]*Role {
 	return map[string]*Role{
 		"admin": {
 			Name:      "admin",
-			Scope:     []string{"get_public_key", "decrypt_scores", "decrypt_metadata", "manage_tokens"},
+			Scope:     []string{"get_public_key", "decrypt_scores", "decrypt_metadata", "manage_tokens", "mark_deleted", "filter_deleted"},
 			TopK:      50,
 			RateLimit: "150/60s",
 		},
 		"member": {
 			Name:      "member",
-			Scope:     []string{"get_public_key", "decrypt_scores", "decrypt_metadata"},
+			Scope:     []string{"get_public_key", "decrypt_scores", "decrypt_metadata", "filter_deleted"},
 			TopK:      10,
 			RateLimit: "30/60s",
 		},

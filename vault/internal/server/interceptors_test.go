@@ -92,6 +92,24 @@ func TestInterceptorRejectsControlCharToken(t *testing.T) {
 	}
 }
 
+// TestVaultMethodsCoversAllRPCs guards against a new VaultService RPC being
+// added without registering it in vaultMethods (and thus silently skipping the
+// runtime token-safety check). The expected set is derived from the generated
+// ServiceDesc, so it stays correct as the service grows.
+func TestVaultMethodsCoversAllRPCs(t *testing.T) {
+	prefix := "/" + pb.VaultService_ServiceDesc.ServiceName + "/"
+	for _, m := range pb.VaultService_ServiceDesc.Methods {
+		full := prefix + m.MethodName
+		if !vaultMethods[full] {
+			t.Errorf("RPC %q is missing from vaultMethods — runtime token check would be skipped", full)
+		}
+	}
+	if len(vaultMethods) != len(pb.VaultService_ServiceDesc.Methods) {
+		t.Errorf("vaultMethods has %d entries, ServiceDesc has %d methods — stale entry?",
+			len(vaultMethods), len(pb.VaultService_ServiceDesc.Methods))
+	}
+}
+
 func TestInterceptorAllowsNonVaultMethod(t *testing.T) {
 	ic := mustInterceptor(t)
 	// Whitespace-around token would normally fail runtime check, but

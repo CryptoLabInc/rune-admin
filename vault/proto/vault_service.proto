@@ -15,6 +15,14 @@ service VaultService {
 
   // Decrypts a list of AES-encrypted metadata strings.
   rpc DecryptMetadata(DecryptMetadataRequest) returns (DecryptMetadataResponse);
+
+  // Marks item_ids as logically deleted by unioning them into the
+  // per-index deny-list. Idempotent. Write scope: mark_deleted.
+  rpc MarkDeleted(MarkDeletedRequest) returns (MarkDeletedResponse);
+
+  // Given candidate item_ids, returns the subset that is on the
+  // per-index deny-list. Read scope: filter_deleted.
+  rpc FilterDeleted(FilterDeletedRequest) returns (FilterDeletedResponse);
 }
 
 // ─── GetAgentManifest ─────────────────────────────────────────────
@@ -70,4 +78,48 @@ message DecryptMetadataResponse {
   // Each element is a JSON-serialized decrypted metadata object
   repeated string decrypted_metadata = 1;
   string error = 2;  // Non-empty on error
+}
+
+// ─── MarkDeleted ───────────────────────────────────────────────────
+
+message MarkDeletedRequest {
+  // Auth token. Required, Fixed 36 chars (evt_ + 32 hex).
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
+  // enVector index the deny-list belongs to. Required.
+  string index_name = 2 [(buf.validate.field).string.min_len = 1];
+  // Stable enVector item_ids to mark deleted. Required, max 10000, deduped server-side.
+  repeated uint64 item_ids = 3 [(buf.validate.field).repeated = {
+    min_items: 1,
+    max_items: 10000
+  }];
+}
+
+message MarkDeletedResponse {
+  // Total deny-list size for the index after this mark (post-union).
+  uint64 count = 1;
+  // Monotonic deny-list version for the index after this mark.
+  uint64 version = 2;
+  string error = 3;  // Non-empty on error
+}
+
+// ─── FilterDeleted ─────────────────────────────────────────────────
+
+message FilterDeletedRequest {
+  // Auth token. Required, Fixed 36 chars (evt_ + 32 hex).
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
+  // enVector index the deny-list belongs to. Required.
+  string index_name = 2 [(buf.validate.field).string.min_len = 1];
+  // Candidate item_ids to check. Required, max 10000.
+  repeated uint64 item_ids = 3 [(buf.validate.field).repeated = {
+    min_items: 1,
+    max_items: 10000
+  }];
+}
+
+message FilterDeletedResponse {
+  // Subset of the requested item_ids that is on the deny-list.
+  repeated uint64 deleted_item_ids = 1;
+  // Monotonic deny-list version for the index at read time.
+  uint64 version = 2;
+  string error = 3;  // Non-empty on error
 }

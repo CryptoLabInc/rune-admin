@@ -22,6 +22,8 @@ var vaultMethods = map[string]bool{
 	"/rune.vault.v1.VaultService/GetAgentManifest": true,
 	"/rune.vault.v1.VaultService/DecryptScores":    true,
 	"/rune.vault.v1.VaultService/DecryptMetadata":  true,
+	"/rune.vault.v1.VaultService/MarkDeleted":      true,
+	"/rune.vault.v1.VaultService/FilterDeleted":    true,
 }
 
 // NewValidationInterceptor returns a unary server interceptor that runs
@@ -60,6 +62,10 @@ func runtimeCheckToken(req any) error {
 	case *pb.DecryptScoresRequest:
 		token = r.GetToken()
 	case *pb.DecryptMetadataRequest:
+		token = r.GetToken()
+	case *pb.MarkDeletedRequest:
+		token = r.GetToken()
+	case *pb.FilterDeletedRequest:
 		token = r.GetToken()
 	default:
 		return nil

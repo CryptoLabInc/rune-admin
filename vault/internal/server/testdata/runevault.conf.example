@@ -34,6 +34,8 @@ tokens:
   # Alternative: team_secret_file: /run/secrets/team_secret
   roles_file: /opt/rune-vault/configs/roles.yml
   tokens_file: /opt/rune-vault/configs/tokens.yml
+  # Logical-delete deny-list. Optional — defaults to deny_list.yml beside tokens_file.
+  # deny_list_file: /opt/rune-vault/configs/deny_list.yml
 
 audit:
   mode: file+stdout         # one of: "", file, stdout, file+stdout
