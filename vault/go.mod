@@ -1,11 +1,11 @@
 module github.com/CryptoLabInc/rune-admin/vault
 
-go 1.25.9
+go 1.26.4
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260415201107-50325440f8f2.1
 	buf.build/go/protovalidate v1.2.0
-	github.com/CryptoLabInc/envector-go-sdk v0.1.3
+	github.com/jh-lee-cryptolab/runespace-go-sdk v0.0.0
 	github.com/spf13/cobra v1.8.1
 	golang.org/x/crypto v0.47.0
 	google.golang.org/grpc v1.80.0
@@ -18,6 +18,7 @@ require (
 	cel.dev/expr v0.25.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/google/cel-go v0.28.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	golang.org/x/exp v0.0.0-20250813145105-42675adae3e6 // indirect
@@ -27,3 +28,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260120221211-b8f7ae30c516 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260120221211-b8f7ae30c516 // indirect
 )
+
+// Local runespace SDK (integration test) — replaces envector-go-sdk.
+replace github.com/jh-lee-cryptolab/runespace-go-sdk => ../../runespace-go-sdk

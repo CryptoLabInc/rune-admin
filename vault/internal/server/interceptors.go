@@ -57,9 +57,9 @@ func runtimeCheckToken(req any) error {
 	switch r := req.(type) {
 	case *pb.GetAgentManifestRequest:
 		token = r.GetToken()
-	case *pb.DecryptScoresRequest:
+	case *pb.InsertRequest:
 		token = r.GetToken()
-	case *pb.DecryptMetadataRequest:
+	case *pb.SearchRequest:
 		token = r.GetToken()
 	default:
 		return nil

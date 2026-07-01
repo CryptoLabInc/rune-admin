@@ -5,69 +5,72 @@ package rune.vault.v1;
 import "buf/validate/validate.proto";
 
 // Rune-Vault gRPC service.
-// Holds the FHE secret key and performs all decryption operations.
+// Holds ALL FHE keys (Enc/Eval/Sec) + agent_dek, performs every
+// encryption/decryption, and is the SOLE runespace client. rune-mcp is a
+// pure-Go client that talks only to this service; it never touches runespace
+// or the FHE SDK directly.
 service VaultService {
-  // Returns the agent manifest (EncKey, agent credentials, optional team index name).
+  // Returns the agent manifest (config only — no FHE keys ever leave the vault).
   rpc GetAgentManifest(GetAgentManifestRequest) returns (GetAgentManifestResponse);
 
-  // Decrypts FHE-encrypted similarity scores and applies Top-K filtering.
-  rpc DecryptScores(DecryptScoresRequest) returns (DecryptScoresResponse);
+  // Capture write: encrypt a plaintext embedding (EncKey) + seal metadata
+  // (agent_dek), then insert into runespace via the SDK.
+  rpc Insert(InsertRequest) returns (InsertResponse);
 
-  // Decrypts a list of AES-encrypted metadata strings.
-  rpc DecryptMetadata(DecryptMetadataRequest) returns (DecryptMetadataResponse);
+  // Blind vector search over runespace (recall + capture-time novelty check).
+  // The plaintext query is sent to runespace (PCMM); the vault decrypts the
+  // score blobs (SecKey), ranks, resolves and opens metadata (agent_dek), and
+  // returns ranked plaintext hits.
+  rpc Search(SearchRequest) returns (SearchResponse);
 }
 
 // ─── GetAgentManifest ─────────────────────────────────────────────
 
 message GetAgentManifestRequest {
-  // Auth token. Required, Fixed 36 chars (evt_ + 32 hex).
+  // Auth token. Required, fixed 36 chars (evt_ + 32 hex).
   string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
 }
 
 message GetAgentManifestResponse {
-  // JSON string: {"EncKey.json": "...", "index_name": "...", "agent_id": "...", ...}
+  // JSON: {"index_name": "...", "agent_id": "...", "dim": 1024} — no keys.
   string manifest_json = 1;
   string error = 2;  // Non-empty on error
 }
 
-// ─── DecryptScores ─────────────────────────────────────────────────
+// ─── Insert (capture write) ───────────────────────────────────────
 
-message DecryptScoresRequest {
-  // Auth token. Required, Fixed 36 chars (evt_ + 32 hex).
+message InsertRequest {
+  // Auth token. Required, fixed 36 chars.
   string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
-  // Base64-encoded CiphertextScore protobuf. Required.
-  string encrypted_blob_b64 = 2 [(buf.validate.field).string.min_len = 1];
-  // Number of top results to return.
-  // Per-role limits (e.g., admin=50, member=10) enforced at the business logic layer.
+  // Plaintext embedding (runed output). Length must equal the configured dim.
+  repeated float vector = 2 [(buf.validate.field).repeated.min_items = 1];
+  // Plaintext metadata JSON. Vault seals it (agent_dek) before storing; may be empty.
+  string metadata = 3;
+}
+
+message InsertResponse {
+  string id = 1;     // runespace-issued opaque id
+  string error = 2;  // Non-empty on error
+}
+
+// ─── Search (recall + novelty) ────────────────────────────────────
+
+message SearchRequest {
+  // Auth token. Required, fixed 36 chars.
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
+  // Plaintext query embedding. Length must equal the configured dim.
+  repeated float vector = 2 [(buf.validate.field).repeated.min_items = 1];
+  // Number of top results. Per-role limits enforced at the business logic layer.
   int32  top_k = 3 [(buf.validate.field).int32 = {gte: 1, lte: 300}];
 }
 
-message ScoreEntry {
-  int32  shard_idx = 1;
-  int32  row_idx   = 2;
-  double score     = 3;
+message SearchHit {
+  string id = 1;
+  double score = 2;
+  string metadata = 3;  // plaintext JSON (vault opened the agent_dek envelope)
 }
 
-message DecryptScoresResponse {
-  repeated ScoreEntry results = 1;  // Top-K results sorted by score descending
-  string error = 2;                 // Non-empty on error
-}
-
-// ─── DecryptMetadata ───────────────────────────────────────────────
-
-message DecryptMetadataRequest {
-  // Auth token. Required, Fixed 36 chars (evt_ + 32 hex).
-  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
-  // Base64-encoded AES blobs. Required, max 1000 items, each non-empty.
-  repeated string encrypted_metadata_list = 2 [(buf.validate.field).repeated = {
-    min_items: 1,
-    max_items: 1000,
-    items: {string: {min_len: 1}}
-  }];
-}
-
-message DecryptMetadataResponse {
-  // Each element is a JSON-serialized decrypted metadata object
-  repeated string decrypted_metadata = 1;
-  string error = 2;  // Non-empty on error
+message SearchResponse {
+  repeated SearchHit hits = 1;  // ranked, score descending
+  string error = 2;             // Non-empty on error
 }

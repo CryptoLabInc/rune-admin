@@ -24,7 +24,7 @@ const (
 
 type GetAgentManifestRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Auth token. Required, Fixed 36 chars (evt_ + 32 hex).
+	// Auth token. Required, fixed 36 chars (evt_ + 32 hex).
 	Token         string `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -69,7 +69,7 @@ func (x *GetAgentManifestRequest) GetToken() string {
 
 type GetAgentManifestResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// JSON string: {"EncKey.json": "...", "index_name": "...", "agent_id": "...", ...}
+	// JSON: {"index_name": "...", "agent_id": "...", "dim": 1024} — no keys.
 	ManifestJson  string `protobuf:"bytes,1,opt,name=manifest_json,json=manifestJson,proto3" json:"manifest_json,omitempty"`
 	Error         string `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"` // Non-empty on error
 	unknownFields protoimpl.UnknownFields
@@ -120,33 +120,32 @@ func (x *GetAgentManifestResponse) GetError() string {
 	return ""
 }
 
-type DecryptScoresRequest struct {
+type InsertRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Auth token. Required, Fixed 36 chars (evt_ + 32 hex).
+	// Auth token. Required, fixed 36 chars.
 	Token string `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
-	// Base64-encoded CiphertextScore protobuf. Required.
-	EncryptedBlobB64 string `protobuf:"bytes,2,opt,name=encrypted_blob_b64,json=encryptedBlobB64,proto3" json:"encrypted_blob_b64,omitempty"`
-	// Number of top results to return.
-	// Per-role limits (e.g., admin=50, member=10) enforced at the business logic layer.
-	TopK          int32 `protobuf:"varint,3,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
+	// Plaintext embedding (runed output). Length must equal the configured dim.
+	Vector []float32 `protobuf:"fixed32,2,rep,packed,name=vector,proto3" json:"vector,omitempty"`
+	// Plaintext metadata JSON. Vault seals it (agent_dek) before storing; may be empty.
+	Metadata      string `protobuf:"bytes,3,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DecryptScoresRequest) Reset() {
-	*x = DecryptScoresRequest{}
+func (x *InsertRequest) Reset() {
+	*x = InsertRequest{}
 	mi := &file_vault_service_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DecryptScoresRequest) String() string {
+func (x *InsertRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DecryptScoresRequest) ProtoMessage() {}
+func (*InsertRequest) ProtoMessage() {}
 
-func (x *DecryptScoresRequest) ProtoReflect() protoreflect.Message {
+func (x *InsertRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_vault_service_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -158,169 +157,111 @@ func (x *DecryptScoresRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DecryptScoresRequest.ProtoReflect.Descriptor instead.
-func (*DecryptScoresRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use InsertRequest.ProtoReflect.Descriptor instead.
+func (*InsertRequest) Descriptor() ([]byte, []int) {
 	return file_vault_service_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *DecryptScoresRequest) GetToken() string {
+func (x *InsertRequest) GetToken() string {
 	if x != nil {
 		return x.Token
 	}
 	return ""
 }
 
-func (x *DecryptScoresRequest) GetEncryptedBlobB64() string {
+func (x *InsertRequest) GetVector() []float32 {
 	if x != nil {
-		return x.EncryptedBlobB64
-	}
-	return ""
-}
-
-func (x *DecryptScoresRequest) GetTopK() int32 {
-	if x != nil {
-		return x.TopK
-	}
-	return 0
-}
-
-type ScoreEntry struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ShardIdx      int32                  `protobuf:"varint,1,opt,name=shard_idx,json=shardIdx,proto3" json:"shard_idx,omitempty"`
-	RowIdx        int32                  `protobuf:"varint,2,opt,name=row_idx,json=rowIdx,proto3" json:"row_idx,omitempty"`
-	Score         float64                `protobuf:"fixed64,3,opt,name=score,proto3" json:"score,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ScoreEntry) Reset() {
-	*x = ScoreEntry{}
-	mi := &file_vault_service_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ScoreEntry) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ScoreEntry) ProtoMessage() {}
-
-func (x *ScoreEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_vault_service_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ScoreEntry.ProtoReflect.Descriptor instead.
-func (*ScoreEntry) Descriptor() ([]byte, []int) {
-	return file_vault_service_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *ScoreEntry) GetShardIdx() int32 {
-	if x != nil {
-		return x.ShardIdx
-	}
-	return 0
-}
-
-func (x *ScoreEntry) GetRowIdx() int32 {
-	if x != nil {
-		return x.RowIdx
-	}
-	return 0
-}
-
-func (x *ScoreEntry) GetScore() float64 {
-	if x != nil {
-		return x.Score
-	}
-	return 0
-}
-
-type DecryptScoresResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Results       []*ScoreEntry          `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"` // Top-K results sorted by score descending
-	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`     // Non-empty on error
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DecryptScoresResponse) Reset() {
-	*x = DecryptScoresResponse{}
-	mi := &file_vault_service_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DecryptScoresResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DecryptScoresResponse) ProtoMessage() {}
-
-func (x *DecryptScoresResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vault_service_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DecryptScoresResponse.ProtoReflect.Descriptor instead.
-func (*DecryptScoresResponse) Descriptor() ([]byte, []int) {
-	return file_vault_service_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *DecryptScoresResponse) GetResults() []*ScoreEntry {
-	if x != nil {
-		return x.Results
+		return x.Vector
 	}
 	return nil
 }
 
-func (x *DecryptScoresResponse) GetError() string {
+func (x *InsertRequest) GetMetadata() string {
+	if x != nil {
+		return x.Metadata
+	}
+	return ""
+}
+
+type InsertResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`       // runespace-issued opaque id
+	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"` // Non-empty on error
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InsertResponse) Reset() {
+	*x = InsertResponse{}
+	mi := &file_vault_service_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InsertResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InsertResponse) ProtoMessage() {}
+
+func (x *InsertResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_service_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InsertResponse.ProtoReflect.Descriptor instead.
+func (*InsertResponse) Descriptor() ([]byte, []int) {
+	return file_vault_service_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *InsertResponse) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *InsertResponse) GetError() string {
 	if x != nil {
 		return x.Error
 	}
 	return ""
 }
 
-type DecryptMetadataRequest struct {
+type SearchRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Auth token. Required, Fixed 36 chars (evt_ + 32 hex).
+	// Auth token. Required, fixed 36 chars.
 	Token string `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
-	// Base64-encoded AES blobs. Required, max 1000 items, each non-empty.
-	EncryptedMetadataList []string `protobuf:"bytes,2,rep,name=encrypted_metadata_list,json=encryptedMetadataList,proto3" json:"encrypted_metadata_list,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Plaintext query embedding. Length must equal the configured dim.
+	Vector []float32 `protobuf:"fixed32,2,rep,packed,name=vector,proto3" json:"vector,omitempty"`
+	// Number of top results. Per-role limits enforced at the business logic layer.
+	TopK          int32 `protobuf:"varint,3,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DecryptMetadataRequest) Reset() {
-	*x = DecryptMetadataRequest{}
-	mi := &file_vault_service_proto_msgTypes[5]
+func (x *SearchRequest) Reset() {
+	*x = SearchRequest{}
+	mi := &file_vault_service_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DecryptMetadataRequest) String() string {
+func (x *SearchRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DecryptMetadataRequest) ProtoMessage() {}
+func (*SearchRequest) ProtoMessage() {}
 
-func (x *DecryptMetadataRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vault_service_proto_msgTypes[5]
+func (x *SearchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_service_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -331,48 +272,114 @@ func (x *DecryptMetadataRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DecryptMetadataRequest.ProtoReflect.Descriptor instead.
-func (*DecryptMetadataRequest) Descriptor() ([]byte, []int) {
-	return file_vault_service_proto_rawDescGZIP(), []int{5}
+// Deprecated: Use SearchRequest.ProtoReflect.Descriptor instead.
+func (*SearchRequest) Descriptor() ([]byte, []int) {
+	return file_vault_service_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *DecryptMetadataRequest) GetToken() string {
+func (x *SearchRequest) GetToken() string {
 	if x != nil {
 		return x.Token
 	}
 	return ""
 }
 
-func (x *DecryptMetadataRequest) GetEncryptedMetadataList() []string {
+func (x *SearchRequest) GetVector() []float32 {
 	if x != nil {
-		return x.EncryptedMetadataList
+		return x.Vector
 	}
 	return nil
 }
 
-type DecryptMetadataResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Each element is a JSON-serialized decrypted metadata object
-	DecryptedMetadata []string `protobuf:"bytes,1,rep,name=decrypted_metadata,json=decryptedMetadata,proto3" json:"decrypted_metadata,omitempty"`
-	Error             string   `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"` // Non-empty on error
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+func (x *SearchRequest) GetTopK() int32 {
+	if x != nil {
+		return x.TopK
+	}
+	return 0
 }
 
-func (x *DecryptMetadataResponse) Reset() {
-	*x = DecryptMetadataResponse{}
+type SearchHit struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Score         float64                `protobuf:"fixed64,2,opt,name=score,proto3" json:"score,omitempty"`
+	Metadata      string                 `protobuf:"bytes,3,opt,name=metadata,proto3" json:"metadata,omitempty"` // plaintext JSON (vault opened the agent_dek envelope)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchHit) Reset() {
+	*x = SearchHit{}
+	mi := &file_vault_service_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchHit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchHit) ProtoMessage() {}
+
+func (x *SearchHit) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_service_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchHit.ProtoReflect.Descriptor instead.
+func (*SearchHit) Descriptor() ([]byte, []int) {
+	return file_vault_service_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SearchHit) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SearchHit) GetScore() float64 {
+	if x != nil {
+		return x.Score
+	}
+	return 0
+}
+
+func (x *SearchHit) GetMetadata() string {
+	if x != nil {
+		return x.Metadata
+	}
+	return ""
+}
+
+type SearchResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Hits          []*SearchHit           `protobuf:"bytes,1,rep,name=hits,proto3" json:"hits,omitempty"`   // ranked, score descending
+	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"` // Non-empty on error
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchResponse) Reset() {
+	*x = SearchResponse{}
 	mi := &file_vault_service_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DecryptMetadataResponse) String() string {
+func (x *SearchResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DecryptMetadataResponse) ProtoMessage() {}
+func (*SearchResponse) ProtoMessage() {}
 
-func (x *DecryptMetadataResponse) ProtoReflect() protoreflect.Message {
+func (x *SearchResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_vault_service_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -384,19 +391,19 @@ func (x *DecryptMetadataResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DecryptMetadataResponse.ProtoReflect.Descriptor instead.
-func (*DecryptMetadataResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use SearchResponse.ProtoReflect.Descriptor instead.
+func (*SearchResponse) Descriptor() ([]byte, []int) {
 	return file_vault_service_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *DecryptMetadataResponse) GetDecryptedMetadata() []string {
+func (x *SearchResponse) GetHits() []*SearchHit {
 	if x != nil {
-		return x.DecryptedMetadata
+		return x.Hits
 	}
 	return nil
 }
 
-func (x *DecryptMetadataResponse) GetError() string {
+func (x *SearchResponse) GetError() string {
 	if x != nil {
 		return x.Error
 	}
@@ -412,30 +419,30 @@ const file_vault_service_proto_rawDesc = "" +
 	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\"U\n" +
 	"\x18GetAgentManifestResponse\x12#\n" +
 	"\rmanifest_json\x18\x01 \x01(\tR\fmanifestJson\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error\"\x8f\x01\n" +
-	"\x14DecryptScoresRequest\x12\x1f\n" +
-	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\x125\n" +
-	"\x12encrypted_blob_b64\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x10encryptedBlobB64\x12\x1f\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\"n\n" +
+	"\rInsertRequest\x12\x1f\n" +
+	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\x12 \n" +
+	"\x06vector\x18\x02 \x03(\x02B\b\xbaH\x05\x92\x01\x02\b\x01R\x06vector\x12\x1a\n" +
+	"\bmetadata\x18\x03 \x01(\tR\bmetadata\"6\n" +
+	"\x0eInsertResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\"s\n" +
+	"\rSearchRequest\x12\x1f\n" +
+	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\x12 \n" +
+	"\x06vector\x18\x02 \x03(\x02B\b\xbaH\x05\x92\x01\x02\b\x01R\x06vector\x12\x1f\n" +
 	"\x05top_k\x18\x03 \x01(\x05B\n" +
-	"\xbaH\a\x1a\x05\x18\xac\x02(\x01R\x04topK\"X\n" +
-	"\n" +
-	"ScoreEntry\x12\x1b\n" +
-	"\tshard_idx\x18\x01 \x01(\x05R\bshardIdx\x12\x17\n" +
-	"\arow_idx\x18\x02 \x01(\x05R\x06rowIdx\x12\x14\n" +
-	"\x05score\x18\x03 \x01(\x01R\x05score\"b\n" +
-	"\x15DecryptScoresResponse\x123\n" +
-	"\aresults\x18\x01 \x03(\v2\x19.rune.vault.v1.ScoreEntryR\aresults\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error\"\x84\x01\n" +
-	"\x16DecryptMetadataRequest\x12\x1f\n" +
-	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\x12I\n" +
-	"\x17encrypted_metadata_list\x18\x02 \x03(\tB\x11\xbaH\x0e\x92\x01\v\b\x01\x10\xe8\a\"\x04r\x02\x10\x01R\x15encryptedMetadataList\"^\n" +
-	"\x17DecryptMetadataResponse\x12-\n" +
-	"\x12decrypted_metadata\x18\x01 \x03(\tR\x11decryptedMetadata\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error2\xb1\x02\n" +
+	"\xbaH\a\x1a\x05\x18\xac\x02(\x01R\x04topK\"M\n" +
+	"\tSearchHit\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05score\x18\x02 \x01(\x01R\x05score\x12\x1a\n" +
+	"\bmetadata\x18\x03 \x01(\tR\bmetadata\"T\n" +
+	"\x0eSearchResponse\x12,\n" +
+	"\x04hits\x18\x01 \x03(\v2\x18.rune.vault.v1.SearchHitR\x04hits\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error2\x81\x02\n" +
 	"\fVaultService\x12c\n" +
-	"\x10GetAgentManifest\x12&.rune.vault.v1.GetAgentManifestRequest\x1a'.rune.vault.v1.GetAgentManifestResponse\x12Z\n" +
-	"\rDecryptScores\x12#.rune.vault.v1.DecryptScoresRequest\x1a$.rune.vault.v1.DecryptScoresResponse\x12`\n" +
-	"\x0fDecryptMetadata\x12%.rune.vault.v1.DecryptMetadataRequest\x1a&.rune.vault.v1.DecryptMetadataResponseb\x06proto3"
+	"\x10GetAgentManifest\x12&.rune.vault.v1.GetAgentManifestRequest\x1a'.rune.vault.v1.GetAgentManifestResponse\x12E\n" +
+	"\x06Insert\x12\x1c.rune.vault.v1.InsertRequest\x1a\x1d.rune.vault.v1.InsertResponse\x12E\n" +
+	"\x06Search\x12\x1c.rune.vault.v1.SearchRequest\x1a\x1d.rune.vault.v1.SearchResponseb\x06proto3"
 
 var (
 	file_vault_service_proto_rawDescOnce sync.Once
@@ -453,20 +460,20 @@ var file_vault_service_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_vault_service_proto_goTypes = []any{
 	(*GetAgentManifestRequest)(nil),  // 0: rune.vault.v1.GetAgentManifestRequest
 	(*GetAgentManifestResponse)(nil), // 1: rune.vault.v1.GetAgentManifestResponse
-	(*DecryptScoresRequest)(nil),     // 2: rune.vault.v1.DecryptScoresRequest
-	(*ScoreEntry)(nil),               // 3: rune.vault.v1.ScoreEntry
-	(*DecryptScoresResponse)(nil),    // 4: rune.vault.v1.DecryptScoresResponse
-	(*DecryptMetadataRequest)(nil),   // 5: rune.vault.v1.DecryptMetadataRequest
-	(*DecryptMetadataResponse)(nil),  // 6: rune.vault.v1.DecryptMetadataResponse
+	(*InsertRequest)(nil),            // 2: rune.vault.v1.InsertRequest
+	(*InsertResponse)(nil),           // 3: rune.vault.v1.InsertResponse
+	(*SearchRequest)(nil),            // 4: rune.vault.v1.SearchRequest
+	(*SearchHit)(nil),                // 5: rune.vault.v1.SearchHit
+	(*SearchResponse)(nil),           // 6: rune.vault.v1.SearchResponse
 }
 var file_vault_service_proto_depIdxs = []int32{
-	3, // 0: rune.vault.v1.DecryptScoresResponse.results:type_name -> rune.vault.v1.ScoreEntry
+	5, // 0: rune.vault.v1.SearchResponse.hits:type_name -> rune.vault.v1.SearchHit
 	0, // 1: rune.vault.v1.VaultService.GetAgentManifest:input_type -> rune.vault.v1.GetAgentManifestRequest
-	2, // 2: rune.vault.v1.VaultService.DecryptScores:input_type -> rune.vault.v1.DecryptScoresRequest
-	5, // 3: rune.vault.v1.VaultService.DecryptMetadata:input_type -> rune.vault.v1.DecryptMetadataRequest
+	2, // 2: rune.vault.v1.VaultService.Insert:input_type -> rune.vault.v1.InsertRequest
+	4, // 3: rune.vault.v1.VaultService.Search:input_type -> rune.vault.v1.SearchRequest
 	1, // 4: rune.vault.v1.VaultService.GetAgentManifest:output_type -> rune.vault.v1.GetAgentManifestResponse
-	4, // 5: rune.vault.v1.VaultService.DecryptScores:output_type -> rune.vault.v1.DecryptScoresResponse
-	6, // 6: rune.vault.v1.VaultService.DecryptMetadata:output_type -> rune.vault.v1.DecryptMetadataResponse
+	3, // 5: rune.vault.v1.VaultService.Insert:output_type -> rune.vault.v1.InsertResponse
+	6, // 6: rune.vault.v1.VaultService.Search:output_type -> rune.vault.v1.SearchResponse
 	4, // [4:7] is the sub-list for method output_type
 	1, // [1:4] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name

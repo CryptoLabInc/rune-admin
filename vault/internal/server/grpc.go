@@ -2,11 +2,8 @@ package server
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"sort"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -21,26 +18,24 @@ import (
 // MaxMessageSize bounds gRPC frames.
 const MaxMessageSize = 256 * 1024 * 1024
 
-// Vault is the runtime container shared by all RPC handlers and the
-// admin UDS server. It owns the long-lived token store, FHE key handle,
-// and audit logger. Construct via NewVault, tear down via Close.
+// Vault is the runtime container shared by all RPC handlers and the admin UDS
+// server. It owns the token store, the runespace engine (all FHE keys + the
+// sole runespace client), and the audit logger. Construct via NewVault.
 type Vault struct {
 	cfg    *Config
 	tokens *tokens.Store
-	keys   *crypto.EnvectorKeys
+	engine *crypto.Engine
 	audit  *AuditLogger
 
-	// Cached bundle pieces from disk. Re-read on demand to pick up
-	// rotated keys without restarting; kept here for zero-copy reuse.
 	bundleParams crypto.KeysParams
 }
 
 // NewVault wires all subsystems together. Caller is responsible for Close.
-func NewVault(cfg *Config, tokenStore *tokens.Store, keys *crypto.EnvectorKeys, audit *AuditLogger) *Vault {
+func NewVault(cfg *Config, tokenStore *tokens.Store, engine *crypto.Engine, audit *AuditLogger) *Vault {
 	return &Vault{
 		cfg:    cfg,
 		tokens: tokenStore,
-		keys:   keys,
+		engine: engine,
 		audit:  audit,
 		bundleParams: crypto.KeysParams{
 			Root:  cfg.Keys.Path,
@@ -50,23 +45,18 @@ func NewVault(cfg *Config, tokenStore *tokens.Store, keys *crypto.EnvectorKeys, 
 	}
 }
 
-func defaultKeyID(_ *Config) string {
-	// Fixed for Phase 1 — Python pins KEY_ID="vault-key" in vault_core.py:30.
-	// Surfaced as a helper so a future config field can override.
-	return "vault-key"
-}
+func defaultKeyID(_ *Config) string { return "vault-key" }
 
 // Tokens exposes the token store for the admin UDS server.
 func (v *Vault) Tokens() *tokens.Store { return v.tokens }
 
-// Config exposes the resolved config (e.g., for status reporting).
+// Config exposes the resolved config.
 func (v *Vault) Config() *Config { return v.cfg }
 
-// Close releases the FHE key handle. The audit logger and token store
-// are owned by the caller (typically the daemon main).
+// Close releases the runespace engine (gRPC conn + cgo key handles).
 func (v *Vault) Close() error {
-	if v.keys != nil {
-		_ = v.keys.Close()
+	if v.engine != nil {
+		_ = v.engine.Close()
 	}
 	return nil
 }
@@ -79,7 +69,16 @@ type VaultGRPC struct {
 
 func NewVaultGRPC(v *Vault) *VaultGRPC { return &VaultGRPC{v: v} }
 
-// ── GetAgentManifest ─────────────────────────────────────────────
+// envelope is the sealed-metadata shape stored verbatim in runespace:
+// {"a": "<agent_id>", "c": "<base64 AES-CTR ciphertext>"}. The agent_id lets
+// any vault request derive the right per-agent DEK, so team memory captured by
+// one agent can be recalled (and metadata-decrypted) by another.
+type envelope struct {
+	AgentID string `json:"a"`
+	Cipher  string `json:"c"`
+}
+
+// ── GetAgentManifest (config only — no keys ever leave the vault) ──
 
 func (s *VaultGRPC) GetAgentManifest(ctx context.Context, req *pb.GetAgentManifestRequest) (*pb.GetAgentManifestResponse, error) {
 	start := time.Now()
@@ -108,12 +107,13 @@ func (s *VaultGRPC) GetAgentManifest(ctx context.Context, req *pb.GetAgentManife
 		return &pb.GetAgentManifestResponse{Error: err.Error()}, status.Error(codes.PermissionDenied, err.Error())
 	}
 
-	bundle, err := s.v.buildBundle(req.GetToken())
-	if err != nil {
-		statusStr = "error"
-		ed := err.Error()
-		errDetail = &ed
-		return &pb.GetAgentManifestResponse{Error: err.Error()}, status.Error(codes.Internal, err.Error())
+	bundle := map[string]any{
+		"key_id":   s.v.bundleParams.KeyID,
+		"agent_id": crypto.AgentIDFromToken(req.GetToken()),
+		"dim":      s.v.cfg.Keys.EmbeddingDim,
+	}
+	if s.v.cfg.Keys.IndexName != "" {
+		bundle["index_name"] = s.v.cfg.Keys.IndexName
 	}
 	js, err := json.Marshal(bundle)
 	if err != nil {
@@ -126,35 +126,63 @@ func (s *VaultGRPC) GetAgentManifest(ctx context.Context, req *pb.GetAgentManife
 	return &pb.GetAgentManifestResponse{ManifestJson: string(js)}, nil
 }
 
-// buildBundle assembles the per-token JSON manifest returned by GetAgentManifest.
-// Order of keys is irrelevant — clients parse by name.
-func (s *Vault) buildBundle(token string) (map[string]any, error) {
-	encKey, err := crypto.ReadEncKey(s.bundleParams)
+// ── Insert (capture write) ────────────────────────────────────────
+
+func (s *VaultGRPC) Insert(ctx context.Context, req *pb.InsertRequest) (*pb.InsertResponse, error) {
+	start := time.Now()
+	user := s.v.tokens.GetUsername(req.GetToken())
+	if user == "" {
+		user = "unknown"
+	}
+	resultCount := 0
+	statusStr := "success"
+	var errDetail *string
+	defer func() {
+		s.emit(ctx, "insert", user, nil, resultCount, statusStr, errDetail, time.Since(start))
+	}()
+
+	username, role, err := s.v.tokens.Validate(req.GetToken())
 	if err != nil {
-		return nil, err
+		st, msg := mapTokenError(err)
+		statusStr, errDetail = errStatus(err)
+		return &pb.InsertResponse{Error: msg}, status.Error(st, msg)
 	}
-	bundle := map[string]any{
-		"EncKey.json": encKey,
-		"key_id":      s.bundleParams.KeyID,
+	user = username
+	if err := role.CheckScope("decrypt_scores"); err != nil {
+		statusStr = "denied"
+		ed := err.Error()
+		errDetail = &ed
+		return &pb.InsertResponse{Error: err.Error()}, status.Error(codes.PermissionDenied, err.Error())
 	}
-	if s.cfg.Keys.IndexName != "" {
-		bundle["index_name"] = s.cfg.Keys.IndexName
+	if s.v.engine == nil {
+		statusStr = "error"
+		msg := "runespace engine not available"
+		errDetail = &msg
+		return &pb.InsertResponse{Error: msg}, status.Error(codes.Internal, msg)
 	}
-	agentID := crypto.AgentIDFromToken(token)
-	dek, err := crypto.DeriveAgentKey(s.cfg.Tokens.TeamSecret, agentID)
+
+	sealed, err := s.sealMeta(req.GetToken(), req.GetMetadata())
 	if err != nil {
-		return nil, err
+		statusStr = "error"
+		msg := err.Error()
+		errDetail = &msg
+		return &pb.InsertResponse{Error: msg}, status.Error(codes.Internal, msg)
 	}
-	bundle["agent_id"] = agentID
-	bundle["agent_dek"] = base64.StdEncoding.EncodeToString(dek)
-	bundle["envector_endpoint"] = s.cfg.Envector.Endpoint
-	bundle["envector_api_key"] = s.cfg.Envector.APIKey
-	return bundle, nil
+
+	id, err := s.v.engine.Insert(ctx, req.GetVector(), sealed)
+	if err != nil {
+		statusStr = "error"
+		msg := err.Error()
+		errDetail = &msg
+		return &pb.InsertResponse{Error: msg}, status.Error(codes.Internal, msg)
+	}
+	resultCount = 1
+	return &pb.InsertResponse{Id: id}, nil
 }
 
-// ── DecryptScores ─────────────────────────────────────────────────
+// ── Search (recall + novelty) ─────────────────────────────────────
 
-func (s *VaultGRPC) DecryptScores(ctx context.Context, req *pb.DecryptScoresRequest) (*pb.DecryptScoresResponse, error) {
+func (s *VaultGRPC) Search(ctx context.Context, req *pb.SearchRequest) (*pb.SearchResponse, error) {
 	start := time.Now()
 	topK := req.GetTopK()
 	user := s.v.tokens.GetUsername(req.GetToken())
@@ -165,163 +193,100 @@ func (s *VaultGRPC) DecryptScores(ctx context.Context, req *pb.DecryptScoresRequ
 	statusStr := "success"
 	var errDetail *string
 	defer func() {
-		s.emit(ctx, "decrypt_scores", user, &topK, resultCount, statusStr, errDetail, time.Since(start))
+		s.emit(ctx, "search", user, &topK, resultCount, statusStr, errDetail, time.Since(start))
 	}()
 
 	username, role, err := s.v.tokens.Validate(req.GetToken())
 	if err != nil {
 		st, msg := mapTokenError(err)
 		statusStr, errDetail = errStatus(err)
-		return &pb.DecryptScoresResponse{Error: msg}, status.Error(st, msg)
+		return &pb.SearchResponse{Error: msg}, status.Error(st, msg)
 	}
 	user = username
 	if err := role.CheckScope("decrypt_scores"); err != nil {
 		statusStr = "denied"
 		ed := err.Error()
 		errDetail = &ed
-		return &pb.DecryptScoresResponse{Error: err.Error()}, status.Error(codes.PermissionDenied, err.Error())
+		return &pb.SearchResponse{Error: err.Error()}, status.Error(codes.PermissionDenied, err.Error())
 	}
 	if int(topK) > role.TopK {
 		te := tokens.ErrTopKExceeded{Requested: int(topK), MaxTopK: role.TopK, RoleName: role.Name}
 		statusStr = "denied"
 		msg := te.Error()
 		errDetail = &msg
-		return &pb.DecryptScoresResponse{Error: msg}, status.Error(codes.InvalidArgument, msg)
+		return &pb.SearchResponse{Error: msg}, status.Error(codes.InvalidArgument, msg)
+	}
+	if s.v.engine == nil {
+		statusStr = "error"
+		msg := "runespace engine not available"
+		errDetail = &msg
+		return &pb.SearchResponse{Error: msg}, status.Error(codes.Internal, msg)
 	}
 
-	blob, err := base64.StdEncoding.DecodeString(req.GetEncryptedBlobB64())
-	if err != nil {
-		statusStr = "error"
-		msg := fmt.Sprintf("Deserialization failed: %s", err.Error())
-		errDetail = &msg
-		return &pb.DecryptScoresResponse{Error: msg}, status.Error(codes.InvalidArgument, msg)
-	}
-	if s.v.keys == nil {
-		statusStr = "error"
-		msg := "FHE key not loaded"
-		errDetail = &msg
-		return &pb.DecryptScoresResponse{Error: msg}, status.Error(codes.Internal, msg)
-	}
-	scores2D, shardIdx, err := s.v.keys.Decrypt(blob)
+	hits, err := s.v.engine.Search(ctx, req.GetVector(), int(topK))
 	if err != nil {
 		statusStr = "error"
 		msg := err.Error()
 		errDetail = &msg
-		return &pb.DecryptScoresResponse{Error: msg}, status.Error(codes.Internal, msg)
+		return &pb.SearchResponse{Error: msg}, status.Error(codes.Internal, msg)
 	}
-	entries := topK_FromShards(scores2D, shardIdx, int(topK))
-	resultCount = len(entries)
-	return &pb.DecryptScoresResponse{Results: entries}, nil
-}
-
-// topK_FromShards mirrors vault_core._decrypt_scores_impl L276-285:
-// flatten 2D scores into (shard_idx, row_idx, score), sort desc by score,
-// take top k. Output order matches Python's heapq.nlargest.
-func topK_FromShards(scores2D [][]float64, shardIdx []int32, k int) []*pb.ScoreEntry {
-	type item struct {
-		shard, row int32
-		score      float64
-	}
-	all := make([]item, 0)
-	for i, row := range scores2D {
-		shard := int32(i)
-		if i < len(shardIdx) {
-			shard = shardIdx[i]
-		}
-		for j, v := range row {
-			all = append(all, item{shard: shard, row: int32(j), score: v})
-		}
-	}
-	sort.SliceStable(all, func(i, j int) bool { return all[i].score > all[j].score })
-	if k > len(all) {
-		k = len(all)
-	}
-	out := make([]*pb.ScoreEntry, k)
-	for i := 0; i < k; i++ {
-		out[i] = &pb.ScoreEntry{
-			ShardIdx: all[i].shard,
-			RowIdx:   all[i].row,
-			Score:    all[i].score,
-		}
-	}
-	return out
-}
-
-// ── DecryptMetadata ───────────────────────────────────────────────
-
-// envelope is the JSON shape of each encrypted_metadata_list element:
-// {"a": "<agent_id>", "c": "<base64_ciphertext>"}.
-type envelope struct {
-	AgentID string `json:"a"`
-	Cipher  string `json:"c"`
-}
-
-func (s *VaultGRPC) DecryptMetadata(ctx context.Context, req *pb.DecryptMetadataRequest) (*pb.DecryptMetadataResponse, error) {
-	start := time.Now()
-	user := s.v.tokens.GetUsername(req.GetToken())
-	if user == "" {
-		user = "unknown"
-	}
-	resultCount := 0
-	statusStr := "success"
-	var errDetail *string
-	defer func() {
-		s.emit(ctx, "decrypt_metadata", user, nil, resultCount, statusStr, errDetail, time.Since(start))
-	}()
-
-	username, role, err := s.v.tokens.Validate(req.GetToken())
-	if err != nil {
-		st, msg := mapTokenError(err)
-		statusStr, errDetail = errStatus(err)
-		return &pb.DecryptMetadataResponse{Error: msg}, status.Error(st, msg)
-	}
-	user = username
-	if err := role.CheckScope("decrypt_metadata"); err != nil {
-		statusStr = "denied"
-		ed := err.Error()
-		errDetail = &ed
-		return &pb.DecryptMetadataResponse{Error: err.Error()}, status.Error(codes.PermissionDenied, err.Error())
-	}
-	if s.v.cfg.Tokens.TeamSecret == "" {
-		statusStr = "error"
-		msg := "VAULT_TEAM_SECRET not configured"
-		errDetail = &msg
-		return &pb.DecryptMetadataResponse{Error: msg}, status.Error(codes.Internal, msg)
-	}
-
-	out := make([]string, 0, len(req.GetEncryptedMetadataList()))
-	for _, blobStr := range req.GetEncryptedMetadataList() {
-		var env envelope
-		if err := json.Unmarshal([]byte(blobStr), &env); err != nil {
-			statusStr = "error"
-			msg := fmt.Sprintf("Metadata decryption failed: %s", err.Error())
-			errDetail = &msg
-			return &pb.DecryptMetadataResponse{Error: msg}, status.Error(codes.InvalidArgument, msg)
-		}
-		dek, err := crypto.DeriveAgentKey(s.v.cfg.Tokens.TeamSecret, env.AgentID)
-		if err != nil {
-			statusStr = "error"
-			msg := fmt.Sprintf("Metadata decryption failed: %s", err.Error())
-			errDetail = &msg
-			return &pb.DecryptMetadataResponse{Error: msg}, status.Error(codes.Internal, msg)
-		}
-		pt, err := crypto.DecryptMetadata(env.Cipher, dek)
-		if err != nil {
-			statusStr = "error"
-			msg := fmt.Sprintf("Metadata decryption failed: %s", err.Error())
-			errDetail = &msg
-			return &pb.DecryptMetadataResponse{Error: msg}, status.Error(codes.Internal, msg)
-		}
-		out = append(out, string(pt))
+	out := make([]*pb.SearchHit, 0, len(hits))
+	for _, h := range hits {
+		out = append(out, &pb.SearchHit{Id: h.ID, Score: h.Score, Metadata: s.openMeta(h.Metadata)})
 	}
 	resultCount = len(out)
-	return &pb.DecryptMetadataResponse{DecryptedMetadata: out}, nil
+	return &pb.SearchResponse{Hits: out}, nil
+}
+
+// sealMeta AES-seals plaintext metadata under the caller's per-agent DEK and
+// wraps it in an {a,c} envelope for storage. Empty metadata seals to "".
+func (s *VaultGRPC) sealMeta(token, meta string) (string, error) {
+	if meta == "" {
+		return "", nil
+	}
+	if s.v.cfg.Tokens.TeamSecret == "" {
+		return "", errors.New("VAULT_TEAM_SECRET not configured")
+	}
+	agentID := crypto.AgentIDFromToken(token)
+	dek, err := crypto.DeriveAgentKey(s.v.cfg.Tokens.TeamSecret, agentID)
+	if err != nil {
+		return "", err
+	}
+	c, err := crypto.EncryptMetadata([]byte(meta), dek)
+	if err != nil {
+		return "", err
+	}
+	b, err := json.Marshal(envelope{AgentID: agentID, Cipher: c})
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+// openMeta best-effort opens a sealed {a,c} envelope to plaintext JSON. On any
+// failure it returns the stored string unchanged (plaintext/legacy tolerated).
+func (s *VaultGRPC) openMeta(stored string) string {
+	if stored == "" {
+		return ""
+	}
+	var env envelope
+	if err := json.Unmarshal([]byte(stored), &env); err != nil || env.Cipher == "" {
+		return stored
+	}
+	dek, err := crypto.DeriveAgentKey(s.v.cfg.Tokens.TeamSecret, env.AgentID)
+	if err != nil {
+		return stored
+	}
+	pt, err := crypto.DecryptMetadata(env.Cipher, dek)
+	if err != nil {
+		return stored
+	}
+	return string(pt)
 }
 
 // ── error mapping & audit helpers ────────────────────────────────
 
 // mapTokenError maps tokens.ErrXxx → (gRPC code, user-facing message).
-// Mirrors vault_grpc_server.py error branches.
 func mapTokenError(err error) (codes.Code, string) {
 	var nf tokens.ErrTokenNotFound
 	if errors.As(err, &nf) {
@@ -346,8 +311,7 @@ func mapTokenError(err error) (codes.Code, string) {
 	return codes.Unauthenticated, err.Error()
 }
 
-// errStatus tags an error for the audit log: token/scope errors are
-// "denied", everything else is "error".
+// errStatus tags an error for the audit log.
 func errStatus(err error) (string, *string) {
 	msg := err.Error()
 	switch {
