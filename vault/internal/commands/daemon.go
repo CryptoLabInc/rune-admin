@@ -59,11 +59,17 @@ func runDaemonStart(ctx context.Context) error {
 	if err := crypto.EnsureKeys(keyParams); err != nil {
 		return fmt.Errorf("daemon: ensure keys: %w", err)
 	}
-	keys, err := crypto.OpenSecretKey(keyParams)
+	// Open the full key set, dial runespace, and register the eval key.
+	eng, err := crypto.OpenEngine(ctx, crypto.EngineParams{
+		Keys:     keyParams,
+		Endpoint: cfg.Envector.Endpoint,
+		Token:    cfg.Envector.APIKey,
+		Insecure: true, // integration test: runespace served plaintext on localhost
+	})
 	if err != nil {
-		return fmt.Errorf("daemon: open sec key: %w", err)
+		return fmt.Errorf("daemon: open runespace engine: %w", err)
 	}
-	defer keys.Close()
+	defer eng.Close()
 
 	audit, err := server.NewAuditLogger(cfg.Audit)
 	if err != nil {
@@ -71,7 +77,7 @@ func runDaemonStart(ctx context.Context) error {
 	}
 	defer audit.Close()
 
-	v := server.NewVault(cfg, store, keys, audit)
+	v := server.NewVault(cfg, store, eng, audit)
 	defer v.Close()
 
 	slog.Info("vault: starting daemon",

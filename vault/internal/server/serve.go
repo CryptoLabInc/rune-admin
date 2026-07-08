@@ -30,10 +30,8 @@ import (
 // errors are returned eagerly.
 func Serve(ctx context.Context, v *Vault, adminFactory AdminFactory) error {
 	cfg := v.Config()
-
-	if err := EnsureVault(ctx, cfg); err != nil {
-		return fmt.Errorf("server: %w", err)
-	}
+	// runespace eval-key registration is handled by crypto.OpenEngine at daemon
+	// startup; no separate cloud-setup step is needed.
 
 	// gRPC listener
 	grpcAddr := fmt.Sprintf("%s:%d", grpcHost(cfg), cfg.Server.GRPC.Port)

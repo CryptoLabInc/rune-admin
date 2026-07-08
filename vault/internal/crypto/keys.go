@@ -1,29 +1,20 @@
 package crypto
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	envector "github.com/CryptoLabInc/envector-go-sdk"
+	runespace "github.com/jh-lee-cryptolab/runespace-go-sdk"
 )
-
-// EnvectorKeys is a thin wrapper around envector-go-sdk's *Keys handle that
-// constrains usage to decrypt-only (KeyPartSec) — Vault never encrypts.
-//
-// On-disk layout matches pyenvector: <root>/<keyID>/{Enc,Sec,Eval}Key.json.
-// envector-go-sdk reads pyenvector's JSON envelope natively, so existing
-// installs work without migration.
-type EnvectorKeys struct {
-	keys *envector.Keys
-}
 
 // KeysParams names the on-disk key bundle and FHE dimension.
 type KeysParams struct {
 	// Root is the parent directory containing <KeyID>/.
 	// E.g., "/opt/runevault/vault-keys" with KeyID "vault-key" reads from
-	// "/opt/runevault/vault-keys/vault-key/{Enc,Sec,Eval}Key.json".
+	// "/opt/runevault/vault-keys/vault-key/{Enc,Sec,Eval}Key(.json|.bin)".
 	Root  string
 	KeyID string
 	Dim   int
@@ -33,15 +24,15 @@ func (p KeysParams) keyDir() string { return filepath.Join(p.Root, p.KeyID) }
 
 // KeysExist reports whether the bundle is present under Root/KeyID.
 func KeysExist(p KeysParams) bool {
-	return envector.KeysExist(
-		envector.WithKeyPath(p.keyDir()),
-		envector.WithKeyID(p.KeyID),
-		envector.WithKeyDim(p.Dim),
+	return runespace.KeysExist(
+		runespace.WithKeyPath(p.keyDir()),
+		runespace.WithKeyID(p.KeyID),
+		runespace.WithKeyDim(p.Dim),
 	)
 }
 
-// EnsureKeys generates a fresh bundle if none exists. No-op if any of the
-// three slots is already present (envector.GenerateKeys never overwrites).
+// EnsureKeys generates a fresh key set (Enc/Eval/Sec, RMP+MM) if none exists.
+// No-op if a bundle is already present (GenerateKeys never overwrites).
 func EnsureKeys(p KeysParams) error {
 	if KeysExist(p) {
 		return nil
@@ -49,58 +40,117 @@ func EnsureKeys(p KeysParams) error {
 	if err := os.MkdirAll(p.keyDir(), 0o700); err != nil {
 		return fmt.Errorf("crypto: mkdir key dir: %w", err)
 	}
-	if err := envector.GenerateKeys(
-		envector.WithKeyPath(p.keyDir()),
-		envector.WithKeyID(p.KeyID),
-		envector.WithKeyDim(p.Dim),
-	); err != nil && !errors.Is(err, envector.ErrKeysAlreadyExist) {
+	if err := runespace.GenerateKeys(
+		runespace.WithKeyPath(p.keyDir()),
+		runespace.WithKeyID(p.KeyID),
+		runespace.WithKeyDim(p.Dim),
+	); err != nil && !errors.Is(err, runespace.ErrKeysAlreadyExist) {
 		return fmt.Errorf("crypto: generate keys: %w", err)
 	}
 	return nil
 }
 
-// OpenSecretKey loads SecKey.json only — Vault is decrypt-only.
-// Returns EnvectorKeys whose Decrypt method is wired to envector-go-sdk's CKKS
-// decryptor; encryption is unavailable.
-func OpenSecretKey(p KeysParams) (*EnvectorKeys, error) {
-	k, err := envector.OpenKeysFromFile(
-		envector.WithKeyPath(p.keyDir()),
-		envector.WithKeyID(p.KeyID),
-		envector.WithKeyDim(p.Dim),
-		envector.WithKeyParts(envector.KeyPartSec),
-	)
+// EngineParams configures the vault's runespace client.
+type EngineParams struct {
+	Keys     KeysParams
+	Endpoint string // runespace gRPC address
+	Token    string // optional runespace access token
+	Insecure bool   // true for local plaintext dev
+}
+
+// Engine is the vault's runespace client. It owns the full FHE key set
+// (Enc+Eval+Sec) and the gRPC connection, and is the SOLE talker to the
+// runespace engine: Insert encrypts locally then appends; Search sends the
+// plaintext query, decrypts the score blobs, and returns ranked hits.
+type Engine struct {
+	client *runespace.Client
+	keys   *runespace.Keys
+}
+
+// OpenEngine opens the full key set, dials runespace, and makes sure the eval
+// key is registered (RegisterKeys on first run, UseKeys thereafter).
+func OpenEngine(ctx context.Context, p EngineParams) (*Engine, error) {
+	keys, err := runespace.OpenKeys(
+		runespace.WithKeyPath(p.Keys.keyDir()),
+		runespace.WithKeyID(p.Keys.KeyID),
+		runespace.WithKeyDim(p.Keys.Dim),
+	) // default parts: Enc (encrypt) + Sec (decrypt); eval streamed by RegisterKeys
 	if err != nil {
-		return nil, fmt.Errorf("crypto: open sec key: %w", err)
+		return nil, fmt.Errorf("crypto: open keys: %w", err)
 	}
-	return &EnvectorKeys{keys: k}, nil
-}
 
-// Decrypt unpacks a CiphertextScore proto blob into per-shard score
-// vectors. The returned slices are aligned: scores[i] is the score vector
-// for shard shardIdx[i]. The gRPC layer flattens these into ScoreEntry
-// rows and applies Top-K.
-func (f *EnvectorKeys) Decrypt(blob []byte) (scores [][]float64, shardIdx []int32, err error) {
-	if f == nil || f.keys == nil {
-		return nil, nil, errors.New("crypto: EnvectorKeys closed")
+	opts := []runespace.ClientOption{}
+	if p.Token != "" {
+		opts = append(opts, runespace.WithAccessToken(p.Token))
 	}
-	return f.keys.Decrypt(blob)
-}
-
-// ReadEncKey reads EncKey.json from disk and returns its contents verbatim
-// for inclusion in the GetAgentManifest gRPC response.
-func ReadEncKey(p KeysParams) (string, error) {
-	enc, err := os.ReadFile(filepath.Join(p.keyDir(), "EncKey.json"))
+	if p.Insecure {
+		opts = append(opts, runespace.WithInsecure())
+	}
+	client, err := runespace.Dial(p.Endpoint, opts...)
 	if err != nil {
-		return "", fmt.Errorf("crypto: read EncKey.json: %w", err)
+		_ = keys.Close()
+		return nil, fmt.Errorf("crypto: dial runespace %s: %w", p.Endpoint, err)
 	}
-	return string(enc), nil
+
+	// Register the eval key once; if the engine already serves this key set,
+	// just bind locally (UseKeys) so restarts are idempotent.
+	if info, ierr := client.Info(ctx); ierr == nil && len(info.RegisteredKeys) > 0 {
+		client.UseKeys(keys)
+	} else if err := client.RegisterKeys(ctx, keys); err != nil {
+		_ = client.Close()
+		_ = keys.Close()
+		return nil, fmt.Errorf("crypto: register keys: %w", err)
+	}
+
+	return &Engine{client: client, keys: keys}, nil
 }
 
-func (f *EnvectorKeys) Close() error {
-	if f == nil || f.keys == nil {
-		return nil
+// Dim returns the FHE slot dimension the key set was opened with.
+func (e *Engine) Dim() int { return e.keys.Dim() }
+
+// Insert encrypts vec (EncKey, RMP+MM) and appends it under a fresh opaque id,
+// which it returns. sealedMeta is stored verbatim in the manifest — the caller
+// is responsible for sealing it (agent_dek) beforehand.
+func (e *Engine) Insert(ctx context.Context, vec []float32, sealedMeta string) (string, error) {
+	return e.client.Insert(ctx, vec, sealedMeta)
+}
+
+// SearchHit is one decrypted, ranked result. Metadata is the stored envelope
+// (still sealed); the caller opens it with the agent_dek.
+type SearchHit struct {
+	ID       string
+	Score    float64
+	Metadata string
+}
+
+// Search runs the blind search (plaintext query → decrypted scores → ranked
+// hits with metadata resolved).
+func (e *Engine) Search(ctx context.Context, vec []float32, topK int) ([]SearchHit, error) {
+	matches, err := e.client.Search(ctx, vec, topK)
+	if err != nil {
+		return nil, err
 	}
-	err := f.keys.Close()
-	f.keys = nil
-	return err
+	out := make([]SearchHit, 0, len(matches))
+	for _, m := range matches {
+		out = append(out, SearchHit{ID: m.ID, Score: m.Score, Metadata: m.Metadata})
+	}
+	return out, nil
+}
+
+// Close releases the gRPC connection and the cgo key handles. Idempotent.
+func (e *Engine) Close() error {
+	var first error
+	if e.client != nil {
+		if err := e.client.Close(); err != nil {
+			first = err
+		}
+		e.client = nil
+	}
+	if e.keys != nil {
+		if err := e.keys.Close(); err != nil && first == nil {
+			first = err
+		}
+		e.keys = nil
+	}
+	return first
 }
