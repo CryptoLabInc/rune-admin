@@ -19,7 +19,7 @@
 #
 # Differences from install.sh:
 #   - Always installs from the local working tree (no GitHub release download).
-#   - For CSP targets, builds linux/amd64 in Docker (golang:1.25-bookworm) with
+#   - For CSP targets, builds linux/amd64 in Docker (golang:1.26-bookworm) with
 #     --platform linux/amd64 — works on any host arch via qemu emulation.
 #   - cloud-init-dev / startup-script-dev only prepare the VM; install.sh runs
 #     over SSH after cloud-init finishes.
@@ -43,7 +43,7 @@ LOCAL_BINARY_HOST="${REPO_ROOT}/vault/bin/runevault"
 TARGET_OS=linux
 TARGET_ARCH=amd64
 LINUX_BINARY="${REPO_ROOT}/vault/bin/runevault-${TARGET_OS}-${TARGET_ARCH}"
-BUILDER_IMAGE="golang:1.25-bookworm"
+BUILDER_IMAGE="golang:1.26-bookworm"
 GRPC_PORT=50051
 
 # Overridable by env (mirrors install.sh)

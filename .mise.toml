@@ -4,15 +4,14 @@
 
 # ── Core development tools ───────────────────────────────────────────
 [tools]
-go = "1.25"
+go = "1.26"
 buf = "1.66"
 
-# ── Deployment tools (install with: mise install) ────────────────────
-# These are needed only for cloud deployment, not for local development.
-terraform = "1.14"
-"aqua:aws/aws-cli" = "2"
-gcloud = "562"
-oci = "3"
+# ── Deployment tools ─────────────────────────────────────────────────
+# Deployment-only tools (terraform, aws-cli, gcloud, oci) live in
+# .mise.deploy.toml so local dev and pre-commit checks never provision
+# them (an unavailable tool must not block a commit).
+# Install them with:  MISE_ENV=deploy mise install
 
 [env]
 CGO_ENABLED = "1"
