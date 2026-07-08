@@ -49,7 +49,7 @@ Feature requests should include:
 
 2. **Install tools and bootstrap**
    ```bash
-   mise install        # Install Go 1.25, buf, terraform, cloud CLIs
+   mise install        # Install Go 1.26, buf, terraform, cloud CLIs
    mise run setup      # Resolve Go modules, generate proto stubs
    ```
 
@@ -161,7 +161,7 @@ of a published GitHub release.
 RUNEVAULT_SKIP_SERVICE=1 \
   bash scripts/install-dev.sh --target local --prefix "$HOME/runevault-test"
 
-# Cloud install: cross-compiles linux/amd64 in golang:1.25-bookworm,
+# Cloud install: cross-compiles linux/amd64 in golang:1.26-bookworm,
 # uploads via SCP, and runs install.sh on the remote VM.
 bash scripts/install-dev.sh --target oci --install-dir "$HOME/rune-vault-oci"
 ```

@@ -96,7 +96,7 @@ Team members install [Rune](https://github.com/CryptoLabInc/rune) and configure 
 ```bash
 git clone https://github.com/CryptoLabInc/rune-admin.git
 cd rune-admin
-mise install            # Go 1.25, buf, terraform, cloud CLIs
+mise install            # Go 1.26, buf, terraform, cloud CLIs
 mise run setup          # Resolve Go modules + generate proto stubs
 mise run go:build       # Builds vault/bin/runevault
 # Copy + edit a dev config (the vault/dev/ tree is gitignored):
