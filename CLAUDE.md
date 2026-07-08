@@ -39,6 +39,17 @@ Do NOT run go, gofmt, or buf directly.
 - Token/auth changes must update `vault/internal/tokens/store_test.go`
 - Run `mise run check` before committing
 
+## Documentation
+
+- `docs-public/` is published to the public repository; `docs-private/` is
+  internal-only (stripped by the sync workflow, but shared with
+  collaborators — do not gitignore it)
+- Language-specific variants of a document use `-ko` / `-en` file name
+  suffixes
+- Date prefixes (`yyyy-mm-dd-`) are decided per document at creation time —
+  always ask before creating a document whether it should carry one
+- See `docs-private/documentation-conventions.md` for details
+
 ## Security invariants
 
 - Secret key (`vault-keys/<key-id>/SecKey.json`) must never be logged, returned in API responses, or leave the server process

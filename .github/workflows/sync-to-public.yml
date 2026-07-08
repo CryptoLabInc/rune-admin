@@ -54,7 +54,14 @@ jobs:
           git remote add public git@github.com:CryptoLabInc/rune-admin.git
           git fetch public main
           PARENT=$(git rev-parse FETCH_HEAD)
-          TREE=$(git rev-parse 'HEAD^{tree}')
+          # Build the published tree from HEAD with internal-only paths
+          # removed. docs-private/ is shared with collaborators here but
+          # must never reach the public repository.
+          export GIT_INDEX_FILE="$(mktemp)"
+          git read-tree HEAD
+          git rm -r --cached --ignore-unmatch -q docs-private
+          TREE=$(git write-tree)
+          unset GIT_INDEX_FILE
           if [ "$TREE" = "$(git rev-parse "${PARENT}^{tree}")" ]; then
             echo "Public repository is already up to date."
             exit 0
