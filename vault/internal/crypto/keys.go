@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	runespace "github.com/jh-lee-cryptolab/runespace-go-sdk"
+	runespace "github.com/CryptoLabInc/runespace-sdk"
 )
 
 // KeysParams names the on-disk key bundle and FHE dimension.
