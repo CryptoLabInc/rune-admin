@@ -20,8 +20,8 @@ import (
 // Other services routed through the same gRPC server bypass runtime checks.
 var vaultMethods = map[string]bool{
 	"/rune.vault.v1.VaultService/GetAgentManifest": true,
-	"/rune.vault.v1.VaultService/DecryptScores":    true,
-	"/rune.vault.v1.VaultService/DecryptMetadata":  true,
+	"/rune.vault.v1.VaultService/Insert":           true,
+	"/rune.vault.v1.VaultService/Search":           true,
 }
 
 // NewValidationInterceptor returns a unary server interceptor that runs
