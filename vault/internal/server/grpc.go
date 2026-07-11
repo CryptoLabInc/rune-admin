@@ -215,6 +215,14 @@ func (s *VaultGRPC) Insert(ctx context.Context, req *pb.InsertRequest) (*pb.Inse
 		statusStr = "error"
 		msg := err.Error()
 		errDetail = &msg
+		// §9.2 C3: the engine replaced its centroid set. The engine cache was
+		// already invalidated (ForwardInsert); relay a stable, typed signal so
+		// the client resyncs centroids and retries once with the same id. The
+		// WRONG_CENTROID_VERSION prefix is the wire contract rune-mcp matches.
+		if errors.Is(err, runespace.ErrCentroidVersionMismatch) {
+			wire := "WRONG_CENTROID_VERSION: centroid set was replaced; resync centroids and retry"
+			return &pb.InsertResponse{Error: wire}, status.Error(codes.FailedPrecondition, wire)
+		}
 		return &pb.InsertResponse{Error: msg}, status.Error(codes.Internal, msg)
 	}
 	resultCount = 1
