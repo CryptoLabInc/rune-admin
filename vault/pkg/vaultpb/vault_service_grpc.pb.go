@@ -22,6 +22,7 @@ const (
 	VaultService_GetAgentManifest_FullMethodName = "/rune.vault.v1.VaultService/GetAgentManifest"
 	VaultService_Insert_FullMethodName           = "/rune.vault.v1.VaultService/Insert"
 	VaultService_Search_FullMethodName           = "/rune.vault.v1.VaultService/Search"
+	VaultService_GetCentroids_FullMethodName     = "/rune.vault.v1.VaultService/GetCentroids"
 )
 
 // VaultServiceClient is the client API for VaultService service.
@@ -29,21 +30,29 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // Rune-Vault gRPC service.
-// Holds ALL FHE keys (Enc/Eval/Sec) + agent_dek, performs every
-// encryption/decryption, and is the SOLE runespace client. rune-mcp is a
-// pure-Go client that talks only to this service; it never touches runespace
-// or the FHE SDK directly.
+// The vault generates and custodies the FHE key set. The PUBLIC EncKey and
+// the caller's derived agent_dek are handed to rune-mcp via GetAgentManifest
+// so capture encryption/sealing happens on the developer machine; SecKey,
+// EvalKey, and team_secret never leave this server. The vault is the SOLE
+// runespace client — rune-mcp talks only to this service and forwards
+// ciphertext through it.
 type VaultServiceClient interface {
-	// Returns the agent manifest (config only — no FHE keys ever leave the vault).
+	// Returns the agent manifest: EncKey (RMP+MM, public), the caller's
+	// agent_dek, index config, centroid_set_version, and capability flags.
 	GetAgentManifest(ctx context.Context, in *GetAgentManifestRequest, opts ...grpc.CallOption) (*GetAgentManifestResponse, error)
-	// Capture write: encrypt a plaintext embedding (EncKey) + seal metadata
-	// (agent_dek), then insert into runespace via the SDK.
+	// Capture write: forward a client-encrypted item (EncryptFlat +
+	// EncryptClustered blobs, plaintext cluster routing, sealed metadata)
+	// verbatim to runespace. The vault sees no plaintext content.
 	Insert(ctx context.Context, in *InsertRequest, opts ...grpc.CallOption) (*InsertResponse, error)
 	// Blind vector search over runespace (recall + capture-time novelty check).
 	// The plaintext query is sent to runespace (PCMM); the vault decrypts the
 	// score blobs (SecKey), ranks, resolves and opens metadata (agent_dek), and
 	// returns ranked plaintext hits.
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
+	// Relays the runespace IVF centroid set (header, then id-ordered batches)
+	// so rune-mcp can push it down to runed for insert routing. Public
+	// structural data — same wire shape as runespace's GetCentroids.
+	GetCentroids(ctx context.Context, in *GetCentroidsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[CentroidChunk], error)
 }
 
 type vaultServiceClient struct {
@@ -84,26 +93,53 @@ func (c *vaultServiceClient) Search(ctx context.Context, in *SearchRequest, opts
 	return out, nil
 }
 
+func (c *vaultServiceClient) GetCentroids(ctx context.Context, in *GetCentroidsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[CentroidChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &VaultService_ServiceDesc.Streams[0], VaultService_GetCentroids_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[GetCentroidsRequest, CentroidChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type VaultService_GetCentroidsClient = grpc.ServerStreamingClient[CentroidChunk]
+
 // VaultServiceServer is the server API for VaultService service.
 // All implementations must embed UnimplementedVaultServiceServer
 // for forward compatibility.
 //
 // Rune-Vault gRPC service.
-// Holds ALL FHE keys (Enc/Eval/Sec) + agent_dek, performs every
-// encryption/decryption, and is the SOLE runespace client. rune-mcp is a
-// pure-Go client that talks only to this service; it never touches runespace
-// or the FHE SDK directly.
+// The vault generates and custodies the FHE key set. The PUBLIC EncKey and
+// the caller's derived agent_dek are handed to rune-mcp via GetAgentManifest
+// so capture encryption/sealing happens on the developer machine; SecKey,
+// EvalKey, and team_secret never leave this server. The vault is the SOLE
+// runespace client — rune-mcp talks only to this service and forwards
+// ciphertext through it.
 type VaultServiceServer interface {
-	// Returns the agent manifest (config only — no FHE keys ever leave the vault).
+	// Returns the agent manifest: EncKey (RMP+MM, public), the caller's
+	// agent_dek, index config, centroid_set_version, and capability flags.
 	GetAgentManifest(context.Context, *GetAgentManifestRequest) (*GetAgentManifestResponse, error)
-	// Capture write: encrypt a plaintext embedding (EncKey) + seal metadata
-	// (agent_dek), then insert into runespace via the SDK.
+	// Capture write: forward a client-encrypted item (EncryptFlat +
+	// EncryptClustered blobs, plaintext cluster routing, sealed metadata)
+	// verbatim to runespace. The vault sees no plaintext content.
 	Insert(context.Context, *InsertRequest) (*InsertResponse, error)
 	// Blind vector search over runespace (recall + capture-time novelty check).
 	// The plaintext query is sent to runespace (PCMM); the vault decrypts the
 	// score blobs (SecKey), ranks, resolves and opens metadata (agent_dek), and
 	// returns ranked plaintext hits.
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
+	// Relays the runespace IVF centroid set (header, then id-ordered batches)
+	// so rune-mcp can push it down to runed for insert routing. Public
+	// structural data — same wire shape as runespace's GetCentroids.
+	GetCentroids(*GetCentroidsRequest, grpc.ServerStreamingServer[CentroidChunk]) error
 	mustEmbedUnimplementedVaultServiceServer()
 }
 
@@ -122,6 +158,9 @@ func (UnimplementedVaultServiceServer) Insert(context.Context, *InsertRequest) (
 }
 func (UnimplementedVaultServiceServer) Search(context.Context, *SearchRequest) (*SearchResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Search not implemented")
+}
+func (UnimplementedVaultServiceServer) GetCentroids(*GetCentroidsRequest, grpc.ServerStreamingServer[CentroidChunk]) error {
+	return status.Error(codes.Unimplemented, "method GetCentroids not implemented")
 }
 func (UnimplementedVaultServiceServer) mustEmbedUnimplementedVaultServiceServer() {}
 func (UnimplementedVaultServiceServer) testEmbeddedByValue()                      {}
@@ -198,6 +237,17 @@ func _VaultService_Search_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VaultService_GetCentroids_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetCentroidsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(VaultServiceServer).GetCentroids(m, &grpc.GenericServerStream[GetCentroidsRequest, CentroidChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type VaultService_GetCentroidsServer = grpc.ServerStreamingServer[CentroidChunk]
+
 // VaultService_ServiceDesc is the grpc.ServiceDesc for VaultService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -218,6 +268,12 @@ var VaultService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VaultService_Search_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "GetCentroids",
+			Handler:       _VaultService_GetCentroids_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "vault_service.proto",
 }

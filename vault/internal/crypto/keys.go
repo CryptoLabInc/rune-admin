@@ -108,6 +108,43 @@ func OpenEngine(ctx context.Context, p EngineParams) (*Engine, error) {
 // Dim returns the FHE slot dimension the key set was opened with.
 func (e *Engine) Dim() int { return e.keys.Dim() }
 
+// ForwardInsert appends an item that rune-mcp already encrypted (EncKey) and
+// sealed (agent_dek), verbatim. The vault performs no crypto here — it is a
+// pure forward; idempotency rides on the client-generated it.ID.
+func (e *Engine) ForwardInsert(ctx context.Context, it runespace.PreEncryptedItem) error {
+	return e.client.InsertPreEncrypted(ctx, it)
+}
+
+// Centroids returns the engine's IVF centroid set for relay to rune-mcp
+// (and onward to runed). The SDK caches the fetch, so repeated relays cost
+// one stream total.
+func (e *Engine) Centroids(ctx context.Context) (*runespace.CentroidSet, error) {
+	return e.client.Centroids(ctx)
+}
+
+// encKeyFiles are the PUBLIC encryption-key artifacts GenerateKeys writes,
+// relative to the key directory. They are safe to hand to clients: EncKey
+// can only encrypt; decryption needs SecKey, which never leaves the vault.
+const (
+	rmpEncKeyFile = "EncKey.json"   // RMP envelope (JSON)
+	mmEncKeyFile  = "mm/EncKey.bin" // MM raw key bytes
+)
+
+// ReadEncKeys loads the two PUBLIC encryption keys for the agent manifest:
+// the RMP EncKey JSON envelope and the raw MM EncKey bytes.
+func ReadEncKeys(p KeysParams) (rmpJSON []byte, mmKey []byte, err error) {
+	dir := p.keyDir()
+	rmpJSON, err = os.ReadFile(filepath.Join(dir, rmpEncKeyFile))
+	if err != nil {
+		return nil, nil, fmt.Errorf("crypto: read %s: %w", rmpEncKeyFile, err)
+	}
+	mmKey, err = os.ReadFile(filepath.Join(dir, mmEncKeyFile))
+	if err != nil {
+		return nil, nil, fmt.Errorf("crypto: read %s: %w", mmEncKeyFile, err)
+	}
+	return rmpJSON, mmKey, nil
+}
+
 // Insert encrypts vec (EncKey, RMP+MM) and appends it under a fresh opaque id,
 // which it returns. sealedMeta is stored verbatim in the manifest — the caller
 // is responsible for sealing it (agent_dek) beforehand.

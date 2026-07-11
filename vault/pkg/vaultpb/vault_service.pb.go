@@ -69,7 +69,14 @@ func (x *GetAgentManifestRequest) GetToken() string {
 
 type GetAgentManifestResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// JSON: {"index_name": "...", "agent_id": "...", "dim": 1024} — no keys.
+	// JSON bundle:
+	//
+	//	"EncKey.json"          RMP EncKey envelope (public, for EncryptFlat)
+	//	"mm_enc_key"           base64(MM EncKey raw bytes, for EncryptClustered)
+	//	"agent_dek"            base64(caller's derived metadata DEK)
+	//	"key_id" "agent_id" "dim" "index_name"
+	//	"centroid_set_version" current engine set (empty = none loaded yet)
+	//	"insert"               capability flag: "pre_encrypted"
 	ManifestJson  string `protobuf:"bytes,1,opt,name=manifest_json,json=manifestJson,proto3" json:"manifest_json,omitempty"`
 	Error         string `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"` // Non-empty on error
 	unknownFields protoimpl.UnknownFields
@@ -124,12 +131,22 @@ type InsertRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Auth token. Required, fixed 36 chars.
 	Token string `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
-	// Plaintext embedding (runed output). Length must equal the configured dim.
-	Vector []float32 `protobuf:"fixed32,2,rep,packed,name=vector,proto3" json:"vector,omitempty"`
-	// Plaintext metadata JSON. Vault seals it (agent_dek) before storing; may be empty.
-	Metadata      string `protobuf:"bytes,3,opt,name=metadata,proto3" json:"metadata,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// Sealed metadata envelope ({"a","c"}), client-sealed with agent_dek.
+	// Stored verbatim; the vault does not open or re-seal it on insert.
+	Metadata string `protobuf:"bytes,3,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	// Client-generated opaque UUID. Required: retries at any hop reuse it so
+	// a re-insert is an idempotent no-op.
+	Id string `protobuf:"bytes,4,opt,name=id,proto3" json:"id,omitempty"`
+	// EncryptFlat output (flat tier ITEM encoding).
+	RmpItem []byte `protobuf:"bytes,5,opt,name=rmp_item,json=rmpItem,proto3" json:"rmp_item,omitempty"`
+	// EncryptClustered output (compact MM row).
+	MmItem []byte `protobuf:"bytes,6,opt,name=mm_item,json=mmItem,proto3" json:"mm_item,omitempty"`
+	// Plaintext IVF routing computed next to the embedding (runed).
+	ClusterId uint32 `protobuf:"varint,7,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	// Centroid set version the routing was computed against.
+	CentroidSetVersion string `protobuf:"bytes,8,opt,name=centroid_set_version,json=centroidSetVersion,proto3" json:"centroid_set_version,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *InsertRequest) Reset() {
@@ -169,13 +186,6 @@ func (x *InsertRequest) GetToken() string {
 	return ""
 }
 
-func (x *InsertRequest) GetVector() []float32 {
-	if x != nil {
-		return x.Vector
-	}
-	return nil
-}
-
 func (x *InsertRequest) GetMetadata() string {
 	if x != nil {
 		return x.Metadata
@@ -183,9 +193,44 @@ func (x *InsertRequest) GetMetadata() string {
 	return ""
 }
 
+func (x *InsertRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *InsertRequest) GetRmpItem() []byte {
+	if x != nil {
+		return x.RmpItem
+	}
+	return nil
+}
+
+func (x *InsertRequest) GetMmItem() []byte {
+	if x != nil {
+		return x.MmItem
+	}
+	return nil
+}
+
+func (x *InsertRequest) GetClusterId() uint32 {
+	if x != nil {
+		return x.ClusterId
+	}
+	return 0
+}
+
+func (x *InsertRequest) GetCentroidSetVersion() string {
+	if x != nil {
+		return x.CentroidSetVersion
+	}
+	return ""
+}
+
 type InsertResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`       // runespace-issued opaque id
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`       // echo of the client-supplied id on success
 	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"` // Non-empty on error
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -410,6 +455,289 @@ func (x *SearchResponse) GetError() string {
 	return ""
 }
 
+type GetCentroidsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Auth token. Required, fixed 36 chars.
+	Token         string `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCentroidsRequest) Reset() {
+	*x = GetCentroidsRequest{}
+	mi := &file_vault_service_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCentroidsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCentroidsRequest) ProtoMessage() {}
+
+func (x *GetCentroidsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_service_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCentroidsRequest.ProtoReflect.Descriptor instead.
+func (*GetCentroidsRequest) Descriptor() ([]byte, []int) {
+	return file_vault_service_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GetCentroidsRequest) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+type CentroidChunk struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Payload:
+	//
+	//	*CentroidChunk_Header
+	//	*CentroidChunk_Batch
+	Payload       isCentroidChunk_Payload `protobuf_oneof:"payload"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CentroidChunk) Reset() {
+	*x = CentroidChunk{}
+	mi := &file_vault_service_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CentroidChunk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CentroidChunk) ProtoMessage() {}
+
+func (x *CentroidChunk) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_service_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CentroidChunk.ProtoReflect.Descriptor instead.
+func (*CentroidChunk) Descriptor() ([]byte, []int) {
+	return file_vault_service_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *CentroidChunk) GetPayload() isCentroidChunk_Payload {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *CentroidChunk) GetHeader() *CentroidSetHeader {
+	if x != nil {
+		if x, ok := x.Payload.(*CentroidChunk_Header); ok {
+			return x.Header
+		}
+	}
+	return nil
+}
+
+func (x *CentroidChunk) GetBatch() *CentroidBatch {
+	if x != nil {
+		if x, ok := x.Payload.(*CentroidChunk_Batch); ok {
+			return x.Batch
+		}
+	}
+	return nil
+}
+
+type isCentroidChunk_Payload interface {
+	isCentroidChunk_Payload()
+}
+
+type CentroidChunk_Header struct {
+	Header *CentroidSetHeader `protobuf:"bytes,1,opt,name=header,proto3,oneof"`
+}
+
+type CentroidChunk_Batch struct {
+	Batch *CentroidBatch `protobuf:"bytes,2,opt,name=batch,proto3,oneof"`
+}
+
+func (*CentroidChunk_Header) isCentroidChunk_Payload() {}
+
+func (*CentroidChunk_Batch) isCentroidChunk_Payload() {}
+
+type CentroidSetHeader struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"` // content hash (sha256)
+	Dim           uint32                 `protobuf:"varint,2,opt,name=dim,proto3" json:"dim,omitempty"`
+	Nlist         uint32                 `protobuf:"varint,3,opt,name=nlist,proto3" json:"nlist,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CentroidSetHeader) Reset() {
+	*x = CentroidSetHeader{}
+	mi := &file_vault_service_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CentroidSetHeader) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CentroidSetHeader) ProtoMessage() {}
+
+func (x *CentroidSetHeader) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_service_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CentroidSetHeader.ProtoReflect.Descriptor instead.
+func (*CentroidSetHeader) Descriptor() ([]byte, []int) {
+	return file_vault_service_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *CentroidSetHeader) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *CentroidSetHeader) GetDim() uint32 {
+	if x != nil {
+		return x.Dim
+	}
+	return 0
+}
+
+func (x *CentroidSetHeader) GetNlist() uint32 {
+	if x != nil {
+		return x.Nlist
+	}
+	return 0
+}
+
+type CentroidBatch struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Centroids     []*Centroid            `protobuf:"bytes,1,rep,name=centroids,proto3" json:"centroids,omitempty"` // id order (append order == cluster id)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CentroidBatch) Reset() {
+	*x = CentroidBatch{}
+	mi := &file_vault_service_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CentroidBatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CentroidBatch) ProtoMessage() {}
+
+func (x *CentroidBatch) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_service_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CentroidBatch.ProtoReflect.Descriptor instead.
+func (*CentroidBatch) Descriptor() ([]byte, []int) {
+	return file_vault_service_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CentroidBatch) GetCentroids() []*Centroid {
+	if x != nil {
+		return x.Centroids
+	}
+	return nil
+}
+
+type Centroid struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Vec           []float32              `protobuf:"fixed32,2,rep,packed,name=vec,proto3" json:"vec,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Centroid) Reset() {
+	*x = Centroid{}
+	mi := &file_vault_service_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Centroid) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Centroid) ProtoMessage() {}
+
+func (x *Centroid) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_service_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Centroid.ProtoReflect.Descriptor instead.
+func (*Centroid) Descriptor() ([]byte, []int) {
+	return file_vault_service_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *Centroid) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *Centroid) GetVec() []float32 {
+	if x != nil {
+		return x.Vec
+	}
+	return nil
+}
+
 var File_vault_service_proto protoreflect.FileDescriptor
 
 const file_vault_service_proto_rawDesc = "" +
@@ -419,11 +747,16 @@ const file_vault_service_proto_rawDesc = "" +
 	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\"U\n" +
 	"\x18GetAgentManifestResponse\x12#\n" +
 	"\rmanifest_json\x18\x01 \x01(\tR\fmanifestJson\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error\"n\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\"\x95\x02\n" +
 	"\rInsertRequest\x12\x1f\n" +
-	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\x12 \n" +
-	"\x06vector\x18\x02 \x03(\x02B\b\xbaH\x05\x92\x01\x02\b\x01R\x06vector\x12\x1a\n" +
-	"\bmetadata\x18\x03 \x01(\tR\bmetadata\"6\n" +
+	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\x12\x1a\n" +
+	"\bmetadata\x18\x03 \x01(\tR\bmetadata\x12\x19\n" +
+	"\x02id\x18\x04 \x01(\tB\t\xbaH\x06r\x04\x10\x01\x18@R\x02id\x12\"\n" +
+	"\brmp_item\x18\x05 \x01(\fB\a\xbaH\x04z\x02\x10\x01R\armpItem\x12 \n" +
+	"\amm_item\x18\x06 \x01(\fB\a\xbaH\x04z\x02\x10\x01R\x06mmItem\x12\x1d\n" +
+	"\n" +
+	"cluster_id\x18\a \x01(\rR\tclusterId\x129\n" +
+	"\x14centroid_set_version\x18\b \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x12centroidSetVersionJ\x04\b\x02\x10\x03R\x06vector\"6\n" +
 	"\x0eInsertResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\"s\n" +
@@ -438,11 +771,27 @@ const file_vault_service_proto_rawDesc = "" +
 	"\bmetadata\x18\x03 \x01(\tR\bmetadata\"T\n" +
 	"\x0eSearchResponse\x12,\n" +
 	"\x04hits\x18\x01 \x03(\v2\x18.rune.vault.v1.SearchHitR\x04hits\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error2\x81\x02\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\"6\n" +
+	"\x13GetCentroidsRequest\x12\x1f\n" +
+	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\"\x8c\x01\n" +
+	"\rCentroidChunk\x12:\n" +
+	"\x06header\x18\x01 \x01(\v2 .rune.vault.v1.CentroidSetHeaderH\x00R\x06header\x124\n" +
+	"\x05batch\x18\x02 \x01(\v2\x1c.rune.vault.v1.CentroidBatchH\x00R\x05batchB\t\n" +
+	"\apayload\"U\n" +
+	"\x11CentroidSetHeader\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\x12\x10\n" +
+	"\x03dim\x18\x02 \x01(\rR\x03dim\x12\x14\n" +
+	"\x05nlist\x18\x03 \x01(\rR\x05nlist\"F\n" +
+	"\rCentroidBatch\x125\n" +
+	"\tcentroids\x18\x01 \x03(\v2\x17.rune.vault.v1.CentroidR\tcentroids\"0\n" +
+	"\bCentroid\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\x12\x14\n" +
+	"\x03vec\x18\x02 \x03(\x02B\x02\x10\x01R\x03vec2\xd5\x02\n" +
 	"\fVaultService\x12c\n" +
 	"\x10GetAgentManifest\x12&.rune.vault.v1.GetAgentManifestRequest\x1a'.rune.vault.v1.GetAgentManifestResponse\x12E\n" +
 	"\x06Insert\x12\x1c.rune.vault.v1.InsertRequest\x1a\x1d.rune.vault.v1.InsertResponse\x12E\n" +
-	"\x06Search\x12\x1c.rune.vault.v1.SearchRequest\x1a\x1d.rune.vault.v1.SearchResponseb\x06proto3"
+	"\x06Search\x12\x1c.rune.vault.v1.SearchRequest\x1a\x1d.rune.vault.v1.SearchResponse\x12R\n" +
+	"\fGetCentroids\x12\".rune.vault.v1.GetCentroidsRequest\x1a\x1c.rune.vault.v1.CentroidChunk0\x01b\x06proto3"
 
 var (
 	file_vault_service_proto_rawDescOnce sync.Once
@@ -456,7 +805,7 @@ func file_vault_service_proto_rawDescGZIP() []byte {
 	return file_vault_service_proto_rawDescData
 }
 
-var file_vault_service_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_vault_service_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_vault_service_proto_goTypes = []any{
 	(*GetAgentManifestRequest)(nil),  // 0: rune.vault.v1.GetAgentManifestRequest
 	(*GetAgentManifestResponse)(nil), // 1: rune.vault.v1.GetAgentManifestResponse
@@ -465,20 +814,30 @@ var file_vault_service_proto_goTypes = []any{
 	(*SearchRequest)(nil),            // 4: rune.vault.v1.SearchRequest
 	(*SearchHit)(nil),                // 5: rune.vault.v1.SearchHit
 	(*SearchResponse)(nil),           // 6: rune.vault.v1.SearchResponse
+	(*GetCentroidsRequest)(nil),      // 7: rune.vault.v1.GetCentroidsRequest
+	(*CentroidChunk)(nil),            // 8: rune.vault.v1.CentroidChunk
+	(*CentroidSetHeader)(nil),        // 9: rune.vault.v1.CentroidSetHeader
+	(*CentroidBatch)(nil),            // 10: rune.vault.v1.CentroidBatch
+	(*Centroid)(nil),                 // 11: rune.vault.v1.Centroid
 }
 var file_vault_service_proto_depIdxs = []int32{
-	5, // 0: rune.vault.v1.SearchResponse.hits:type_name -> rune.vault.v1.SearchHit
-	0, // 1: rune.vault.v1.VaultService.GetAgentManifest:input_type -> rune.vault.v1.GetAgentManifestRequest
-	2, // 2: rune.vault.v1.VaultService.Insert:input_type -> rune.vault.v1.InsertRequest
-	4, // 3: rune.vault.v1.VaultService.Search:input_type -> rune.vault.v1.SearchRequest
-	1, // 4: rune.vault.v1.VaultService.GetAgentManifest:output_type -> rune.vault.v1.GetAgentManifestResponse
-	3, // 5: rune.vault.v1.VaultService.Insert:output_type -> rune.vault.v1.InsertResponse
-	6, // 6: rune.vault.v1.VaultService.Search:output_type -> rune.vault.v1.SearchResponse
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	5,  // 0: rune.vault.v1.SearchResponse.hits:type_name -> rune.vault.v1.SearchHit
+	9,  // 1: rune.vault.v1.CentroidChunk.header:type_name -> rune.vault.v1.CentroidSetHeader
+	10, // 2: rune.vault.v1.CentroidChunk.batch:type_name -> rune.vault.v1.CentroidBatch
+	11, // 3: rune.vault.v1.CentroidBatch.centroids:type_name -> rune.vault.v1.Centroid
+	0,  // 4: rune.vault.v1.VaultService.GetAgentManifest:input_type -> rune.vault.v1.GetAgentManifestRequest
+	2,  // 5: rune.vault.v1.VaultService.Insert:input_type -> rune.vault.v1.InsertRequest
+	4,  // 6: rune.vault.v1.VaultService.Search:input_type -> rune.vault.v1.SearchRequest
+	7,  // 7: rune.vault.v1.VaultService.GetCentroids:input_type -> rune.vault.v1.GetCentroidsRequest
+	1,  // 8: rune.vault.v1.VaultService.GetAgentManifest:output_type -> rune.vault.v1.GetAgentManifestResponse
+	3,  // 9: rune.vault.v1.VaultService.Insert:output_type -> rune.vault.v1.InsertResponse
+	6,  // 10: rune.vault.v1.VaultService.Search:output_type -> rune.vault.v1.SearchResponse
+	8,  // 11: rune.vault.v1.VaultService.GetCentroids:output_type -> rune.vault.v1.CentroidChunk
+	8,  // [8:12] is the sub-list for method output_type
+	4,  // [4:8] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_vault_service_proto_init() }
@@ -486,13 +845,17 @@ func file_vault_service_proto_init() {
 	if File_vault_service_proto != nil {
 		return
 	}
+	file_vault_service_proto_msgTypes[8].OneofWrappers = []any{
+		(*CentroidChunk_Header)(nil),
+		(*CentroidChunk_Batch)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_vault_service_proto_rawDesc), len(file_vault_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
