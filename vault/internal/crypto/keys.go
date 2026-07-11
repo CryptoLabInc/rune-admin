@@ -111,8 +111,17 @@ func (e *Engine) Dim() int { return e.keys.Dim() }
 // ForwardInsert appends an item that rune-mcp already encrypted (EncKey) and
 // sealed (agent_dek), verbatim. The vault performs no crypto here — it is a
 // pure forward; idempotency rides on the client-generated it.ID.
+//
+// A centroid-version mismatch is the one error acted on locally: it proves the
+// engine replaced its set while our SDK cache (served to buildBundle and the
+// GetCentroids relay) still holds the old one, so the cache is dropped before
+// the error is relayed — the client's resync then receives the fresh set.
 func (e *Engine) ForwardInsert(ctx context.Context, it runespace.PreEncryptedItem) error {
-	return e.client.InsertPreEncrypted(ctx, it)
+	err := e.client.InsertPreEncrypted(ctx, it)
+	if errors.Is(err, runespace.ErrCentroidVersionMismatch) {
+		e.client.InvalidateCentroidCache()
+	}
+	return err
 }
 
 // Centroids returns the engine's IVF centroid set for relay to rune-mcp
