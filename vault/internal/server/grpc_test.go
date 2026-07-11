@@ -65,9 +65,13 @@ func TestGetAgentManifestInvalidToken(t *testing.T) {
 func TestInsertInvalidToken(t *testing.T) {
 	srv := NewVaultGRPC(newTestVault(t))
 	_, err := srv.Insert(context.Background(), &pb.InsertRequest{
-		Token:    "evt_ffffffffffffffffffffffffffffffff",
-		Vector:   []float32{0.1, 0.2},
-		Metadata: `{"x":1}`,
+		Token:              "evt_ffffffffffffffffffffffffffffffff",
+		Id:                 "test-id-1",
+		RmpItem:            []byte{1},
+		MmItem:             []byte{2},
+		ClusterId:          0,
+		CentroidSetVersion: "v1",
+		Metadata:           `{"a":"x","c":"y"}`,
 	})
 	if status.Code(err) != codes.Unauthenticated {
 		t.Errorf("code = %v, want Unauthenticated", status.Code(err))

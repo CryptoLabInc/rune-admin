@@ -5,6 +5,7 @@ go 1.26.4
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260415201107-50325440f8f2.1
 	buf.build/go/protovalidate v1.2.0
+	github.com/google/uuid v1.6.0
 	github.com/CryptoLabInc/runespace-sdk v0.1.0
 	github.com/spf13/cobra v1.8.1
 	golang.org/x/crypto v0.47.0
@@ -18,7 +19,6 @@ require (
 	cel.dev/expr v0.25.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/google/cel-go v0.28.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	golang.org/x/exp v0.0.0-20250813145105-42675adae3e6 // indirect

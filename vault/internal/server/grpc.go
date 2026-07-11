@@ -2,13 +2,18 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"time"
+	"unicode/utf8"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+
+	runespace "github.com/jh-lee-cryptolab/runespace-go-sdk"
 
 	"github.com/CryptoLabInc/rune-admin/vault/internal/crypto"
 	"github.com/CryptoLabInc/rune-admin/vault/internal/tokens"
@@ -107,13 +112,12 @@ func (s *VaultGRPC) GetAgentManifest(ctx context.Context, req *pb.GetAgentManife
 		return &pb.GetAgentManifestResponse{Error: err.Error()}, status.Error(codes.PermissionDenied, err.Error())
 	}
 
-	bundle := map[string]any{
-		"key_id":   s.v.bundleParams.KeyID,
-		"agent_id": crypto.AgentIDFromToken(req.GetToken()),
-		"dim":      s.v.cfg.Keys.EmbeddingDim,
-	}
-	if s.v.cfg.Keys.IndexName != "" {
-		bundle["index_name"] = s.v.cfg.Keys.IndexName
+	bundle, err := s.v.buildBundle(ctx, req.GetToken())
+	if err != nil {
+		statusStr = "error"
+		ed := err.Error()
+		errDetail = &ed
+		return &pb.GetAgentManifestResponse{Error: err.Error()}, status.Error(codes.Internal, err.Error())
 	}
 	js, err := json.Marshal(bundle)
 	if err != nil {
@@ -124,6 +128,44 @@ func (s *VaultGRPC) GetAgentManifest(ctx context.Context, req *pb.GetAgentManife
 	}
 	resultCount = 1
 	return &pb.GetAgentManifestResponse{ManifestJson: string(js)}, nil
+}
+
+// buildBundle assembles the agent manifest. The PUBLIC EncKey pair and the
+// caller's derived agent_dek leave the vault here — by design: capture-side
+// encryption/sealing happens on the developer machine. SecKey/EvalKey/
+// team_secret are never included.
+func (v *Vault) buildBundle(ctx context.Context, token string) (map[string]any, error) {
+	rmpJSON, mmKey, err := crypto.ReadEncKeys(v.bundleParams)
+	if err != nil {
+		return nil, err
+	}
+	agentID := crypto.AgentIDFromToken(token)
+	dek, err := crypto.DeriveAgentKey(v.cfg.Tokens.TeamSecret, agentID)
+	if err != nil {
+		return nil, err
+	}
+	bundle := map[string]any{
+		"EncKey.json": string(rmpJSON),
+		"mm_enc_key":  base64.StdEncoding.EncodeToString(mmKey),
+		"agent_id":    agentID,
+		"agent_dek":   base64.StdEncoding.EncodeToString(dek),
+		"key_id":      v.bundleParams.KeyID,
+		"dim":         v.cfg.Keys.EmbeddingDim,
+		// Capability flag: this vault expects client-encrypted inserts.
+		"insert": "pre_encrypted",
+	}
+	if v.cfg.Keys.IndexName != "" {
+		bundle["index_name"] = v.cfg.Keys.IndexName
+	}
+	// Current centroid set version so the client can judge cache freshness
+	// before pulling the (large) relay stream. Best-effort: an unreachable
+	// engine leaves it empty and the client retries via GetCentroids.
+	if v.engine != nil {
+		if cs, err := v.engine.Centroids(ctx); err == nil {
+			bundle["centroid_set_version"] = cs.Version
+		}
+	}
+	return bundle, nil
 }
 
 // ── Insert (capture write) ────────────────────────────────────────
@@ -161,23 +203,22 @@ func (s *VaultGRPC) Insert(ctx context.Context, req *pb.InsertRequest) (*pb.Inse
 		return &pb.InsertResponse{Error: msg}, status.Error(codes.Internal, msg)
 	}
 
-	sealed, err := s.sealMeta(req.GetToken(), req.GetMetadata())
-	if err != nil {
-		statusStr = "error"
-		msg := err.Error()
-		errDetail = &msg
-		return &pb.InsertResponse{Error: msg}, status.Error(codes.Internal, msg)
+	it := runespace.PreEncryptedItem{
+		ID:                 req.GetId(),
+		RMPBlob:            req.GetRmpItem(),
+		MMBlob:             req.GetMmItem(),
+		ClusterID:          req.GetClusterId(),
+		CentroidSetVersion: req.GetCentroidSetVersion(),
+		Metadata:           req.GetMetadata(),
 	}
-
-	id, err := s.v.engine.Insert(ctx, req.GetVector(), sealed)
-	if err != nil {
+	if err := s.v.engine.ForwardInsert(ctx, it); err != nil {
 		statusStr = "error"
 		msg := err.Error()
 		errDetail = &msg
 		return &pb.InsertResponse{Error: msg}, status.Error(codes.Internal, msg)
 	}
 	resultCount = 1
-	return &pb.InsertResponse{Id: id}, nil
+	return &pb.InsertResponse{Id: it.ID}, nil
 }
 
 // ── Search (recall + novelty) ─────────────────────────────────────
@@ -238,31 +279,6 @@ func (s *VaultGRPC) Search(ctx context.Context, req *pb.SearchRequest) (*pb.Sear
 	return &pb.SearchResponse{Hits: out}, nil
 }
 
-// sealMeta AES-seals plaintext metadata under the caller's per-agent DEK and
-// wraps it in an {a,c} envelope for storage. Empty metadata seals to "".
-func (s *VaultGRPC) sealMeta(token, meta string) (string, error) {
-	if meta == "" {
-		return "", nil
-	}
-	if s.v.cfg.Tokens.TeamSecret == "" {
-		return "", errors.New("VAULT_TEAM_SECRET not configured")
-	}
-	agentID := crypto.AgentIDFromToken(token)
-	dek, err := crypto.DeriveAgentKey(s.v.cfg.Tokens.TeamSecret, agentID)
-	if err != nil {
-		return "", err
-	}
-	c, err := crypto.EncryptMetadata([]byte(meta), dek)
-	if err != nil {
-		return "", err
-	}
-	b, err := json.Marshal(envelope{AgentID: agentID, Cipher: c})
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
-
 // openMeta best-effort opens a sealed {a,c} envelope to plaintext JSON. On any
 // failure it returns the stored string unchanged (plaintext/legacy tolerated).
 func (s *VaultGRPC) openMeta(stored string) string {
@@ -279,6 +295,16 @@ func (s *VaultGRPC) openMeta(stored string) string {
 	}
 	pt, err := crypto.DecryptMetadata(env.Cipher, dek)
 	if err != nil {
+		return stored
+	}
+	// AES-CTR is unauthenticated: decrypting an envelope sealed under a
+	// different team_secret "succeeds" and yields garbage bytes. Invalid
+	// UTF-8 here would make the proto3 string unmarshalable and fail the
+	// whole Search response at the gRPC layer, so fall back to the sealed
+	// envelope instead. Proper fix is AEAD (AES-GCM) — see crypto/metadata.go.
+	if !utf8.Valid(pt) {
+		slog.Warn("vault: sealed metadata decrypted to non-UTF-8 bytes — returning envelope unopened (different team_secret or corrupted record)",
+			"agent_id", env.AgentID)
 		return stored
 	}
 	return string(pt)
@@ -341,4 +367,81 @@ func (s *VaultGRPC) emit(ctx context.Context, method, user string, topK *int32, 
 		LatencyMs:   float64(duration.Microseconds()) / 1000.0,
 		Error:       errDetail,
 	})
+}
+
+// ── GetCentroids (relay) ─────────────────────────────────────────
+
+// centroidBatchSize bounds one relay frame: 64 centroids × dim 1024 × 4B ≈
+// 256KB per message, comfortably under the gRPC frame cap.
+const centroidBatchSize = 64
+
+// GetCentroids relays the engine's IVF centroid set to rune-mcp so it can
+// push the set down to runed. Same wire shape as runespace's GetCentroids:
+// one header frame, then id-ordered batches.
+func (s *VaultGRPC) GetCentroids(req *pb.GetCentroidsRequest, stream pb.VaultService_GetCentroidsServer) error {
+	ctx := stream.Context()
+	start := time.Now()
+	user := s.v.tokens.GetUsername(req.GetToken())
+	if user == "" {
+		user = "unknown"
+	}
+	resultCount := 0
+	statusStr := "success"
+	var errDetail *string
+	defer func() {
+		s.emit(ctx, "get_centroids", user, nil, resultCount, statusStr, errDetail, time.Since(start))
+	}()
+
+	username, role, err := s.v.tokens.Validate(req.GetToken())
+	if err != nil {
+		st, msg := mapTokenError(err)
+		statusStr, errDetail = errStatus(err)
+		return status.Error(st, msg)
+	}
+	user = username
+	if err := role.CheckScope("get_public_key"); err != nil {
+		statusStr = "denied"
+		ed := err.Error()
+		errDetail = &ed
+		return status.Error(codes.PermissionDenied, err.Error())
+	}
+	if s.v.engine == nil {
+		statusStr = "error"
+		msg := "runespace engine not available"
+		errDetail = &msg
+		return status.Error(codes.Internal, msg)
+	}
+
+	cs, err := s.v.engine.Centroids(ctx)
+	if err != nil {
+		statusStr = "error"
+		msg := err.Error()
+		errDetail = &msg
+		return status.Error(codes.Internal, msg)
+	}
+	if err := stream.Send(&pb.CentroidChunk{Payload: &pb.CentroidChunk_Header{Header: &pb.CentroidSetHeader{
+		Version: cs.Version,
+		Dim:     uint32(cs.Dim),
+		Nlist:   uint32(len(cs.Vectors)),
+	}}}); err != nil {
+		statusStr = "error"
+		msg := err.Error()
+		errDetail = &msg
+		return err
+	}
+	for lo := 0; lo < len(cs.Vectors); lo += centroidBatchSize {
+		hi := min(lo+centroidBatchSize, len(cs.Vectors))
+		batch := make([]*pb.Centroid, 0, hi-lo)
+		for i := lo; i < hi; i++ {
+			batch = append(batch, &pb.Centroid{Id: uint32(i), Vec: cs.Vectors[i]})
+		}
+		if err := stream.Send(&pb.CentroidChunk{Payload: &pb.CentroidChunk_Batch{Batch: &pb.CentroidBatch{Centroids: batch}}}); err != nil {
+			statusStr = "error"
+			msg := err.Error()
+			errDetail = &msg
+			return err
+		}
+	}
+	resultCount = len(cs.Vectors)
+	return nil
 }
