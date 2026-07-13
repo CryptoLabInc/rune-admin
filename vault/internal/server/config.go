@@ -29,7 +29,7 @@ const expectedSecretMode fs.FileMode = 0o640
 type Config struct {
 	Server    ServerConfig    `yaml:"server"`
 	Keys      KeysConfig      `yaml:"keys"`
-	Runespace RunespaceConfig `yaml:"envector"`
+	Runespace RunespaceConfig `yaml:"runespace"`
 	Tokens    TokensConfig    `yaml:"tokens"`
 	Audit     AuditConfig     `yaml:"audit"`
 
@@ -152,7 +152,7 @@ func resolveConfigPath(override string) (path string, searched []string, err err
 // (anything looser than 0o640). Idempotent.
 func (c *Config) Resolve() error {
 	if c.Runespace.APIKeyFile != "" {
-		val, err := readSecretFile(c.Runespace.APIKeyFile, "envector.api_key_file")
+		val, err := readSecretFile(c.Runespace.APIKeyFile, "runespace.api_key_file")
 		if err != nil {
 			return err
 		}

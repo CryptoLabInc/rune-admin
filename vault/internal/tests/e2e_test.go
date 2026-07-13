@@ -41,7 +41,7 @@ func TestE2EDaemonLifecycle(t *testing.T) {
 keys:
   path: %[1]s/keys
   embedding_dim: 1024
-envector:
+runespace:
   endpoint: ""
   api_key: ""
 tokens:

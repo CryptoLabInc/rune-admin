@@ -29,7 +29,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
                          │ MCP tool calls
                          ▼
             ┌────────────────────────────┐
-            │   envector-mcp-server(s)   │  ← Scalable
+            │   runespace-mcp-server(s)  │  ← Scalable
             │   (Public Keys only)       │
             │                            │
             │  Tools:                    │
@@ -43,7 +43,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
                    ▼              ▼
   ┌──────────────────────┐  ┌────────────────────────────┐
   │ Runespace(SaaS)      │  │        Rune-Vault           │
-  │  https://envector.io │  │  (Your Infrastructure)     │
+  │  https://runespace.example.com │  │  (Your Infrastructure)     │
   │                      │  │                            │
   │  - Encrypted vectors │  │  ┌──────────────────────┐  │
   │  - Encrypted         │  │  │  FHE Key Manager     │  │
@@ -67,7 +67,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
                             └────────────────────────────┘
 ```
 
-**Key**: Agents never contact Vault directly. The envector-mcp-server's
+**Key**: Agents never contact Vault directly. The runespace-mcp-server's
 `remember` tool orchestrates the Vault decryption call as part of its
 3-step pipeline. Secret key never leaves Vault.
 
@@ -92,7 +92,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 
 **Runtime**:
 - Single-binary Go gRPC daemon (`runevault`) — no runtime dependencies beyond TLS
-- gRPC server on port 50051 (used by envector-mcp-server)
+- gRPC server on port 50051 (used by runespace-mcp-server)
 - gRPC health check via `grpc.health.v1` protocol
 - Admin Unix domain socket at `/opt/runevault/admin.sock` (mode 0600, vault-user owned)
 - Registered as a native systemd unit (`runevault.service`) on Linux or a launchd job (`com.cryptolabinc.runevault`) on macOS
@@ -127,20 +127,20 @@ Defined in `proto/vault_service.proto` (`rune.vault.v1.VaultService`).
 
 **`GetPublicKey()`**
 - Returns: JSON bundle containing EncKey, EvalKey, index_name, key_id, agent_id, agent_dek (per-user derived encryption key)
-- Used by: envector-mcp-server at startup
+- Used by: runespace-mcp-server at startup
 - Auth: Required (validates token + scope check)
 
 **`DecryptScores()`**
 - Input: Result ciphertext from encrypted similarity search (base64-serialized)
 - Returns: Top-K typed `ScoreEntry` messages (shard_idx, row_idx, score)
-- Used by: envector-mcp-server's `remember` pipeline (per search query)
+- Used by: runespace-mcp-server's `remember` pipeline (per search query)
 - Auth: Required (validates token + scope check)
 - Policy: Per-role top_k limit (admin: 50, member: 10). Proto constraint: 1-300 range.
 
 **`DecryptMetadata()`**
 - Input: List of AES-encrypted metadata blobs. Each blob is JSON `{"a": "<agent_id>", "c": "<base64_ciphertext>"}`.
 - Returns: Decrypted metadata (JSON strings)
-- Used by: envector-mcp-server's `remember` pipeline
+- Used by: runespace-mcp-server's `remember` pipeline
 - Auth: Required (validates token + scope check)
 - Vault derives the agent's DEK via HKDF-SHA256 from team secret + agent_id.
 
@@ -176,7 +176,7 @@ Custom roles can be created via `runevault role create`.
 2. `/opt/runevault/configs/runevault.conf`
 3. `./runevault.conf` (cwd, dev only)
 
-Secret YAML fields (`tokens.team_secret`, `envector.api_key`) accept a sibling `*_file` key for KMS-backed deployments.
+Secret YAML fields (`tokens.team_secret`, `runespace.api_key`) accept a sibling `*_file` key for KMS-backed deployments.
 
 ### 4. Admin Socket & CLI
 
@@ -281,10 +281,10 @@ User: "What decisions did we make about database?"
     ▼
 AI Agent (Claude/Gemini/Codex)
     │
-    ├── 1. Call envector-mcp-server `remember` tool
+    ├── 1. Call runespace-mcp-server `remember` tool
     │
     ▼
-envector-mcp-server (`remember` orchestration)
+runespace-mcp-server (`remember` orchestration)
     │
     ├── 2. Embed query (auto-embedded if text, or accepts vector/JSON)
     ├── 3. Encrypted similarity scoring on Runespace
@@ -301,7 +301,7 @@ Vault (gRPC — secret key holder)
     ├── 8. Return [{index: 42, score: 0.95}, ...]
     │
     ▼
-envector-mcp-server (continued)
+runespace-mcp-server (continued)
     │
     ├── 9. Retrieve metadata for top-k indices from Runespace
     ├── 10. Return results to Agent
@@ -311,7 +311,7 @@ AI Agent → User: "In Q2 2024, team chose PostgreSQL for JSON support..."
 ```
 
 **Key**: The Agent never contacts Vault directly. The `remember` tool
-in envector-mcp-server orchestrates the entire 3-step pipeline.
+in runespace-mcp-server orchestrates the entire 3-step pipeline.
 Secret key never leaves Vault.
 
 **`search` vs `remember`**: The `search` tool is for the operator's own
@@ -413,7 +413,7 @@ Cloud Resources Created
 ```
 
 Common Terraform variables across all CSPs: `team_name`, `tls_mode`,
-`envector_endpoint`, `envector_api_key`, `runevault_version`,
+`runespace_endpoint`, `runespace_api_key`, `runevault_version`,
 `public_key`, `region`. CSP-specific: `instance_type` (AWS),
 `project_id` / `zone` / `machine_type` (GCP), `oci_profile` /
 `compartment_id` (OCI). Output: `vault_public_ip`.
