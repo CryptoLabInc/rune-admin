@@ -25,8 +25,8 @@
 #     over SSH after cloud-init finishes.
 #
 # Non-interactive env vars (CSP install — operator workstation):
-#   RUNEVAULT_ENVECTOR_ENDPOINT      enVector endpoint URL (required)
-#   RUNEVAULT_ENVECTOR_API_KEY       enVector API key (required)
+#   RUNEVAULT_RUNESPACE_ENDPOINT      Runespace endpoint URL (required)
+#   RUNEVAULT_RUNESPACE_API_KEY       Runespace API key (required)
 #   RUNEVAULT_TEAM_NAME              Team name (required)
 #   RUNEVAULT_TARGET                 Pre-select target without interactive menu
 #   RUNEVAULT_INSTALL_DIR            Pre-set CSP install directory
@@ -53,8 +53,8 @@ CSP_PUBLIC_IP=""
 
 # CSP config (populated by dev_csp_prompt_config)
 TEAM_NAME=""
-ENVECTOR_ENDPOINT=""
-ENVECTOR_API_KEY=""
+RUNESPACE_ENDPOINT=""
+RUNESPACE_API_KEY=""
 CSP_REGION=""
 GCP_PROJECT_ID=""
 OCI_COMPARTMENT_ID=""
@@ -273,16 +273,16 @@ dev_local_prompt_config() {
     printf '\n'
 
     _prompt RUNEVAULT_TEAM_NAME         "Team name"         "devteam"
-    _prompt RUNEVAULT_ENVECTOR_ENDPOINT "enVector endpoint" ""
-    _prompt RUNEVAULT_ENVECTOR_API_KEY  "enVector API key"  ""
+    _prompt RUNEVAULT_RUNESPACE_ENDPOINT "Runespace endpoint" ""
+    _prompt RUNEVAULT_RUNESPACE_API_KEY  "Runespace API key"  ""
     printf '\n'
 
-    [[ -n "${RUNEVAULT_ENVECTOR_ENDPOINT:-}" ]] || die "enVector endpoint is required."
-    [[ -n "${RUNEVAULT_ENVECTOR_API_KEY:-}" ]]  || die "enVector API key is required."
+    [[ -n "${RUNEVAULT_RUNESPACE_ENDPOINT:-}" ]] || die "Runespace endpoint is required."
+    [[ -n "${RUNEVAULT_RUNESPACE_API_KEY:-}" ]]  || die "Runespace API key is required."
   else
     RUNEVAULT_TEAM_NAME="${RUNEVAULT_TEAM_NAME:-devteam}"
-    RUNEVAULT_ENVECTOR_ENDPOINT="${RUNEVAULT_ENVECTOR_ENDPOINT:-https://envector.example.com}"
-    RUNEVAULT_ENVECTOR_API_KEY="${RUNEVAULT_ENVECTOR_API_KEY:-dev-api-key-placeholder}"
+    RUNEVAULT_RUNESPACE_ENDPOINT="${RUNEVAULT_RUNESPACE_ENDPOINT:-https://runespace.example.com}"
+    RUNEVAULT_RUNESPACE_API_KEY="${RUNEVAULT_RUNESPACE_API_KEY:-dev-api-key-placeholder}"
   fi
 }
 
@@ -293,8 +293,8 @@ dev_local_install() {
 
   export RUNEVAULT_LOCAL_BINARY="$LOCAL_BINARY_HOST"
   export RUNEVAULT_TEAM_NAME
-  export RUNEVAULT_ENVECTOR_ENDPOINT
-  export RUNEVAULT_ENVECTOR_API_KEY
+  export RUNEVAULT_RUNESPACE_ENDPOINT
+  export RUNEVAULT_RUNESPACE_API_KEY
 
   if [[ -n "$PREFIX" ]]; then
     export RUNEVAULT_INSTALL_PREFIX="$PREFIX"
@@ -374,8 +374,8 @@ dev_csp_prompt_config() {
     printf '\n'
 
     _prompt TEAM_NAME          "Team name"          "devteam"
-    _prompt ENVECTOR_ENDPOINT  "enVector endpoint"  ""
-    _prompt ENVECTOR_API_KEY   "enVector API key"   ""
+    _prompt RUNESPACE_ENDPOINT  "Runespace endpoint"  ""
+    _prompt RUNESPACE_API_KEY   "Runespace API key"   ""
 
     case "$csp" in
       aws) _prompt CSP_REGION "AWS region"   "us-east-1"   ;;
@@ -391,16 +391,16 @@ dev_csp_prompt_config() {
     printf '\n'
   else
     TEAM_NAME="${RUNEVAULT_TEAM_NAME:-}"
-    ENVECTOR_ENDPOINT="${RUNEVAULT_ENVECTOR_ENDPOINT:-}"
-    ENVECTOR_API_KEY="${RUNEVAULT_ENVECTOR_API_KEY:-}"
+    RUNESPACE_ENDPOINT="${RUNEVAULT_RUNESPACE_ENDPOINT:-}"
+    RUNESPACE_API_KEY="${RUNEVAULT_RUNESPACE_API_KEY:-}"
     CSP_REGION="${RUNEVAULT_CSP_REGION:-}"
     GCP_PROJECT_ID="${RUNEVAULT_GCP_PROJECT_ID:-}"
     OCI_COMPARTMENT_ID="${RUNEVAULT_OCI_COMPARTMENT_ID:-}"
 
     local missing=()
     [[ -z "$TEAM_NAME" ]]         && missing+=("RUNEVAULT_TEAM_NAME")
-    [[ -z "$ENVECTOR_ENDPOINT" ]] && missing+=("RUNEVAULT_ENVECTOR_ENDPOINT")
-    [[ -z "$ENVECTOR_API_KEY" ]]  && missing+=("RUNEVAULT_ENVECTOR_API_KEY")
+    [[ -z "$RUNESPACE_ENDPOINT" ]] && missing+=("RUNEVAULT_RUNESPACE_ENDPOINT")
+    [[ -z "$RUNESPACE_API_KEY" ]]  && missing+=("RUNEVAULT_RUNESPACE_API_KEY")
     [[ "$csp" = gcp && -z "$GCP_PROJECT_ID" ]]      && missing+=("RUNEVAULT_GCP_PROJECT_ID")
     [[ "$csp" = oci && -z "$OCI_COMPARTMENT_ID" ]]  && missing+=("RUNEVAULT_OCI_COMPARTMENT_ID")
     if [[ ${#missing[@]} -gt 0 ]]; then
@@ -411,8 +411,8 @@ dev_csp_prompt_config() {
   fi
 
   [[ -n "$TEAM_NAME" ]]          || die "Team name is required."
-  [[ -n "$ENVECTOR_ENDPOINT" ]]  || die "enVector endpoint is required."
-  [[ -n "$ENVECTOR_API_KEY" ]]   || die "enVector API key is required."
+  [[ -n "$RUNESPACE_ENDPOINT" ]]  || die "Runespace endpoint is required."
+  [[ -n "$RUNESPACE_API_KEY" ]]   || die "Runespace API key is required."
   if [[ "$csp" = gcp ]]; then
     [[ -n "$GCP_PROJECT_ID" ]]     || die "GCP project ID is required."
   fi
@@ -489,8 +489,8 @@ dev_csp_render_tfvars() {
   {
     printf 'team_name          = "%s"\n' "$(escape_tf "${TEAM_NAME:-default}")"
     printf 'tls_mode           = "self-signed"\n'
-    printf 'envector_endpoint  = "%s"\n' "$(escape_tf "${ENVECTOR_ENDPOINT}")"
-    printf 'envector_api_key   = "%s"\n' "$(escape_tf "${ENVECTOR_API_KEY}")"
+    printf 'runespace_endpoint  = "%s"\n' "$(escape_tf "${RUNESPACE_ENDPOINT}")"
+    printf 'runespace_api_key   = "%s"\n' "$(escape_tf "${RUNESPACE_API_KEY}")"
     printf 'runevault_version  = "dev"\n'
     printf 'public_key         = "%s"\n' "$(escape_tf "${public_key}")"
     printf 'region             = "%s"\n' "$(escape_tf "${CSP_REGION}")"
@@ -584,14 +584,14 @@ dev_csp_upload_and_install() {
   info "Running install.sh on the VM..."
   local tn ee ek
   tn=$(escape_single "$TEAM_NAME")
-  ee=$(escape_single "$ENVECTOR_ENDPOINT")
-  ek=$(escape_single "$ENVECTOR_API_KEY")
+  ee=$(escape_single "$RUNESPACE_ENDPOINT")
+  ek=$(escape_single "$RUNESPACE_API_KEY")
   local remote_cmd
   remote_cmd="sudo \
     RUNEVAULT_LOCAL_BINARY=/tmp/runevault-${TARGET_OS}-${TARGET_ARCH} \
     RUNEVAULT_TEAM_NAME='${tn}' \
-    RUNEVAULT_ENVECTOR_ENDPOINT='${ee}' \
-    RUNEVAULT_ENVECTOR_API_KEY='${ek}' \
+    RUNEVAULT_RUNESPACE_ENDPOINT='${ee}' \
+    RUNEVAULT_RUNESPACE_API_KEY='${ek}' \
     bash /tmp/install.sh --target local --non-interactive --version dev"
 
   # shellcheck disable=SC2086

@@ -23,7 +23,7 @@ For system architecture and data flow details, see [docs/ARCHITECTURE.md](docs/A
 
 ### For Administrators
 
-1. **Runespace account** at [https://envector.io](https://envector.io) — Cluster Endpoint and API Key
+1. **Runespace account** at [https://runespace.example.com](https://runespace.example.com) — Cluster Endpoint and API Key
 2. **Cloud provider account** (AWS, GCP, or OCI) — only needed for cloud deployment
 
 The [installer](#quick-start) auto-checks for the tools it needs (`terraform` and the relevant cloud CLI when targeting a CSP).

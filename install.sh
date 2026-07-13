@@ -20,15 +20,15 @@
 #
 # Non-interactive env vars (local install):
 #   RUNEVAULT_TEAM_NAME              keys.index_name (required)
-#   RUNEVAULT_ENVECTOR_ENDPOINT      envector.endpoint (required)
-#   RUNEVAULT_ENVECTOR_API_KEY       envector.api_key
-#   RUNEVAULT_ENVECTOR_API_KEY_FILE  envector.api_key_file (alternative)
+#   RUNEVAULT_RUNESPACE_ENDPOINT      runespace.endpoint (required)
+#   RUNEVAULT_RUNESPACE_API_KEY       runespace.api_key
+#   RUNEVAULT_RUNESPACE_API_KEY_FILE  runespace.api_key_file (alternative)
 #   RUNEVAULT_TLS_CERT_PATH          Path to existing TLS cert (skips auto-gen)
 #   RUNEVAULT_TLS_KEY_PATH           Path to existing TLS key  (skips auto-gen)
 #
 # Non-interactive env vars (CSP install — operator workstation):
-#   RUNEVAULT_ENVECTOR_ENDPOINT      enVector endpoint URL (required)
-#   RUNEVAULT_ENVECTOR_API_KEY       enVector API key (required)
+#   RUNEVAULT_RUNESPACE_ENDPOINT      Runespace endpoint URL (required)
+#   RUNEVAULT_RUNESPACE_API_KEY       Runespace API key (required)
 #   RUNEVAULT_TEAM_NAME              Team name — used for resource naming and vault index (required)
 #   RUNEVAULT_TARGET                 Pre-select target without interactive menu
 #   RUNEVAULT_INSTALL_DIR            Pre-set CSP install directory
@@ -301,14 +301,14 @@ csp_prompt_config() {
     printf '  Cloud deployment configuration\n'
     printf '══════════════════════════════════════════════════════════\n'
     printf '\n'
-    printf '  Create your enVector cluster at https://envector.io\n'
+    printf '  Create your Runespace cluster at https://runespace.example.com\n'
     printf '  before proceeding. You will need the endpoint URL and\n'
     printf '  API key from the dashboard.\n'
     printf '\n'
 
     _prompt TEAM_NAME          "Team name"          ""
-    _prompt ENVECTOR_ENDPOINT  "enVector endpoint"  ""
-    _prompt ENVECTOR_API_KEY   "enVector API key"   ""
+    _prompt RUNESPACE_ENDPOINT  "Runespace endpoint"  ""
+    _prompt RUNESPACE_API_KEY   "Runespace API key"   ""
 
     case "$csp" in
       aws) _prompt CSP_REGION "AWS region"   "us-east-1"   ;;
@@ -324,16 +324,16 @@ csp_prompt_config() {
     printf '\n'
   else
     TEAM_NAME="${RUNEVAULT_TEAM_NAME:-}"
-    ENVECTOR_ENDPOINT="${RUNEVAULT_ENVECTOR_ENDPOINT:-}"
-    ENVECTOR_API_KEY="${RUNEVAULT_ENVECTOR_API_KEY:-}"
+    RUNESPACE_ENDPOINT="${RUNEVAULT_RUNESPACE_ENDPOINT:-}"
+    RUNESPACE_API_KEY="${RUNEVAULT_RUNESPACE_API_KEY:-}"
     CSP_REGION="${RUNEVAULT_CSP_REGION:-}"
     GCP_PROJECT_ID="${RUNEVAULT_GCP_PROJECT_ID:-}"
     OCI_COMPARTMENT_ID="${RUNEVAULT_OCI_COMPARTMENT_ID:-}"
 
     local missing=()
     [[ -z "$TEAM_NAME" ]]         && missing+=("RUNEVAULT_TEAM_NAME")
-    [[ -z "$ENVECTOR_ENDPOINT" ]] && missing+=("RUNEVAULT_ENVECTOR_ENDPOINT")
-    [[ -z "$ENVECTOR_API_KEY" ]]  && missing+=("RUNEVAULT_ENVECTOR_API_KEY")
+    [[ -z "$RUNESPACE_ENDPOINT" ]] && missing+=("RUNEVAULT_RUNESPACE_ENDPOINT")
+    [[ -z "$RUNESPACE_API_KEY" ]]  && missing+=("RUNEVAULT_RUNESPACE_API_KEY")
     [[ "$csp" = gcp && -z "$GCP_PROJECT_ID" ]]      && missing+=("RUNEVAULT_GCP_PROJECT_ID")
     [[ "$csp" = oci && -z "$OCI_COMPARTMENT_ID" ]]  && missing+=("RUNEVAULT_OCI_COMPARTMENT_ID")
     if [[ ${#missing[@]} -gt 0 ]]; then
@@ -344,8 +344,8 @@ csp_prompt_config() {
   fi
 
   [[ -n "$TEAM_NAME" ]]          || die "Team name is required."
-  [[ -n "$ENVECTOR_ENDPOINT" ]]  || die "enVector endpoint is required."
-  [[ -n "$ENVECTOR_API_KEY" ]]   || die "enVector API key is required."
+  [[ -n "$RUNESPACE_ENDPOINT" ]]  || die "Runespace endpoint is required."
+  [[ -n "$RUNESPACE_API_KEY" ]]   || die "Runespace API key is required."
   if [[ "$csp" = gcp ]]; then
     [[ -n "$GCP_PROJECT_ID" ]]     || die "GCP project ID is required."
   fi
@@ -430,8 +430,8 @@ csp_render_tfvars() {
   {
     printf 'team_name          = "%s"\n' "$(escape_tf "${TEAM_NAME:-default}")"
     printf 'tls_mode           = "self-signed"\n'
-    printf 'envector_endpoint  = "%s"\n' "$(escape_tf "${ENVECTOR_ENDPOINT}")"
-    printf 'envector_api_key   = "%s"\n' "$(escape_tf "${ENVECTOR_API_KEY}")"
+    printf 'runespace_endpoint  = "%s"\n' "$(escape_tf "${RUNESPACE_ENDPOINT}")"
+    printf 'runespace_api_key   = "%s"\n' "$(escape_tf "${RUNESPACE_API_KEY}")"
     printf 'runevault_version  = "%s"\n' "$(escape_tf "${VERSION}")"
     printf 'public_key         = "%s"\n' "$(escape_tf "${public_key}")"
     printf 'region             = "%s"\n' "$(escape_tf "${CSP_REGION}")"
@@ -1013,9 +1013,9 @@ collect_and_write_config() {
     info "Config already exists (use --force to overwrite): ${conf_file}"
   else
     local team_name="${RUNEVAULT_TEAM_NAME:-}"
-    local envector_endpoint="${RUNEVAULT_ENVECTOR_ENDPOINT:-}"
-    local envector_api_key="${RUNEVAULT_ENVECTOR_API_KEY:-}"
-    local envector_api_key_file="${RUNEVAULT_ENVECTOR_API_KEY_FILE:-}"
+    local runespace_endpoint="${RUNEVAULT_RUNESPACE_ENDPOINT:-}"
+    local runespace_api_key="${RUNEVAULT_RUNESPACE_API_KEY:-}"
+    local runespace_api_key_file="${RUNEVAULT_RUNESPACE_API_KEY_FILE:-}"
     local team_secret="${RUNEVAULT_TEAM_SECRET:-}"
 
     if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
@@ -1026,18 +1026,18 @@ collect_and_write_config() {
       printf '\n'
       [[ -z "$team_name" ]] \
         && read -r -p "Team name (vault index identifier): " team_name
-      [[ -z "$envector_endpoint" ]] \
-        && read -r -p "enVector endpoint URL: " envector_endpoint
-      if [[ -z "$envector_api_key" && -z "$envector_api_key_file" ]]; then
-        read -r -p "enVector API key: " envector_api_key
+      [[ -z "$runespace_endpoint" ]] \
+        && read -r -p "Runespace endpoint URL: " runespace_endpoint
+      if [[ -z "$runespace_api_key" && -z "$runespace_api_key_file" ]]; then
+        read -r -p "Runespace API key: " runespace_api_key
       fi
       printf '\n'
     else
       local missing=()
       [[ -z "$team_name" ]]         && missing+=("RUNEVAULT_TEAM_NAME")
-      [[ -z "$envector_endpoint" ]] && missing+=("RUNEVAULT_ENVECTOR_ENDPOINT")
-      [[ -z "$envector_api_key" && -z "$envector_api_key_file" ]] \
-        && missing+=("RUNEVAULT_ENVECTOR_API_KEY or RUNEVAULT_ENVECTOR_API_KEY_FILE")
+      [[ -z "$runespace_endpoint" ]] && missing+=("RUNEVAULT_RUNESPACE_ENDPOINT")
+      [[ -z "$runespace_api_key" && -z "$runespace_api_key_file" ]] \
+        && missing+=("RUNEVAULT_RUNESPACE_API_KEY or RUNEVAULT_RUNESPACE_API_KEY_FILE")
       if [[ ${#missing[@]} -gt 0 ]]; then
         printf 'ERROR: Missing required env vars for non-interactive install:\n' >&2
         for v in "${missing[@]}"; do printf '  %s\n' "$v" >&2; done
@@ -1050,15 +1050,15 @@ collect_and_write_config() {
     fi
 
     [[ -n "$team_name" ]]         || die "team_name is required."
-    [[ -n "$envector_endpoint" ]] || die "envector_endpoint is required."
-    [[ -n "$envector_api_key" || -n "$envector_api_key_file" ]] \
-      || die "enVector API key or key file is required."
+    [[ -n "$runespace_endpoint" ]] || die "runespace_endpoint is required."
+    [[ -n "$runespace_api_key" || -n "$runespace_api_key_file" ]] \
+      || die "Runespace API key or key file is required."
 
     local api_key_line
-    if [[ -n "$envector_api_key_file" ]]; then
-      api_key_line="  api_key_file: ${envector_api_key_file}"
+    if [[ -n "$runespace_api_key_file" ]]; then
+      api_key_line="  api_key_file: ${runespace_api_key_file}"
     else
-      api_key_line="  api_key: ${envector_api_key}"
+      api_key_line="  api_key: ${runespace_api_key}"
     fi
 
     info "Writing ${conf_file}..."
@@ -1079,8 +1079,8 @@ collect_and_write_config() {
       "  index_name: ${team_name}" \
       "  embedding_dim: 1024" \
       "" \
-      "envector:" \
-      "  endpoint: ${envector_endpoint}" \
+      "runespace:" \
+      "  endpoint: ${runespace_endpoint}" \
       "${api_key_line}" \
       "" \
       "tokens:" \

@@ -21,7 +21,7 @@ func minimalValidConfig(t *testing.T) string {
 keys:
   path: /tmp/vault-keys
   embedding_dim: 1024
-envector:
+runespace:
   endpoint: https://example.com
   api_key: inline-api-key
 tokens:
@@ -105,7 +105,7 @@ func TestLoadConfigUnknownFieldsRejected(t *testing.T) {
 
 func TestLoadConfigAPIKeyFileIndirection(t *testing.T) {
 	dir := t.TempDir()
-	keyFile := filepath.Join(dir, "envector.key")
+	keyFile := filepath.Join(dir, "runespace.key")
 	if err := os.WriteFile(keyFile, []byte("file-api-key\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

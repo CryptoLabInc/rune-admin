@@ -64,7 +64,7 @@ func runDaemonStart(ctx context.Context) error {
 		Keys:     keyParams,
 		Endpoint: cfg.Runespace.Endpoint,
 		Token:    cfg.Runespace.APIKey,
-		Insecure: cfg.Runespace.Insecure, // TLS by default; set envector.insecure=true only for a localhost runespace
+		Insecure: cfg.Runespace.Insecure, // TLS by default; set runespace.insecure=true only for a localhost runespace
 	})
 	if err != nil {
 		return fmt.Errorf("daemon: open runespace engine: %w", err)

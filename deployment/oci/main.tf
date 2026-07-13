@@ -43,13 +43,13 @@ variable "tls_mode" {
   default     = "self-signed"
 }
 
-variable "envector_endpoint" {
-  description = "enVector Cloud endpoint"
+variable "runespace_endpoint" {
+  description = "Runespace endpoint"
   type        = string
 }
 
-variable "envector_api_key" {
-  description = "enVector Cloud API key"
+variable "runespace_api_key" {
+  description = "Runespace API key"
   type        = string
   sensitive   = true
 }
@@ -164,8 +164,8 @@ resource "oci_core_instance" "vault_instance" {
     ssh_authorized_keys = var.public_key
     user_data = base64encode(templatefile("${path.module}/startup-script.sh", {
       team_name          = var.team_name
-      envector_endpoint  = var.envector_endpoint
-      envector_api_key   = var.envector_api_key
+      runespace_endpoint = var.runespace_endpoint
+      runespace_api_key  = var.runespace_api_key
       runevault_version  = var.runevault_version
     }))
   }
