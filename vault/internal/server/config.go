@@ -65,15 +65,11 @@ type KeysConfig struct {
 	EmbeddingDim int    `yaml:"embedding_dim"`
 }
 
-// RunespaceConfig accepts either an inline api_key or an api_key_file
-// pointing at a 0600-mode file containing the same value. If both are
-// set, api_key_file wins. Resolve() materialises the final string into
-// APIKey and clears APIKeyFile.
 type RunespaceConfig struct {
-	Endpoint   string `yaml:"endpoint"`
-	APIKey     string `yaml:"api_key"`
-	APIKeyFile string `yaml:"api_key_file"`
-	Insecure   bool   `yaml:"insecure"` // default: false (true only for development; runespace on localhost)
+	Endpoint  string `yaml:"endpoint"`
+	Token     string `yaml:"token"`
+	TokenFile string `yaml:"token_file"`
+	Insecure  bool   `yaml:"insecure"` // default: false (true only for development; runespace on localhost)
 }
 
 type TokensConfig struct {
@@ -151,13 +147,13 @@ func resolveConfigPath(override string) (path string, searched []string, err err
 // Returns an error if any referenced secret file has a permissive mode
 // (anything looser than 0o640). Idempotent.
 func (c *Config) Resolve() error {
-	if c.Runespace.APIKeyFile != "" {
-		val, err := readSecretFile(c.Runespace.APIKeyFile, "runespace.api_key_file")
+	if c.Runespace.TokenFile != "" {
+		val, err := readSecretFile(c.Runespace.TokenFile, "runespace.token_file")
 		if err != nil {
 			return err
 		}
-		c.Runespace.APIKey = val
-		c.Runespace.APIKeyFile = ""
+		c.Runespace.Token = val
+		c.Runespace.TokenFile = ""
 	}
 	if c.Tokens.TeamSecretFile != "" {
 		val, err := readSecretFile(c.Tokens.TeamSecretFile, "tokens.team_secret_file")
@@ -202,11 +198,11 @@ func checkSecretMode(path, label string) error {
 // admin endpoints that surface configuration to operators.
 func (c *Config) Redact() Config {
 	out := *c
-	if out.Runespace.APIKey != "" {
-		out.Runespace.APIKey = "[REDACTED]"
+	if out.Runespace.Token != "" {
+		out.Runespace.Token = "[REDACTED]"
 	}
-	if out.Runespace.APIKeyFile != "" {
-		out.Runespace.APIKeyFile = "[REDACTED]"
+	if out.Runespace.TokenFile != "" {
+		out.Runespace.TokenFile = "[REDACTED]"
 	}
 	if out.Tokens.TeamSecret != "" {
 		out.Tokens.TeamSecret = "[REDACTED]"

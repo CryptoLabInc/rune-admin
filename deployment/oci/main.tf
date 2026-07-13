@@ -48,7 +48,7 @@ variable "runespace_endpoint" {
   type        = string
 }
 
-variable "runespace_api_key" {
+variable "runespace_token" {
   description = "Runespace API key"
   type        = string
   sensitive   = true
@@ -165,7 +165,7 @@ resource "oci_core_instance" "vault_instance" {
     user_data = base64encode(templatefile("${path.module}/startup-script.sh", {
       team_name          = var.team_name
       runespace_endpoint = var.runespace_endpoint
-      runespace_api_key  = var.runespace_api_key
+      runespace_token  = var.runespace_token
       runevault_version  = var.runevault_version
     }))
   }

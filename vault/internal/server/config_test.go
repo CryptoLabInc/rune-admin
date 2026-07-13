@@ -23,7 +23,7 @@ keys:
   embedding_dim: 1024
 runespace:
   endpoint: https://example.com
-  api_key: inline-api-key
+  token: inline-api-key
 tokens:
   team_secret: inline-team-secret-deadbeef
   roles_file: /tmp/roles.yml
@@ -103,7 +103,7 @@ func TestLoadConfigUnknownFieldsRejected(t *testing.T) {
 	}
 }
 
-func TestLoadConfigAPIKeyFileIndirection(t *testing.T) {
+func TestLoadConfigTokenFileIndirection(t *testing.T) {
 	dir := t.TempDir()
 	keyFile := filepath.Join(dir, "runespace.key")
 	if err := os.WriteFile(keyFile, []byte("file-api-key\n"), 0o600); err != nil {
@@ -111,8 +111,8 @@ func TestLoadConfigAPIKeyFileIndirection(t *testing.T) {
 	}
 	body := strings.Replace(
 		minimalValidConfig(t),
-		"  api_key: inline-api-key",
-		"  api_key_file: "+keyFile,
+		"  token: inline-api-key",
+		"  token_file: "+keyFile,
 		1,
 	)
 	path := writeConfig(t, body)
@@ -120,11 +120,11 @@ func TestLoadConfigAPIKeyFileIndirection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Runespace.APIKey != "file-api-key" {
-		t.Errorf("api_key = %q, want file-api-key", cfg.Runespace.APIKey)
+	if cfg.Runespace.Token != "file-api-key" {
+		t.Errorf("token = %q, want file-api-key", cfg.Runespace.Token)
 	}
-	if cfg.Runespace.APIKeyFile != "" {
-		t.Errorf("api_key_file should be cleared after Resolve, got %q", cfg.Runespace.APIKeyFile)
+	if cfg.Runespace.TokenFile != "" {
+		t.Errorf("token_file should be cleared after Resolve, got %q", cfg.Runespace.TokenFile)
 	}
 }
 
@@ -205,15 +205,15 @@ func TestLoadConfigSecretFileMissing(t *testing.T) {
 
 func TestRedactMasksSecrets(t *testing.T) {
 	cfg := &Config{
-		Runespace: RunespaceConfig{APIKey: "deadbeef", APIKeyFile: "/x"},
+		Runespace: RunespaceConfig{Token: "deadbeef", TokenFile: "/x"},
 		Tokens:    TokensConfig{TeamSecret: "supersecret", TeamSecretFile: "/y"},
 	}
 	r := cfg.Redact()
-	if r.Runespace.APIKey != "[REDACTED]" {
-		t.Errorf("api_key not redacted: %q", r.Runespace.APIKey)
+	if r.Runespace.Token != "[REDACTED]" {
+		t.Errorf("token not redacted: %q", r.Runespace.Token)
 	}
-	if r.Runespace.APIKeyFile != "[REDACTED]" {
-		t.Errorf("api_key_file not redacted: %q", r.Runespace.APIKeyFile)
+	if r.Runespace.TokenFile != "[REDACTED]" {
+		t.Errorf("token_file not redacted: %q", r.Runespace.TokenFile)
 	}
 	if r.Tokens.TeamSecret != "[REDACTED]" {
 		t.Errorf("team_secret not redacted: %q", r.Tokens.TeamSecret)
@@ -222,7 +222,7 @@ func TestRedactMasksSecrets(t *testing.T) {
 		t.Errorf("team_secret_file not redacted: %q", r.Tokens.TeamSecretFile)
 	}
 	// Original must be untouched.
-	if cfg.Runespace.APIKey != "deadbeef" {
+	if cfg.Runespace.Token != "deadbeef" {
 		t.Errorf("Redact mutated original")
 	}
 }

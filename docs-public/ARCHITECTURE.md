@@ -176,7 +176,7 @@ Custom roles can be created via `runevault role create`.
 2. `/opt/runevault/configs/runevault.conf`
 3. `./runevault.conf` (cwd, dev only)
 
-Secret YAML fields (`tokens.team_secret`, `runespace.api_key`) accept a sibling `*_file` key for KMS-backed deployments.
+Secret YAML fields (`tokens.team_secret`, `runespace.token`) accept a sibling `*_file` key for KMS-backed deployments.
 
 ### 4. Admin Socket & CLI
 
@@ -413,7 +413,7 @@ Cloud Resources Created
 ```
 
 Common Terraform variables across all CSPs: `team_name`, `tls_mode`,
-`runespace_endpoint`, `runespace_api_key`, `runevault_version`,
+`runespace_endpoint`, `runespace_token`, `runevault_version`,
 `public_key`, `region`. CSP-specific: `instance_type` (AWS),
 `project_id` / `zone` / `machine_type` (GCP), `oci_profile` /
 `compartment_id` (OCI). Output: `vault_public_ip`.

@@ -63,7 +63,7 @@ func runDaemonStart(ctx context.Context) error {
 	eng, err := crypto.OpenEngine(ctx, crypto.EngineParams{
 		Keys:     keyParams,
 		Endpoint: cfg.Runespace.Endpoint,
-		Token:    cfg.Runespace.APIKey,
+		Token:    cfg.Runespace.Token,
 		Insecure: cfg.Runespace.Insecure, // TLS by default; set runespace.insecure=true only for a localhost runespace
 	})
 	if err != nil {

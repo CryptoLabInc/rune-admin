@@ -14,7 +14,7 @@ done
 cat > /etc/profile.d/runevault-installer-env.sh <<'ENVFILE'
 export RUNEVAULT_TEAM_NAME='${team_name}'
 export RUNEVAULT_RUNESPACE_ENDPOINT='${runespace_endpoint}'
-export RUNEVAULT_RUNESPACE_API_KEY='${runespace_api_key}'
+export RUNEVAULT_RUNESPACE_TOKEN='${runespace_token}'
 ENVFILE
 chmod 600 /etc/profile.d/runevault-installer-env.sh
 set -a; . /etc/profile.d/runevault-installer-env.sh; set +a

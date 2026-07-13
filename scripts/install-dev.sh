@@ -26,7 +26,7 @@
 #
 # Non-interactive env vars (CSP install — operator workstation):
 #   RUNEVAULT_RUNESPACE_ENDPOINT      Runespace endpoint URL (required)
-#   RUNEVAULT_RUNESPACE_API_KEY       Runespace API key (required)
+#   RUNEVAULT_RUNESPACE_TOKEN       Runespace API key (required)
 #   RUNEVAULT_TEAM_NAME              Team name (required)
 #   RUNEVAULT_TARGET                 Pre-select target without interactive menu
 #   RUNEVAULT_INSTALL_DIR            Pre-set CSP install directory
@@ -54,7 +54,7 @@ CSP_PUBLIC_IP=""
 # CSP config (populated by dev_csp_prompt_config)
 TEAM_NAME=""
 RUNESPACE_ENDPOINT=""
-RUNESPACE_API_KEY=""
+RUNESPACE_TOKEN=""
 CSP_REGION=""
 GCP_PROJECT_ID=""
 OCI_COMPARTMENT_ID=""
@@ -274,15 +274,15 @@ dev_local_prompt_config() {
 
     _prompt RUNEVAULT_TEAM_NAME         "Team name"         "devteam"
     _prompt RUNEVAULT_RUNESPACE_ENDPOINT "Runespace endpoint" ""
-    _prompt RUNEVAULT_RUNESPACE_API_KEY  "Runespace API key"  ""
+    _prompt RUNEVAULT_RUNESPACE_TOKEN  "Runespace API key"  ""
     printf '\n'
 
     [[ -n "${RUNEVAULT_RUNESPACE_ENDPOINT:-}" ]] || die "Runespace endpoint is required."
-    [[ -n "${RUNEVAULT_RUNESPACE_API_KEY:-}" ]]  || die "Runespace API key is required."
+    [[ -n "${RUNEVAULT_RUNESPACE_TOKEN:-}" ]]  || die "Runespace API key is required."
   else
     RUNEVAULT_TEAM_NAME="${RUNEVAULT_TEAM_NAME:-devteam}"
     RUNEVAULT_RUNESPACE_ENDPOINT="${RUNEVAULT_RUNESPACE_ENDPOINT:-https://runespace.example.com}"
-    RUNEVAULT_RUNESPACE_API_KEY="${RUNEVAULT_RUNESPACE_API_KEY:-dev-api-key-placeholder}"
+    RUNEVAULT_RUNESPACE_TOKEN="${RUNEVAULT_RUNESPACE_TOKEN:-dev-api-key-placeholder}"
   fi
 }
 
@@ -294,7 +294,7 @@ dev_local_install() {
   export RUNEVAULT_LOCAL_BINARY="$LOCAL_BINARY_HOST"
   export RUNEVAULT_TEAM_NAME
   export RUNEVAULT_RUNESPACE_ENDPOINT
-  export RUNEVAULT_RUNESPACE_API_KEY
+  export RUNEVAULT_RUNESPACE_TOKEN
 
   if [[ -n "$PREFIX" ]]; then
     export RUNEVAULT_INSTALL_PREFIX="$PREFIX"
@@ -375,7 +375,7 @@ dev_csp_prompt_config() {
 
     _prompt TEAM_NAME          "Team name"          "devteam"
     _prompt RUNESPACE_ENDPOINT  "Runespace endpoint"  ""
-    _prompt RUNESPACE_API_KEY   "Runespace API key"   ""
+    _prompt RUNESPACE_TOKEN   "Runespace API key"   ""
 
     case "$csp" in
       aws) _prompt CSP_REGION "AWS region"   "us-east-1"   ;;
@@ -392,7 +392,7 @@ dev_csp_prompt_config() {
   else
     TEAM_NAME="${RUNEVAULT_TEAM_NAME:-}"
     RUNESPACE_ENDPOINT="${RUNEVAULT_RUNESPACE_ENDPOINT:-}"
-    RUNESPACE_API_KEY="${RUNEVAULT_RUNESPACE_API_KEY:-}"
+    RUNESPACE_TOKEN="${RUNEVAULT_RUNESPACE_TOKEN:-}"
     CSP_REGION="${RUNEVAULT_CSP_REGION:-}"
     GCP_PROJECT_ID="${RUNEVAULT_GCP_PROJECT_ID:-}"
     OCI_COMPARTMENT_ID="${RUNEVAULT_OCI_COMPARTMENT_ID:-}"
@@ -400,7 +400,7 @@ dev_csp_prompt_config() {
     local missing=()
     [[ -z "$TEAM_NAME" ]]         && missing+=("RUNEVAULT_TEAM_NAME")
     [[ -z "$RUNESPACE_ENDPOINT" ]] && missing+=("RUNEVAULT_RUNESPACE_ENDPOINT")
-    [[ -z "$RUNESPACE_API_KEY" ]]  && missing+=("RUNEVAULT_RUNESPACE_API_KEY")
+    [[ -z "$RUNESPACE_TOKEN" ]]  && missing+=("RUNEVAULT_RUNESPACE_TOKEN")
     [[ "$csp" = gcp && -z "$GCP_PROJECT_ID" ]]      && missing+=("RUNEVAULT_GCP_PROJECT_ID")
     [[ "$csp" = oci && -z "$OCI_COMPARTMENT_ID" ]]  && missing+=("RUNEVAULT_OCI_COMPARTMENT_ID")
     if [[ ${#missing[@]} -gt 0 ]]; then
@@ -412,7 +412,7 @@ dev_csp_prompt_config() {
 
   [[ -n "$TEAM_NAME" ]]          || die "Team name is required."
   [[ -n "$RUNESPACE_ENDPOINT" ]]  || die "Runespace endpoint is required."
-  [[ -n "$RUNESPACE_API_KEY" ]]   || die "Runespace API key is required."
+  [[ -n "$RUNESPACE_TOKEN" ]]   || die "Runespace API key is required."
   if [[ "$csp" = gcp ]]; then
     [[ -n "$GCP_PROJECT_ID" ]]     || die "GCP project ID is required."
   fi
@@ -490,7 +490,7 @@ dev_csp_render_tfvars() {
     printf 'team_name          = "%s"\n' "$(escape_tf "${TEAM_NAME:-default}")"
     printf 'tls_mode           = "self-signed"\n'
     printf 'runespace_endpoint  = "%s"\n' "$(escape_tf "${RUNESPACE_ENDPOINT}")"
-    printf 'runespace_api_key   = "%s"\n' "$(escape_tf "${RUNESPACE_API_KEY}")"
+    printf 'runespace_token   = "%s"\n' "$(escape_tf "${RUNESPACE_TOKEN}")"
     printf 'runevault_version  = "dev"\n'
     printf 'public_key         = "%s"\n' "$(escape_tf "${public_key}")"
     printf 'region             = "%s"\n' "$(escape_tf "${CSP_REGION}")"
@@ -585,13 +585,13 @@ dev_csp_upload_and_install() {
   local tn ee ek
   tn=$(escape_single "$TEAM_NAME")
   ee=$(escape_single "$RUNESPACE_ENDPOINT")
-  ek=$(escape_single "$RUNESPACE_API_KEY")
+  ek=$(escape_single "$RUNESPACE_TOKEN")
   local remote_cmd
   remote_cmd="sudo \
     RUNEVAULT_LOCAL_BINARY=/tmp/runevault-${TARGET_OS}-${TARGET_ARCH} \
     RUNEVAULT_TEAM_NAME='${tn}' \
     RUNEVAULT_RUNESPACE_ENDPOINT='${ee}' \
-    RUNEVAULT_RUNESPACE_API_KEY='${ek}' \
+    RUNEVAULT_RUNESPACE_TOKEN='${ek}' \
     bash /tmp/install.sh --target local --non-interactive --version dev"
 
   # shellcheck disable=SC2086

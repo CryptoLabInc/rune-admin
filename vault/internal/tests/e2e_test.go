@@ -43,7 +43,7 @@ keys:
   embedding_dim: 1024
 runespace:
   endpoint: ""
-  api_key: ""
+  token: ""
 tokens:
   team_secret: smoke-secret
   roles_file: %[1]s/roles.yml

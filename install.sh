@@ -21,14 +21,14 @@
 # Non-interactive env vars (local install):
 #   RUNEVAULT_TEAM_NAME              keys.index_name (required)
 #   RUNEVAULT_RUNESPACE_ENDPOINT      runespace.endpoint (required)
-#   RUNEVAULT_RUNESPACE_API_KEY       runespace.api_key
-#   RUNEVAULT_RUNESPACE_API_KEY_FILE  runespace.api_key_file (alternative)
+#   RUNEVAULT_RUNESPACE_TOKEN       runespace.token
+#   RUNEVAULT_RUNESPACE_TOKEN_FILE  runespace.token_file (alternative)
 #   RUNEVAULT_TLS_CERT_PATH          Path to existing TLS cert (skips auto-gen)
 #   RUNEVAULT_TLS_KEY_PATH           Path to existing TLS key  (skips auto-gen)
 #
 # Non-interactive env vars (CSP install — operator workstation):
 #   RUNEVAULT_RUNESPACE_ENDPOINT      Runespace endpoint URL (required)
-#   RUNEVAULT_RUNESPACE_API_KEY       Runespace API key (required)
+#   RUNEVAULT_RUNESPACE_TOKEN       Runespace API key (required)
 #   RUNEVAULT_TEAM_NAME              Team name — used for resource naming and vault index (required)
 #   RUNEVAULT_TARGET                 Pre-select target without interactive menu
 #   RUNEVAULT_INSTALL_DIR            Pre-set CSP install directory
@@ -308,7 +308,7 @@ csp_prompt_config() {
 
     _prompt TEAM_NAME          "Team name"          ""
     _prompt RUNESPACE_ENDPOINT  "Runespace endpoint"  ""
-    _prompt RUNESPACE_API_KEY   "Runespace API key"   ""
+    _prompt RUNESPACE_TOKEN   "Runespace API key"   ""
 
     case "$csp" in
       aws) _prompt CSP_REGION "AWS region"   "us-east-1"   ;;
@@ -325,7 +325,7 @@ csp_prompt_config() {
   else
     TEAM_NAME="${RUNEVAULT_TEAM_NAME:-}"
     RUNESPACE_ENDPOINT="${RUNEVAULT_RUNESPACE_ENDPOINT:-}"
-    RUNESPACE_API_KEY="${RUNEVAULT_RUNESPACE_API_KEY:-}"
+    RUNESPACE_TOKEN="${RUNEVAULT_RUNESPACE_TOKEN:-}"
     CSP_REGION="${RUNEVAULT_CSP_REGION:-}"
     GCP_PROJECT_ID="${RUNEVAULT_GCP_PROJECT_ID:-}"
     OCI_COMPARTMENT_ID="${RUNEVAULT_OCI_COMPARTMENT_ID:-}"
@@ -333,7 +333,7 @@ csp_prompt_config() {
     local missing=()
     [[ -z "$TEAM_NAME" ]]         && missing+=("RUNEVAULT_TEAM_NAME")
     [[ -z "$RUNESPACE_ENDPOINT" ]] && missing+=("RUNEVAULT_RUNESPACE_ENDPOINT")
-    [[ -z "$RUNESPACE_API_KEY" ]]  && missing+=("RUNEVAULT_RUNESPACE_API_KEY")
+    [[ -z "$RUNESPACE_TOKEN" ]]  && missing+=("RUNEVAULT_RUNESPACE_TOKEN")
     [[ "$csp" = gcp && -z "$GCP_PROJECT_ID" ]]      && missing+=("RUNEVAULT_GCP_PROJECT_ID")
     [[ "$csp" = oci && -z "$OCI_COMPARTMENT_ID" ]]  && missing+=("RUNEVAULT_OCI_COMPARTMENT_ID")
     if [[ ${#missing[@]} -gt 0 ]]; then
@@ -345,7 +345,7 @@ csp_prompt_config() {
 
   [[ -n "$TEAM_NAME" ]]          || die "Team name is required."
   [[ -n "$RUNESPACE_ENDPOINT" ]]  || die "Runespace endpoint is required."
-  [[ -n "$RUNESPACE_API_KEY" ]]   || die "Runespace API key is required."
+  [[ -n "$RUNESPACE_TOKEN" ]]   || die "Runespace API key is required."
   if [[ "$csp" = gcp ]]; then
     [[ -n "$GCP_PROJECT_ID" ]]     || die "GCP project ID is required."
   fi
@@ -431,7 +431,7 @@ csp_render_tfvars() {
     printf 'team_name          = "%s"\n' "$(escape_tf "${TEAM_NAME:-default}")"
     printf 'tls_mode           = "self-signed"\n'
     printf 'runespace_endpoint  = "%s"\n' "$(escape_tf "${RUNESPACE_ENDPOINT}")"
-    printf 'runespace_api_key   = "%s"\n' "$(escape_tf "${RUNESPACE_API_KEY}")"
+    printf 'runespace_token   = "%s"\n' "$(escape_tf "${RUNESPACE_TOKEN}")"
     printf 'runevault_version  = "%s"\n' "$(escape_tf "${VERSION}")"
     printf 'public_key         = "%s"\n' "$(escape_tf "${public_key}")"
     printf 'region             = "%s"\n' "$(escape_tf "${CSP_REGION}")"
@@ -1014,8 +1014,8 @@ collect_and_write_config() {
   else
     local team_name="${RUNEVAULT_TEAM_NAME:-}"
     local runespace_endpoint="${RUNEVAULT_RUNESPACE_ENDPOINT:-}"
-    local runespace_api_key="${RUNEVAULT_RUNESPACE_API_KEY:-}"
-    local runespace_api_key_file="${RUNEVAULT_RUNESPACE_API_KEY_FILE:-}"
+    local runespace_token="${RUNEVAULT_RUNESPACE_TOKEN:-}"
+    local runespace_token_file="${RUNEVAULT_RUNESPACE_TOKEN_FILE:-}"
     local team_secret="${RUNEVAULT_TEAM_SECRET:-}"
 
     if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
@@ -1028,16 +1028,16 @@ collect_and_write_config() {
         && read -r -p "Team name (vault index identifier): " team_name
       [[ -z "$runespace_endpoint" ]] \
         && read -r -p "Runespace endpoint URL: " runespace_endpoint
-      if [[ -z "$runespace_api_key" && -z "$runespace_api_key_file" ]]; then
-        read -r -p "Runespace API key: " runespace_api_key
+      if [[ -z "$runespace_token" && -z "$runespace_token_file" ]]; then
+        read -r -p "Runespace API key: " runespace_token
       fi
       printf '\n'
     else
       local missing=()
       [[ -z "$team_name" ]]         && missing+=("RUNEVAULT_TEAM_NAME")
       [[ -z "$runespace_endpoint" ]] && missing+=("RUNEVAULT_RUNESPACE_ENDPOINT")
-      [[ -z "$runespace_api_key" && -z "$runespace_api_key_file" ]] \
-        && missing+=("RUNEVAULT_RUNESPACE_API_KEY or RUNEVAULT_RUNESPACE_API_KEY_FILE")
+      [[ -z "$runespace_token" && -z "$runespace_token_file" ]] \
+        && missing+=("RUNEVAULT_RUNESPACE_TOKEN or RUNEVAULT_RUNESPACE_TOKEN_FILE")
       if [[ ${#missing[@]} -gt 0 ]]; then
         printf 'ERROR: Missing required env vars for non-interactive install:\n' >&2
         for v in "${missing[@]}"; do printf '  %s\n' "$v" >&2; done
@@ -1051,14 +1051,14 @@ collect_and_write_config() {
 
     [[ -n "$team_name" ]]         || die "team_name is required."
     [[ -n "$runespace_endpoint" ]] || die "runespace_endpoint is required."
-    [[ -n "$runespace_api_key" || -n "$runespace_api_key_file" ]] \
+    [[ -n "$runespace_token" || -n "$runespace_token_file" ]] \
       || die "Runespace API key or key file is required."
 
-    local api_key_line
-    if [[ -n "$runespace_api_key_file" ]]; then
-      api_key_line="  api_key_file: ${runespace_api_key_file}"
+    local token_line
+    if [[ -n "$runespace_token_file" ]]; then
+      token_line="  token_file: ${runespace_token_file}"
     else
-      api_key_line="  api_key: ${runespace_api_key}"
+      token_line="  token: ${runespace_token}"
     fi
 
     info "Writing ${conf_file}..."
@@ -1081,7 +1081,7 @@ collect_and_write_config() {
       "" \
       "runespace:" \
       "  endpoint: ${runespace_endpoint}" \
-      "${api_key_line}" \
+      "${token_line}" \
       "" \
       "tokens:" \
       "  team_secret: ${team_secret}" \
