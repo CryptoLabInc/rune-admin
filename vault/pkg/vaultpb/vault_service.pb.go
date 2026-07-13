@@ -583,10 +583,14 @@ func (*CentroidChunk_Header) isCentroidChunk_Payload() {}
 func (*CentroidChunk_Batch) isCentroidChunk_Payload() {}
 
 type CentroidSetHeader struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"` // content hash (sha256)
-	Dim           uint32                 `protobuf:"varint,2,opt,name=dim,proto3" json:"dim,omitempty"`
-	Nlist         uint32                 `protobuf:"varint,3,opt,name=nlist,proto3" json:"nlist,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Version string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"` // content hash (sha256)
+	Dim     uint32                 `protobuf:"varint,2,opt,name=dim,proto3" json:"dim,omitempty"`
+	Nlist   uint32                 `protobuf:"varint,3,opt,name=nlist,proto3" json:"nlist,omitempty"`
+	// evi preset the set was trained for (e.g. "IP1") — a version-hash
+	// ingredient, relayed so runed can recompute and verify the content hash.
+	// Empty when the engine predates the field.
+	Preset        string `protobuf:"bytes,4,opt,name=preset,proto3" json:"preset,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -640,6 +644,13 @@ func (x *CentroidSetHeader) GetNlist() uint32 {
 		return x.Nlist
 	}
 	return 0
+}
+
+func (x *CentroidSetHeader) GetPreset() string {
+	if x != nil {
+		return x.Preset
+	}
+	return ""
 }
 
 type CentroidBatch struct {
@@ -777,11 +788,12 @@ const file_vault_service_proto_rawDesc = "" +
 	"\rCentroidChunk\x12:\n" +
 	"\x06header\x18\x01 \x01(\v2 .rune.vault.v1.CentroidSetHeaderH\x00R\x06header\x124\n" +
 	"\x05batch\x18\x02 \x01(\v2\x1c.rune.vault.v1.CentroidBatchH\x00R\x05batchB\t\n" +
-	"\apayload\"U\n" +
+	"\apayload\"m\n" +
 	"\x11CentroidSetHeader\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x10\n" +
 	"\x03dim\x18\x02 \x01(\rR\x03dim\x12\x14\n" +
-	"\x05nlist\x18\x03 \x01(\rR\x05nlist\"F\n" +
+	"\x05nlist\x18\x03 \x01(\rR\x05nlist\x12\x16\n" +
+	"\x06preset\x18\x04 \x01(\tR\x06preset\"F\n" +
 	"\rCentroidBatch\x125\n" +
 	"\tcentroids\x18\x01 \x03(\v2\x17.rune.vault.v1.CentroidR\tcentroids\"0\n" +
 	"\bCentroid\x12\x0e\n" +
