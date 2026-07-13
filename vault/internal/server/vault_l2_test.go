@@ -16,7 +16,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	runespace "github.com/jh-lee-cryptolab/runespace-go-sdk"
+	runespace "github.com/CryptoLabInc/runespace-sdk"
 
 	"github.com/CryptoLabInc/rune-admin/vault/internal/crypto"
 	"github.com/CryptoLabInc/rune-admin/vault/internal/tokens"
