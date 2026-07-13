@@ -36,7 +36,7 @@ audit:
 func writeConfig(t *testing.T, body string) string {
 	t.Helper()
 	dir := t.TempDir()
-	path := filepath.Join(dir, "runevault.conf")
+	path := filepath.Join(dir, "runeconsole.conf")
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -68,11 +68,11 @@ func TestLoadConfigMinimalValid(t *testing.T) {
 }
 
 func TestLoadConfigMissingNamesAllPaths(t *testing.T) {
-	_, err := LoadConfig("/tmp/this/path/does/not/exist/runevault.conf")
+	_, err := LoadConfig("/tmp/this/path/does/not/exist/runeconsole.conf")
 	if err == nil {
 		t.Fatal("expected error for missing config")
 	}
-	if !strings.Contains(err.Error(), "/tmp/this/path/does/not/exist/runevault.conf") {
+	if !strings.Contains(err.Error(), "/tmp/this/path/does/not/exist/runeconsole.conf") {
 		t.Errorf("err missing override path: %v", err)
 	}
 }
@@ -274,7 +274,7 @@ func TestValidateRejectsTLSWithoutCertKey(t *testing.T) {
 
 func TestExampleConfigParsesCleanly(t *testing.T) {
 	// The committed example file should at least parse — operators copy it.
-	data, err := os.ReadFile("testdata/runevault.conf.example")
+	data, err := os.ReadFile("testdata/runeconsole.conf.example")
 	if err != nil {
 		t.Fatal(err)
 	}

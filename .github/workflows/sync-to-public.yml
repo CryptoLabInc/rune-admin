@@ -1,5 +1,5 @@
 # Mirrors the latest state of this repository's main branch to the public
-# CryptoLabInc/rune-admin repository as a single squashed commit. Commit
+# CryptoLabInc/rune-console repository as a single squashed commit. Commit
 # history, messages, and author details from this repository are not
 # transferred — only the resulting file tree is published.
 name: Sync to public repository
@@ -16,7 +16,7 @@ jobs:
   sync:
     # Only run in the private development repository, never in the public
     # mirror or forks.
-    if: github.repository == 'geuna0204/rune-admin-private'
+    if: github.repository == 'geuna0204/rune-console-private'
     runs-on: ubuntu-latest
     steps:
       - name: Check deploy key availability
@@ -51,7 +51,7 @@ jobs:
         if: steps.guard.outputs.enabled == 'true'
         run: |
           set -euo pipefail
-          git remote add public git@github.com:CryptoLabInc/rune-admin.git
+          git remote add public git@github.com:CryptoLabInc/rune-console.git
           git fetch public main
           PARENT=$(git rev-parse FETCH_HEAD)
           # Build the published tree from HEAD with internal-only paths
@@ -72,6 +72,6 @@ jobs:
           export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
           COMMIT=$(git commit-tree "$TREE" -p "$PARENT" \
             -m "chore: sync from development repository" \
-            -m "Source: rune-admin-private@$(git rev-parse --short HEAD)")
+            -m "Source: rune-console-private@$(git rev-parse --short HEAD)")
           git push public "$COMMIT:refs/heads/main"
-          echo "Pushed $COMMIT to CryptoLabInc/rune-admin main."
+          echo "Pushed $COMMIT to CryptoLabInc/rune-console main."

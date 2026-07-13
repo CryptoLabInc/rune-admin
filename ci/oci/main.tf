@@ -1,6 +1,6 @@
 # Terraform Deployment for CI Runner (OCI)
 #
-# Provisions a self-hosted GitHub Actions runner for Rune-Vault CI.
+# Provisions a self-hosted GitHub Actions runner for Rune-console CI.
 # Runner labels: self-hosted, vault-ci
 #
 # Usage:
@@ -44,7 +44,7 @@ variable "compartment_id" {
 variable "github_repo" {
   description = "GitHub repository (owner/name)"
   type        = string
-  default     = "CryptoLabInc/rune-admin"
+  default     = "CryptoLabInc/rune-console"
 }
 
 variable "github_runner_token" {

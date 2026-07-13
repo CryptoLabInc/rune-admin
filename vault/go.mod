@@ -1,4 +1,4 @@
-module github.com/CryptoLabInc/rune-admin/vault
+module github.com/CryptoLabInc/rune-console/vault
 
 go 1.26.4
 

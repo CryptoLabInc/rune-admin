@@ -9,7 +9,7 @@ import (
 	"runtime"
 )
 
-// RepoRoot returns the absolute path to the rune-admin repository root,
+// RepoRoot returns the absolute path to the rune-console repository root,
 // resolved relative to this source file. Works regardless of the test's
 // cwd, so tests can locate tests/fixtures/ from any subpackage.
 func RepoRoot() string {

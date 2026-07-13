@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Generate self-signed CA + server certificate for Rune-Vault TLS.
+# Generate self-signed CA + server certificate for Rune-console TLS.
 #
 # Usage:
 #   ./scripts/generate-certs.sh [output-dir] [hostname]
@@ -43,7 +43,7 @@ openssl req -new -x509 \
     -key "$OUTPUT_DIR/ca.key" \
     -out "$OUTPUT_DIR/ca.pem" \
     -days "$CA_DAYS" \
-    -subj "/CN=Rune-Vault CA" \
+    -subj "/CN=Rune-console CA" \
     -sha256
 
 echo "==> Generating server key (2048-bit)..."

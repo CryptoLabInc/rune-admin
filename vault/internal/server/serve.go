@@ -18,7 +18,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
-	pb "github.com/CryptoLabInc/rune-admin/vault/pkg/vaultpb"
+	pb "github.com/CryptoLabInc/rune-console/vault/pkg/vaultpb"
 )
 
 // Serve starts the gRPC + admin UDS listeners with the given Vault and

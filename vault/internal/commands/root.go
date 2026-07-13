@@ -13,7 +13,7 @@ var globals globalFlags
 
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:           "runevault",
+		Use:           "runeconsole",
 		Short:         "Rune Vault daemon server with admin CLI",
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -23,7 +23,7 @@ func newRootCmd() *cobra.Command {
 	}
 
 	cmd.PersistentFlags().StringVar(&globals.configPath, "config", "",
-		"Path to runevault.conf (default: /opt/runevault/configs/runevault.conf, then ./runevault.conf)")
+		"Path to runeconsole.conf (default: /opt/runeconsole/configs/runeconsole.conf, then ./runeconsole.conf)")
 	cmd.PersistentFlags().StringVar(&globals.adminSocket, "admin-socket", "",
 		"Override server.admin.socket from config")
 

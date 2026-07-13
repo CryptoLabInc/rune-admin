@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/CryptoLabInc/rune-admin/vault/internal/commands"
+	"github.com/CryptoLabInc/rune-console/vault/internal/commands"
 )
 
 func main() {

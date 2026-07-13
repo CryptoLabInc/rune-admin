@@ -9,8 +9,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/CryptoLabInc/rune-admin/vault/internal/tokens"
-	pb "github.com/CryptoLabInc/rune-admin/vault/pkg/vaultpb"
+	"github.com/CryptoLabInc/rune-console/vault/internal/tokens"
+	pb "github.com/CryptoLabInc/rune-console/vault/pkg/vaultpb"
 )
 
 // ── error mapping ─────────────────────────────────────────────────

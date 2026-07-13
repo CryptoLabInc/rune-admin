@@ -17,14 +17,14 @@ import (
 // ConfigLookupPaths lists, in priority order, the on-disk locations that
 // LoadConfig probes when the caller doesn't pass an explicit path.
 var ConfigLookupPaths = []string{
-	"/opt/runevault/configs/runevault.conf",
-	"./runevault.conf",
+	"/opt/runeconsole/configs/runeconsole.conf",
+	"./runeconsole.conf",
 }
 
-// 0640: group-readable so runevault group members can run CLI commands without sudo.
+// 0640: group-readable so runeconsole group members can run CLI commands without sudo.
 const expectedSecretMode fs.FileMode = 0o640
 
-// Config is the in-memory shape of runevault.conf. Field names follow the
+// Config is the in-memory shape of runeconsole.conf. Field names follow the
 // YAML schema exactly so the loader can decode without an intermediate type.
 type Config struct {
 	Server    ServerConfig    `yaml:"server"`
@@ -112,7 +112,7 @@ func LoadConfig(override string) (*Config, error) {
 	}
 	cfg.Source = path
 
-	if err := checkSecretMode(path, "runevault.conf"); err != nil {
+	if err := checkSecretMode(path, "runeconsole.conf"); err != nil {
 		return nil, err
 	}
 

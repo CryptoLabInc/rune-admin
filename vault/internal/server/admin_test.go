@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/CryptoLabInc/rune-admin/vault/internal/tokens"
+	"github.com/CryptoLabInc/rune-console/vault/internal/tokens"
 )
 
 func newAdminTestVault(t *testing.T) *Vault {

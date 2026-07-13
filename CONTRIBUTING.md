@@ -19,7 +19,7 @@ Before creating an issue:
    - Error messages and logs
    - Steps to reproduce
 
-Create issue at: https://github.com/CryptoLabInc/rune-admin/issues
+Create issue at: https://github.com/CryptoLabInc/rune-console/issues
 
 ### Suggesting Features
 
@@ -43,8 +43,8 @@ Feature requests should include:
 
 1. **Clone repository**
    ```bash
-   git clone https://github.com/CryptoLabInc/rune-admin.git
-   cd rune-admin
+   git clone https://github.com/CryptoLabInc/rune-console.git
+   cd rune-console
    ```
 
 2. **Install tools and bootstrap**
@@ -88,9 +88,9 @@ vault/internal/
 
 ```bash
 mise run go:test:unit     # Unit tests only (E2E excluded by build tag)
-mise run go:build         # Build vault/bin/runevault first…
+mise run go:build         # Build vault/bin/runeconsole first…
 mise run go:test:e2e      # …then run E2E against the built binary
-mise run go:test          # All tests including E2E (requires RUNEVAULT_TEST_BINARY)
+mise run go:test          # All tests including E2E (requires RUNECONSOLE_TEST_BINARY)
 ```
 
 ### Test Fixtures
@@ -146,8 +146,8 @@ Integration tests use GPG-encrypted fixtures containing FHE keys and ciphertext 
 ### Local Testing
 
 ```bash
-mise run dev         # Run runevault daemon in foreground (uses vault/dev/runevault.conf)
-mise run go:build    # Build runevault binary to vault/bin/runevault
+mise run dev         # Run runeconsole daemon in foreground (uses vault/dev/runeconsole.conf)
+mise run go:build    # Build runeconsole binary to vault/bin/runeconsole
 ```
 
 ### Testing the Installer Locally
@@ -158,8 +158,8 @@ of a published GitHub release.
 
 ```bash
 # Local install into a rootless prefix (no service registration)
-RUNEVAULT_SKIP_SERVICE=1 \
-  bash scripts/install-dev.sh --target local --prefix "$HOME/runevault-test"
+RUNECONSOLE_SKIP_SERVICE=1 \
+  bash scripts/install-dev.sh --target local --prefix "$HOME/runeconsole-test"
 
 # Cloud install: cross-compiles linux/amd64 in golang:1.26-bookworm,
 # uploads via SCP, and runs install.sh on the remote VM.
@@ -240,17 +240,17 @@ Closes #123
 ## Repository Structure
 
 ```
-rune-admin/
+rune-console/
 ├── vault/
-│   ├── cmd/                       # runevault binary entry point
+│   ├── cmd/                       # runeconsole binary entry point
 │   ├── internal/                  # commands, server, tokens, crypto, tests
 │   ├── pkg/vaultpb/               # generated gRPC stubs
 │   ├── proto/                     # .proto source
 │   └── dev/                       # local dev config (gitignored)
 ├── deployment/
 │   ├── aws/  gcp/  oci/           # Terraform per CSP
-│   ├── systemd/runevault.service  # Linux service unit
-│   └── launchd/com.cryptolabinc.runevault.plist  # macOS service
+│   ├── systemd/runeconsole.service  # Linux service unit
+│   └── launchd/com.cryptolabinc.runeconsole.plist  # macOS service
 ├── scripts/
 │   ├── install-dev.sh             # Dev sibling of install.sh
 │   ├── generate-certs.sh          # Self-signed TLS certs for dev
@@ -268,8 +268,8 @@ Core server code is in `vault/`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md
 
 - Secret key (`vault-keys/<key-id>/SecKey.json`) must never be logged, returned in API responses, or leave the server process
 - Admin transport is a Unix domain socket (mode 0600, vault-user owned) — never expose externally
-- Never commit private keys (`SecKey.json`) or filled-in `runevault.conf` files
-- Token secrets and FHE keys live in `runevault.conf` (mode 0600); secret YAML fields support `*_file` indirection for KMS-backed deployments
+- Never commit private keys (`SecKey.json`) or filled-in `runeconsole.conf` files
+- Token secrets and FHE keys live in `runeconsole.conf` (mode 0600); secret YAML fields support `*_file` indirection for KMS-backed deployments
 - TLS is required for all cloud deployments (`server.grpc.tls.disable: true` is dev-only)
 - Review security implications of changes
 - Test authentication and authorization

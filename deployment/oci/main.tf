@@ -54,8 +54,8 @@ variable "runespace_token" {
   sensitive   = true
 }
 
-variable "runevault_version" {
-  description = "Pinned runevault release tag — drives the install.sh URL and binary version on the VM."
+variable "runeconsole_version" {
+  description = "Pinned runeconsole release tag — drives the install.sh URL and binary version on the VM."
   type        = string
 }
 
@@ -166,7 +166,7 @@ resource "oci_core_instance" "vault_instance" {
       team_name          = var.team_name
       runespace_endpoint = var.runespace_endpoint
       runespace_token  = var.runespace_token
-      runevault_version  = var.runevault_version
+      runeconsole_version  = var.runeconsole_version
     }))
   }
 }
@@ -193,7 +193,7 @@ data "oci_core_images" "ubuntu_image" {
 
 # Outputs
 output "vault_url" {
-  description = "Rune-Vault gRPC endpoint"
+  description = "Rune-console gRPC endpoint"
   value       = "${oci_core_instance.vault_instance.public_ip}:50051"
 }
 

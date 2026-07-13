@@ -1,8 +1,8 @@
-# Rune-Vault Architecture
+# Rune-console Architecture
 
 ## System Overview
 
-Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted organizational memory. It manages cryptographic keys, authenticates team members, and provides decryption services for encrypted search results.
+Rune-console is the **infrastructure backbone** for team-shared FHE-encrypted organizational memory. It manages cryptographic keys, authenticates team members, and provides decryption services for encrypted search results.
 
 ### Core Responsibilities
 
@@ -42,7 +42,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
                    │              │ (called by remember)
                    ▼              ▼
   ┌──────────────────────┐  ┌────────────────────────────┐
-  │ Runespace(SaaS)      │  │        Rune-Vault           │
+  │ Runespace(SaaS)      │  │        Rune-console           │
   │  https://runespace.example.com │  │  (Your Infrastructure)     │
   │                      │  │                            │
   │  - Encrypted vectors │  │  ┌──────────────────────┐  │
@@ -76,11 +76,11 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 | Endpoint | Protocol | Purpose | Exposure |
 |----------|----------|---------|----------|
 | `:50051` | gRPC + TLS | Vault service, health check, reflection | Public (team members) |
-| `/opt/runevault/admin.sock` | Unix domain socket (mode 0600) | Admin token/role CRUD + status | Local only — `runevault` CLI |
+| `/opt/runeconsole/admin.sock` | Unix domain socket (mode 0600) | Admin token/role CRUD + status | Local only — `runeconsole` CLI |
 
 ## Component Details
 
-### 1. Rune-Vault Server
+### 1. Rune-console Server
 
 **Purpose**: Centralized key management and decryption service for a team
 
@@ -91,15 +91,15 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 - **On-Premise** (Self-hosted)
 
 **Runtime**:
-- Single-binary Go gRPC daemon (`runevault`) — no runtime dependencies beyond TLS
+- Single-binary Go gRPC daemon (`runeconsole`) — no runtime dependencies beyond TLS
 - gRPC server on port 50051 (used by runespace-mcp-server)
 - gRPC health check via `grpc.health.v1` protocol
-- Admin Unix domain socket at `/opt/runevault/admin.sock` (mode 0600, vault-user owned)
-- Registered as a native systemd unit (`runevault.service`) on Linux or a launchd job (`com.cryptolabinc.runevault`) on macOS
+- Admin Unix domain socket at `/opt/runeconsole/admin.sock` (mode 0600, vault-user owned)
+- Registered as a native systemd unit (`runeconsole.service`) on Linux or a launchd job (`com.cryptolabinc.runeconsole`) on macOS
 
-**Key Storage** (`/opt/runevault/vault-keys/<key-id>/`, default `<key-id>` = `vault-key`):
+**Key Storage** (`/opt/runeconsole/vault-keys/<key-id>/`, default `<key-id>` = `vault-key`):
 ```
-/opt/runevault/vault-keys/vault-key/
+/opt/runeconsole/vault-keys/vault-key/
 ├── EncKey.json      # Public encryption key (distributed to agents)
 ├── EvalKey.json     # Public evaluation key (for FHE operations)
 └── SecKey.json      # Secret decryption key (NEVER leaves Vault)
@@ -163,47 +163,47 @@ Defined in `proto/vault_service.proto` (`rune.vault.v1.VaultService`).
 | admin | get_public_key, decrypt_scores, decrypt_metadata, manage_tokens | 50 | 150/60s |
 | member | get_public_key, decrypt_scores, decrypt_metadata | 10 | 30/60s |
 
-Custom roles can be created via `runevault role create`.
+Custom roles can be created via `runeconsole role create`.
 
 **Token Lifecycle:**
-- Issue: `runevault token issue --user alice --role member --expires 90d`
-- Rotate: `runevault token rotate --user alice` (atomic revoke + reissue) or `--all`
-- Revoke: `runevault token revoke --user alice`
-- Persistence: atomic YAML writes to the files referenced by `tokens.tokens_file` and `tokens.roles_file` in `runevault.conf` (defaults: `/opt/runevault/configs/{tokens,roles}.yml`).
+- Issue: `runeconsole token issue --user alice --role member --expires 90d`
+- Rotate: `runeconsole token rotate --user alice` (atomic revoke + reissue) or `--all`
+- Revoke: `runeconsole token revoke --user alice`
+- Persistence: atomic YAML writes to the files referenced by `tokens.tokens_file` and `tokens.roles_file` in `runeconsole.conf` (defaults: `/opt/runeconsole/configs/{tokens,roles}.yml`).
 
-**Configuration Source**: `runevault.conf` (YAML) is the single source of truth — no env-var fallback or migration helper. Lookup order:
+**Configuration Source**: `runeconsole.conf` (YAML) is the single source of truth — no env-var fallback or migration helper. Lookup order:
 1. `--config <path>` CLI flag
-2. `/opt/runevault/configs/runevault.conf`
-3. `./runevault.conf` (cwd, dev only)
+2. `/opt/runeconsole/configs/runeconsole.conf`
+3. `./runeconsole.conf` (cwd, dev only)
 
 Secret YAML fields (`tokens.team_secret`, `runespace.token`) accept a sibling `*_file` key for KMS-backed deployments.
 
 ### 4. Admin Socket & CLI
 
 **Admin Socket** (`vault/internal/server/admin.go`):
-- Unix domain socket at `/opt/runevault/admin.sock` (mode 0600, vault-user owned)
+- Unix domain socket at `/opt/runeconsole/admin.sock` (mode 0600, vault-user owned)
 - Filesystem permissions are the only authorization gate; never expose externally
-- Used by the `runevault` CLI and by the daemon's lifecycle hooks (e.g. `ErrRestartRequested` after token rotation)
+- Used by the `runeconsole` CLI and by the daemon's lifecycle hooks (e.g. `ErrRestartRequested` after token rotation)
 
-**CLI** (`runevault`):
+**CLI** (`runeconsole`):
 
 | Command | Purpose |
 |---------|---------|
-| `runevault status` | Daemon health and socket liveness |
-| `runevault logs` | Tail audit log output |
-| `runevault token issue --user <name> --role <role> [--expires 90d]` | Issue a new per-user token |
-| `runevault token list` | List issued tokens |
-| `runevault token rotate --user <name>` / `--all` | Atomic revoke + reissue |
-| `runevault token revoke --user <name>` | Revoke a token |
-| `runevault role list` | List configured roles |
-| `runevault role create --name <name> --scope a,b,c --top-k N --rate-limit N/Ts` | Create a custom role |
-| `runevault role update --name <name> [--scope] [--top-k] [--rate-limit]` | Update an existing role |
-| `runevault role delete --name <name>` | Delete a role |
-| `runevault version` | Print build version (works without daemon or socket) |
+| `runeconsole status` | Daemon health and socket liveness |
+| `runeconsole logs` | Tail audit log output |
+| `runeconsole token issue --user <name> --role <role> [--expires 90d]` | Issue a new per-user token |
+| `runeconsole token list` | List issued tokens |
+| `runeconsole token rotate --user <name>` / `--all` | Atomic revoke + reissue |
+| `runeconsole token revoke --user <name>` | Revoke a token |
+| `runeconsole role list` | List configured roles |
+| `runeconsole role create --name <name> --scope a,b,c --top-k N --rate-limit N/Ts` | Create a custom role |
+| `runeconsole role update --name <name> [--scope] [--top-k] [--rate-limit]` | Update an existing role |
+| `runeconsole role delete --name <name>` | Delete a role |
+| `runeconsole version` | Print build version (works without daemon or socket) |
 
 The `daemon start` subcommand is invoked by systemd / launchd; operators
-control lifecycle via `systemctl … runevault` (Linux) or
-`launchctl … system/com.cryptolabinc.runevault` (macOS) rather than directly.
+control lifecycle via `systemctl … runeconsole` (Linux) or
+`launchctl … system/com.cryptolabinc.runeconsole` (macOS) rather than directly.
 
 ### 5. Input Validation
 
@@ -236,12 +236,12 @@ Structured JSON logging for all gRPC operations (`vault/internal/server/audit.go
 - Source IP extracted from the gRPC peer context
 - File output uses `lumberjack` for size-based rotation
 
-**Configuration** in `runevault.conf`:
+**Configuration** in `runeconsole.conf`:
 
 ```yaml
 audit:
   mode: file+stdout         # one of: "" (disabled), file, stdout, file+stdout
-  path: /opt/runevault/logs/audit.log
+  path: /opt/runeconsole/logs/audit.log
 ```
 
 ## Data Flow
@@ -317,7 +317,7 @@ Secret key never leaves Vault.
 **`search` vs `remember`**: The `search` tool is for the operator's own
 encrypted data where secret key is held locally by the MCP server runtime.
 The `remember` tool accesses shared team memory where secret key is held
-exclusively by Rune-Vault, preventing agent tampering attacks from
+exclusively by Rune-console, preventing agent tampering attacks from
 indiscriminately decrypting shared vectors.
 
 ## Security Model
@@ -398,22 +398,22 @@ Cloud Resources Created
     ├── Compute Instance (VM)
     │   ├── OS: Ubuntu 24.04 LTS
     │   └── Software (installed via cloud-init startup script):
-    │       ├── runevault binary (SHA256SUMS-verified)
-    │       └── runevault.service (systemd) registered
+    │       ├── runeconsole binary (SHA256SUMS-verified)
+    │       └── runeconsole.service (systemd) registered
     │
     ├── Networking
     │   ├── Public IP address
     │   └── Security group / list / firewall rule (allow 50051/gRPC)
     │
     ├── Storage
-    │   └── /opt/runevault/vault-keys/<key-id>/  (FHE keys)
+    │   └── /opt/runeconsole/vault-keys/<key-id>/  (FHE keys)
     │
     └── Audit Logging
-        └── /opt/runevault/logs/audit.log
+        └── /opt/runeconsole/logs/audit.log
 ```
 
 Common Terraform variables across all CSPs: `team_name`, `tls_mode`,
-`runespace_endpoint`, `runespace_token`, `runevault_version`,
+`runespace_endpoint`, `runespace_token`, `runeconsole_version`,
 `public_key`, `region`. CSP-specific: `instance_type` (AWS),
 `project_id` / `zone` / `machine_type` (GCP), `oci_profile` /
 `compartment_id` (OCI). Output: `vault_public_ip`.
@@ -427,16 +427,16 @@ provider.
 ### Backup & Recovery
 
 **Critical Assets**:
-- `/opt/runevault/vault-keys/<key-id>/SecKey.json` — **MUST backup** (cannot regenerate)
-- `tokens.team_secret` from `runevault.conf` — **MUST backup** (needed for DEK re-derivation)
-- Per-user tokens — rotatable via `runevault token rotate`
+- `/opt/runeconsole/vault-keys/<key-id>/SecKey.json` — **MUST backup** (cannot regenerate)
+- `tokens.team_secret` from `runeconsole.conf` — **MUST backup** (needed for DEK re-derivation)
+- Per-user tokens — rotatable via `runeconsole token rotate`
 
 **Backup Strategy**:
 ```bash
 # Manually back up vault keys (run on the VM)
-sudo tar czf vault-keys_backup_$(date +%Y-%m-%d).tar.gz -C /opt/runevault vault-keys/
+sudo tar czf vault-keys_backup_$(date +%Y-%m-%d).tar.gz -C /opt/runeconsole vault-keys/
 
-# Also archive runevault.conf or at minimum the tokens.team_secret value
+# Also archive runeconsole.conf or at minimum the tokens.team_secret value
 # Store in: offline media, a different cloud provider, or a password manager
 ```
 
@@ -446,14 +446,14 @@ sudo tar czf vault-keys_backup_$(date +%Y-%m-%d).tar.gz -C /opt/runevault vault-
 sudo bash install.sh --target <aws|gcp|oci>
 
 # 2. Stop the daemon before restoring keys
-sudo systemctl stop runevault
+sudo systemctl stop runeconsole
 
 # 3. Restore vault-keys and team_secret
-sudo tar xzf vault-keys_backup_YYYY-MM-DD.tar.gz -C /opt/runevault
-# Edit /opt/runevault/configs/runevault.conf and restore tokens.team_secret
+sudo tar xzf vault-keys_backup_YYYY-MM-DD.tar.gz -C /opt/runeconsole
+# Edit /opt/runeconsole/configs/runeconsole.conf and restore tokens.team_secret
 
 # 4. Bring the daemon back up
-sudo systemctl start runevault
+sudo systemctl start runeconsole
 # Team members continue without reconfiguration.
 ```
 
@@ -461,10 +461,10 @@ sudo systemctl start runevault
 
 ```bash
 # Rotate a single user's token
-runevault token rotate --user alice
+runeconsole token rotate --user alice
 
 # Rotate all tokens
-runevault token rotate --all
+runeconsole token rotate --all
 
 # Distribute new tokens to team members via a secure channel
 ```
@@ -506,9 +506,9 @@ ssh ubuntu@<vault-host>     # or ec2-user@... / opc@... depending on CSP
 top
 
 # Tail the audit log for latency
-sudo tail -20 /opt/runevault/logs/audit.log
+sudo tail -20 /opt/runeconsole/logs/audit.log
 # Or use the CLI from the host:
-runevault logs
+runeconsole logs
 ```
 
 **Solutions**:
@@ -523,16 +523,16 @@ runevault logs
 **Diagnosis**:
 ```bash
 # Verify the daemon is up
-runevault status
+runeconsole status
 
 # Inspect server logs for denied requests
-sudo journalctl -u runevault | grep -i "denied\|unauthenticated"
+sudo journalctl -u runeconsole | grep -i "denied\|unauthenticated"
 ```
 
 **Solutions**:
 - Wrong token → Re-share the correct token
 - Token rotated → Distribute the new token to all team members
-- Token expired → Issue a fresh token via `runevault token issue`
+- Token expired → Issue a fresh token via `runeconsole token issue`
 - Rate limited → Wait for the window to reset, or adjust the role's `rate_limit`
 - Firewall → Check the security group allows 50051 from team IPs
 
@@ -543,18 +543,18 @@ sudo journalctl -u runevault | grep -i "denied\|unauthenticated"
 **Diagnosis**:
 ```bash
 # Linux
-sudo systemctl status runevault
-sudo journalctl -u runevault -n 100
+sudo systemctl status runeconsole
+sudo journalctl -u runeconsole -n 100
 
 # macOS
-sudo launchctl print system/com.cryptolabinc.runevault
-sudo log show --predicate 'process == "runevault"' --last 10m
+sudo launchctl print system/com.cryptolabinc.runeconsole
+sudo log show --predicate 'process == "runeconsole"' --last 10m
 ```
 
 **Solutions**:
 - OOM killer → Increase VM memory
 - Disk full → Rotate logs (`lumberjack` handles size-based rotation, but free disk first)
-- Crashed process → `sudo systemctl restart runevault` (Linux) / `sudo launchctl kickstart -k system/com.cryptolabinc.runevault` (macOS)
+- Crashed process → `sudo systemctl restart runeconsole` (Linux) / `sudo launchctl kickstart -k system/com.cryptolabinc.runeconsole` (macOS)
 - Persistent crash → Re-provision with `install.sh --uninstall` then `install.sh --target <provider>`, restoring `vault-keys/` from backup before first start
 
 ## Next Steps

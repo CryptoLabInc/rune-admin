@@ -64,8 +64,8 @@ variable "machine_type" {
   default     = "e2-medium"  # 2 vCPU, 4GB RAM
 }
 
-variable "runevault_version" {
-  description = "Pinned runevault release tag — drives the install.sh URL and binary version on the VM."
+variable "runeconsole_version" {
+  description = "Pinned runeconsole release tag — drives the install.sh URL and binary version on the VM."
   type        = string
 }
 
@@ -154,7 +154,7 @@ resource "google_compute_instance" "vault" {
     team_name          = var.team_name
     runespace_endpoint = var.runespace_endpoint
     runespace_token  = var.runespace_token
-    runevault_version  = var.runevault_version
+    runeconsole_version  = var.runeconsole_version
   })
 
   service_account {
@@ -173,7 +173,7 @@ resource "google_compute_instance" "vault" {
 
 # Outputs
 output "vault_url" {
-  description = "Rune-Vault gRPC endpoint"
+  description = "Rune-console gRPC endpoint"
   value       = "${google_compute_address.vault_ip.address}:50051"
 }
 
