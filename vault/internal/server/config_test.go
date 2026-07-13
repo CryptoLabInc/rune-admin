@@ -120,11 +120,11 @@ func TestLoadConfigAPIKeyFileIndirection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Envector.APIKey != "file-api-key" {
-		t.Errorf("api_key = %q, want file-api-key", cfg.Envector.APIKey)
+	if cfg.Runespace.APIKey != "file-api-key" {
+		t.Errorf("api_key = %q, want file-api-key", cfg.Runespace.APIKey)
 	}
-	if cfg.Envector.APIKeyFile != "" {
-		t.Errorf("api_key_file should be cleared after Resolve, got %q", cfg.Envector.APIKeyFile)
+	if cfg.Runespace.APIKeyFile != "" {
+		t.Errorf("api_key_file should be cleared after Resolve, got %q", cfg.Runespace.APIKeyFile)
 	}
 }
 
@@ -205,15 +205,15 @@ func TestLoadConfigSecretFileMissing(t *testing.T) {
 
 func TestRedactMasksSecrets(t *testing.T) {
 	cfg := &Config{
-		Envector: EnvectorConfig{APIKey: "deadbeef", APIKeyFile: "/x"},
-		Tokens:   TokensConfig{TeamSecret: "supersecret", TeamSecretFile: "/y"},
+		Runespace: RunespaceConfig{APIKey: "deadbeef", APIKeyFile: "/x"},
+		Tokens:    TokensConfig{TeamSecret: "supersecret", TeamSecretFile: "/y"},
 	}
 	r := cfg.Redact()
-	if r.Envector.APIKey != "[REDACTED]" {
-		t.Errorf("api_key not redacted: %q", r.Envector.APIKey)
+	if r.Runespace.APIKey != "[REDACTED]" {
+		t.Errorf("api_key not redacted: %q", r.Runespace.APIKey)
 	}
-	if r.Envector.APIKeyFile != "[REDACTED]" {
-		t.Errorf("api_key_file not redacted: %q", r.Envector.APIKeyFile)
+	if r.Runespace.APIKeyFile != "[REDACTED]" {
+		t.Errorf("api_key_file not redacted: %q", r.Runespace.APIKeyFile)
 	}
 	if r.Tokens.TeamSecret != "[REDACTED]" {
 		t.Errorf("team_secret not redacted: %q", r.Tokens.TeamSecret)
@@ -222,7 +222,7 @@ func TestRedactMasksSecrets(t *testing.T) {
 		t.Errorf("team_secret_file not redacted: %q", r.Tokens.TeamSecretFile)
 	}
 	// Original must be untouched.
-	if cfg.Envector.APIKey != "deadbeef" {
+	if cfg.Runespace.APIKey != "deadbeef" {
 		t.Errorf("Redact mutated original")
 	}
 }

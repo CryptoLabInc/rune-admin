@@ -17,7 +17,7 @@ The CI workflow (`ci.yml`) always references one of these by name. A fixture upd
 
 ### Prerequisites
 
-- enVector Cloud access (`ENVECTOR_ENDPOINT`, `ENVECTOR_API_KEY`)
+- Runespace access (`ENVECTOR_ENDPOINT`, `ENVECTOR_API_KEY`)
 - GitHub repo admin access (to update Secrets)
 - `mise run setup` completed
 
@@ -57,7 +57,7 @@ gh secret set FIXTURES_GPG_PASSPHRASE_ALT
 ENVECTOR_ENDPOINT=... ENVECTOR_API_KEY=... python scripts/generate-test-fixtures.py
 ```
 
-This connects to enVector Cloud and writes plaintext fixtures to `tests/fixtures/`.
+This connects to Runespace and writes plaintext fixtures to `tests/fixtures/`.
 
 #### 5. Encrypt fixtures with the new passphrase
 

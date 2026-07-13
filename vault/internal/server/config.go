@@ -27,11 +27,11 @@ const expectedSecretMode fs.FileMode = 0o640
 // Config is the in-memory shape of runevault.conf. Field names follow the
 // YAML schema exactly so the loader can decode without an intermediate type.
 type Config struct {
-	Server   ServerConfig   `yaml:"server"`
-	Keys     KeysConfig     `yaml:"keys"`
-	Envector EnvectorConfig `yaml:"envector"`
-	Tokens   TokensConfig   `yaml:"tokens"`
-	Audit    AuditConfig    `yaml:"audit"`
+	Server    ServerConfig    `yaml:"server"`
+	Keys      KeysConfig      `yaml:"keys"`
+	Runespace RunespaceConfig `yaml:"envector"`
+	Tokens    TokensConfig    `yaml:"tokens"`
+	Audit     AuditConfig     `yaml:"audit"`
 
 	// Source records where this Config was loaded from (resolved absolute
 	// path), populated by LoadConfig. Empty for in-memory test configs.
@@ -65,14 +65,15 @@ type KeysConfig struct {
 	EmbeddingDim int    `yaml:"embedding_dim"`
 }
 
-// EnvectorConfig accepts either an inline api_key or an api_key_file
+// RunespaceConfig accepts either an inline api_key or an api_key_file
 // pointing at a 0600-mode file containing the same value. If both are
 // set, api_key_file wins. Resolve() materialises the final string into
 // APIKey and clears APIKeyFile.
-type EnvectorConfig struct {
+type RunespaceConfig struct {
 	Endpoint   string `yaml:"endpoint"`
 	APIKey     string `yaml:"api_key"`
 	APIKeyFile string `yaml:"api_key_file"`
+	Insecure   bool   `yaml:"insecure"` // default: false (true only for development; runespace on localhost)
 }
 
 type TokensConfig struct {
@@ -150,13 +151,13 @@ func resolveConfigPath(override string) (path string, searched []string, err err
 // Returns an error if any referenced secret file has a permissive mode
 // (anything looser than 0o640). Idempotent.
 func (c *Config) Resolve() error {
-	if c.Envector.APIKeyFile != "" {
-		val, err := readSecretFile(c.Envector.APIKeyFile, "envector.api_key_file")
+	if c.Runespace.APIKeyFile != "" {
+		val, err := readSecretFile(c.Runespace.APIKeyFile, "envector.api_key_file")
 		if err != nil {
 			return err
 		}
-		c.Envector.APIKey = val
-		c.Envector.APIKeyFile = ""
+		c.Runespace.APIKey = val
+		c.Runespace.APIKeyFile = ""
 	}
 	if c.Tokens.TeamSecretFile != "" {
 		val, err := readSecretFile(c.Tokens.TeamSecretFile, "tokens.team_secret_file")
@@ -201,11 +202,11 @@ func checkSecretMode(path, label string) error {
 // admin endpoints that surface configuration to operators.
 func (c *Config) Redact() Config {
 	out := *c
-	if out.Envector.APIKey != "" {
-		out.Envector.APIKey = "[REDACTED]"
+	if out.Runespace.APIKey != "" {
+		out.Runespace.APIKey = "[REDACTED]"
 	}
-	if out.Envector.APIKeyFile != "" {
-		out.Envector.APIKeyFile = "[REDACTED]"
+	if out.Runespace.APIKeyFile != "" {
+		out.Runespace.APIKeyFile = "[REDACTED]"
 	}
 	if out.Tokens.TeamSecret != "" {
 		out.Tokens.TeamSecret = "[REDACTED]"

@@ -78,7 +78,7 @@ See [CLAUDE.md](CLAUDE.md#commands) (or [AGENTS.md](AGENTS.md#commands)) for the
 ```
 vault/internal/
 ├── tokens/        # Token store + role/rate-limit unit tests
-├── crypto/        # HKDF + AES-CTR + envector-go-sdk wrappers
+├── crypto/        # HKDF + AES-CTR + runespace-sdk wrappers
 ├── server/        # gRPC handlers, interceptors, audit, admin UDS, config
 ├── commands/      # CLI subcommands + admin client
 └── tests/         # E2E (build tag `e2e`): decrypt pipeline (fixture-based) + CLI smoke

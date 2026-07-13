@@ -23,7 +23,7 @@ For system architecture and data flow details, see [docs/ARCHITECTURE.md](docs/A
 
 ### For Administrators
 
-1. **enVector Cloud account** at [https://envector.io](https://envector.io) — Cluster Endpoint and API Key
+1. **Runespace account** at [https://envector.io](https://envector.io) — Cluster Endpoint and API Key
 2. **Cloud provider account** (AWS, GCP, or OCI) — only needed for cloud deployment
 
 The [installer](#quick-start) auto-checks for the tools it needs (`terraform` and the relevant cloud CLI when targeting a CSP).
@@ -33,8 +33,8 @@ The [installer](#quick-start) auto-checks for the tools it needs (`terraform` an
 Team members install [Rune](https://github.com/CryptoLabInc/rune) from Claude Marketplace and configure it with:
 - Vault Endpoint (provided by admin)
 - Vault Token (provided by admin)
-- enVector Cluster Endpoint (provided by admin)
-- enVector API Key (provided by admin)
+- Runespace Cluster Endpoint (provided by admin)
+- Runespace API Key (provided by admin)
 
 ## Quick Start
 
@@ -54,7 +54,7 @@ curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/instal
   | sudo bash -s -- --target aws    # or gcp, oci
 ```
 
-The installer prompts for team name, enVector endpoint, and CSP-specific
+The installer prompts for team name, Runespace endpoint, and CSP-specific
 inputs (region, GCP project ID, OCI compartment OCID). Use `--non-interactive`
 plus the `RUNEVAULT_*` env vars listed in [`install.sh`](install.sh) for CI.
 
@@ -83,8 +83,8 @@ sudo runevault token issue --user alice --role member --expires 90d
 # Share via secure channel (1Password, Signal, etc.):
 #   - Vault Endpoint
 #   - Vault Token
-#   - enVector Cluster Endpoint
-#   - enVector API Key
+#   - Runespace Cluster Endpoint
+#   - Runespace API Key
 ```
 
 Members of the `runevault` group can run the CLI without `sudo`.

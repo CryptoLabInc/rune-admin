@@ -62,9 +62,9 @@ func runDaemonStart(ctx context.Context) error {
 	// Open the full key set, dial runespace, and register the eval key.
 	eng, err := crypto.OpenEngine(ctx, crypto.EngineParams{
 		Keys:     keyParams,
-		Endpoint: cfg.Envector.Endpoint,
-		Token:    cfg.Envector.APIKey,
-		Insecure: true, // integration test: runespace served plaintext on localhost
+		Endpoint: cfg.Runespace.Endpoint,
+		Token:    cfg.Runespace.APIKey,
+		Insecure: cfg.Runespace.Insecure, // TLS by default; set envector.insecure=true only for a localhost runespace
 	})
 	if err != nil {
 		return fmt.Errorf("daemon: open runespace engine: %w", err)
