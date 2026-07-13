@@ -1,5 +1,5 @@
 // Package crypto provides metadata key derivation, AES-256-CTR metadata
-// encryption, and FHE key lifecycle wrappers around envector-go-sdk.
+// encryption, and FHE key lifecycle wrappers around runespace-sdk.
 //
 // Wire format for metadata ciphertext:
 //

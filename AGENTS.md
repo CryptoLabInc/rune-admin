@@ -1,7 +1,7 @@
 # Rune-Vault (rune-admin)
 
 Single-binary Go gRPC server (`runevault`) for FHE-encrypted organizational
-memory. Built on `github.com/CryptoLabInc/envector-go-sdk`. The secret key
+memory. Built on `github.com/CryptoLabInc/runespace-sdk`. The secret key
 never leaves this server.
 
 ## Setup

@@ -7,7 +7,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
 ### Core Responsibilities
 
 1. **Key Management**: Generate, store, and protect FHE keys (secret key isolation)
-2. **Decryption Service**: Decrypt search results from enVector Cloud
+2. **Decryption Service**: Decrypt search results from Runespace
 3. **Authentication**: Validate team member access via tokens
 4. **Access Control**: Per-user RBAC with role-based top_k limits, scope enforcement, and rate limiting
 5. **Audit Logging**: Structured JSON logs for compliance and debugging
@@ -42,7 +42,7 @@ Rune-Vault is the **infrastructure backbone** for team-shared FHE-encrypted orga
                    │              │ (called by remember)
                    ▼              ▼
   ┌──────────────────────┐  ┌────────────────────────────┐
-  │ enVector Cloud(SaaS) │  │        Rune-Vault           │
+  │ Runespace(SaaS)      │  │        Rune-Vault           │
   │  https://envector.io │  │  (Your Infrastructure)     │
   │                      │  │                            │
   │  - Encrypted vectors │  │  ┌──────────────────────┐  │
@@ -287,7 +287,7 @@ AI Agent (Claude/Gemini/Codex)
 envector-mcp-server (`remember` orchestration)
     │
     ├── 2. Embed query (auto-embedded if text, or accepts vector/JSON)
-    ├── 3. Encrypted similarity scoring on enVector Cloud
+    ├── 3. Encrypted similarity scoring on Runespace
     │      → Returns result ciphertext (base64)
     │
     ├── 4. Call Vault: DecryptScores(token, ciphertext, top_k) via gRPC
@@ -303,7 +303,7 @@ Vault (gRPC — secret key holder)
     ▼
 envector-mcp-server (continued)
     │
-    ├── 9. Retrieve metadata for top-k indices from enVector Cloud
+    ├── 9. Retrieve metadata for top-k indices from Runespace
     ├── 10. Return results to Agent
     │
     ▼
@@ -325,13 +325,13 @@ indiscriminately decrypting shared vectors.
 ### Threat Model
 
 **Assumptions**:
-- enVector Cloud is **untrusted** (sees only ciphertext)
+- Runespace is **untrusted** (sees only ciphertext)
 - Network is **untrusted** (TLS required)
 - Team members' laptops are **trusted** (Rune runs locally)
 - Vault VM is **trusted** (admin controls infrastructure)
 
 **Threats Mitigated**:
-1. **Cloud Provider Breach**: enVector Cloud compromise → no plaintext leak (FHE)
+1. **Cloud Provider Breach**: Runespace compromise → no plaintext leak (FHE)
 2. **Network Eavesdropping**: MITM attacks → TLS encryption
 3. **Unauthorized Access**: Non-team members → token authentication
 4. **Key Theft**: secret key extraction → architectural isolation (no export API)
@@ -489,7 +489,7 @@ When to scale:
 | `vault/internal/commands` | CLI subcommands (`daemon`, `token`, `role`, `status`, `logs`, `version`) and admin-socket client |
 | `vault/internal/server` | gRPC server, config loader, audit logger, admin UDS, `EnsureVault` startup hook, interceptors |
 | `vault/internal/tokens` | Per-user RBAC store: tokens, roles, validation, rate limiting, YAML persistence |
-| `vault/internal/crypto` | FHE key management + HKDF/AES wrappers around `envector-go-sdk` |
+| `vault/internal/crypto` | FHE key management + HKDF/AES wrappers around `runespace-sdk` |
 | `vault/internal/tests` | E2E tests gated by build tag `e2e` (decrypt pipeline + CLI smoke) |
 | `vault/pkg/vaultpb` | Generated gRPC stubs from `vault/proto/*.proto` |
 
