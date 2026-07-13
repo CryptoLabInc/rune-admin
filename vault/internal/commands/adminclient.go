@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/CryptoLabInc/rune-admin/vault/internal/server"
+	"github.com/CryptoLabInc/rune-console/vault/internal/server"
 )
 
 // AdminClient talks to the Vault admin UDS server.
@@ -102,7 +102,7 @@ func (a *AdminClient) Do(method, path string, body, dst any) error {
 }
 
 // resolveAdminClient returns an AdminClient using either the explicit
-// --admin-socket flag or the socket field from the resolved runevault.conf.
+// --admin-socket flag or the socket field from the resolved runeconsole.conf.
 func resolveAdminClient() (*AdminClient, error) {
 	socket := globals.adminSocket
 	if socket == "" {

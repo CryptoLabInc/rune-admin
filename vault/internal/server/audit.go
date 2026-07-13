@@ -68,7 +68,7 @@ func NewAuditLogger(cfg AuditConfig) (*AuditLogger, error) {
 	if mode.File {
 		path := cfg.Path
 		if path == "" {
-			path = "/var/log/runevault/audit.log"
+			path = "/var/log/runeconsole/audit.log"
 		}
 		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			return nil, fmt.Errorf("audit: mkdir log dir: %w", err)

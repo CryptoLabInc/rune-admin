@@ -8,15 +8,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/CryptoLabInc/rune-admin/vault/internal/crypto"
-	"github.com/CryptoLabInc/rune-admin/vault/internal/server"
-	"github.com/CryptoLabInc/rune-admin/vault/internal/tokens"
+	"github.com/CryptoLabInc/rune-console/vault/internal/crypto"
+	"github.com/CryptoLabInc/rune-console/vault/internal/server"
+	"github.com/CryptoLabInc/rune-console/vault/internal/tokens"
 )
 
 func newDaemonCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:    "daemon",
-		Short:  "Manage the runevault daemon process",
+		Short:  "Manage the runeconsole daemon process",
 		Hidden: true,
 	}
 	cmd.AddCommand(newDaemonStartCmd())

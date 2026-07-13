@@ -3,7 +3,7 @@ package server
 import (
 	"testing"
 
-	"github.com/CryptoLabInc/rune-admin/vault/internal/crypto"
+	"github.com/CryptoLabInc/rune-console/vault/internal/crypto"
 )
 
 func mustDEK(t *testing.T, secret, agentID string) []byte {

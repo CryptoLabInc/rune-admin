@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/CryptoLabInc/rune-admin/vault/pkg/vaultpb"
+	pb "github.com/CryptoLabInc/rune-console/vault/pkg/vaultpb"
 )
 
 // vaultMethods enumerates the gRPC method paths owned by VaultService.

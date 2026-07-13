@@ -13,11 +13,11 @@ import (
 	"time"
 )
 
-// TestE2EDaemonLifecycle boots runevault as a daemon against a tmp config
+// TestE2EDaemonLifecycle boots runeconsole as a daemon against a tmp config
 // (TLS disabled), exercises token/role CLI operations through the admin UDS,
 // then verifies daemon stop.
 //
-// Set RUNEVAULT_TEST_BINARY to a pre-built binary path to skip the in-test
+// Set RUNECONSOLE_TEST_BINARY to a pre-built binary path to skip the in-test
 // build step (required in CI — run `mise run go:build` first).
 func TestE2EDaemonLifecycle(t *testing.T) {
 	repoRoot := RepoRoot()
@@ -29,7 +29,7 @@ func TestE2EDaemonLifecycle(t *testing.T) {
 
 	binary := resolveBinary(t, repoRoot, tmp)
 
-	confPath := filepath.Join(tmp, "runevault.conf")
+	confPath := filepath.Join(tmp, "runeconsole.conf")
 	conf := fmt.Sprintf(`server:
   grpc:
     host: 127.0.0.1
@@ -156,18 +156,18 @@ audit:
 	}
 }
 
-// resolveBinary returns the runevault binary path. If RUNEVAULT_TEST_BINARY
+// resolveBinary returns the runeconsole binary path. If RUNECONSOLE_TEST_BINARY
 // is set it is used as-is (relative paths are resolved from repoRoot).
 // Otherwise the binary is built from source into tmp.
 func resolveBinary(t *testing.T, repoRoot, tmp string) string {
 	t.Helper()
-	if p := os.Getenv("RUNEVAULT_TEST_BINARY"); p != "" {
+	if p := os.Getenv("RUNECONSOLE_TEST_BINARY"); p != "" {
 		if !filepath.IsAbs(p) {
 			p = filepath.Join(repoRoot, p)
 		}
 		return p
 	}
-	binary := filepath.Join(tmp, "runevault")
+	binary := filepath.Join(tmp, "runeconsole")
 	build := exec.Command("go", "build", "-o", binary, "./cmd")
 	build.Dir = filepath.Join(repoRoot, "vault")
 	if out, err := build.CombinedOutput(); err != nil {

@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/CryptoLabInc/rune-admin/vault/pkg/vaultpb"
+	pb "github.com/CryptoLabInc/rune-console/vault/pkg/vaultpb"
 )
 
 func TestCheckTokenSafetyAccepts(t *testing.T) {

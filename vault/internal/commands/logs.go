@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/CryptoLabInc/rune-admin/vault/internal/server"
+	"github.com/CryptoLabInc/rune-console/vault/internal/server"
 )
 
 // newLogsCmd returns the "logs" subcommand which tails the daemon log output.
@@ -28,7 +28,7 @@ func newLogsCmd() *cobra.Command {
 
 func runLogs(follow bool) error {
 	if runtime.GOOS == "linux" {
-		args := []string{"-u", "runevault", "--no-pager"}
+		args := []string{"-u", "runeconsole", "--no-pager"}
 		if follow {
 			args = append(args, "-f")
 		}
@@ -56,11 +56,11 @@ func runLogs(follow bool) error {
 }
 
 // daemonStderrLogPath derives the launchd stderr log path from the config
-// source location: /opt/runevault/configs/runevault.conf → /opt/runevault/logs/runevault.stderr.log
+// source location: /opt/runeconsole/configs/runeconsole.conf → /opt/runeconsole/logs/runeconsole.stderr.log
 func daemonStderrLogPath(cfg *server.Config) string {
 	if cfg.Source != "" {
 		prefix := filepath.Dir(filepath.Dir(cfg.Source))
-		return filepath.Join(prefix, "logs", "runevault.stderr.log")
+		return filepath.Join(prefix, "logs", "runeconsole.stderr.log")
 	}
-	return "/opt/runevault/logs/runevault.stderr.log"
+	return "/opt/runeconsole/logs/runeconsole.stderr.log"
 }

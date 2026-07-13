@@ -3,22 +3,22 @@ package_update: true
 packages: [ca-certificates, curl, openssl]
 
 write_files:
-  - path: /etc/profile.d/runevault-installer-env.sh
+  - path: /etc/profile.d/runeconsole-installer-env.sh
     content: |
-      export RUNEVAULT_TEAM_NAME='${team_name}'
-      export RUNEVAULT_RUNESPACE_ENDPOINT='${runespace_endpoint}'
-      export RUNEVAULT_RUNESPACE_TOKEN='${runespace_token}'
+      export RUNECONSOLE_TEAM_NAME='${team_name}'
+      export RUNECONSOLE_RUNESPACE_ENDPOINT='${runespace_endpoint}'
+      export RUNECONSOLE_RUNESPACE_TOKEN='${runespace_token}'
     permissions: '0600'
 
 runcmd:
-  - exec > /var/log/runevault-install.log 2>&1
-  - set -a; . /etc/profile.d/runevault-installer-env.sh; set +a
+  - exec > /var/log/runeconsole-install.log 2>&1
+  - set -a; . /etc/profile.d/runeconsole-installer-env.sh; set +a
   - |
-      INSTALL_URL="https://raw.githubusercontent.com/CryptoLabInc/rune-admin/${runevault_version}/install.sh"
+      INSTALL_URL="https://raw.githubusercontent.com/CryptoLabInc/rune-console/${runeconsole_version}/install.sh"
       for i in 1 2 3 4 5; do
         curl -fsSL --retry 5 --retry-delay 10 --connect-timeout 15 "$${INSTALL_URL}" -o /tmp/install.sh && break
         sleep $((i*10))
       done
-      bash /tmp/install.sh --target local --non-interactive --version "${runevault_version}"
-  - usermod -aG runevault ubuntu
-  - rm -f /etc/profile.d/runevault-installer-env.sh
+      bash /tmp/install.sh --target local --non-interactive --version "${runeconsole_version}"
+  - usermod -aG runeconsole ubuntu
+  - rm -f /etc/profile.d/runeconsole-installer-env.sh

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/CryptoLabInc/rune-admin/vault/internal/server"
-	"github.com/CryptoLabInc/rune-admin/vault/internal/tokens"
+	"github.com/CryptoLabInc/rune-console/vault/internal/server"
+	"github.com/CryptoLabInc/rune-console/vault/internal/tokens"
 )
 
 // adminUDSFixture spins up a real UDS-backed admin server with a demo

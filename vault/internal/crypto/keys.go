@@ -13,8 +13,8 @@ import (
 // KeysParams names the on-disk key bundle and FHE dimension.
 type KeysParams struct {
 	// Root is the parent directory containing <KeyID>/.
-	// E.g., "/opt/runevault/vault-keys" with KeyID "vault-key" reads from
-	// "/opt/runevault/vault-keys/vault-key/{Enc,Sec,Eval}Key(.json|.bin)".
+	// E.g., "/opt/runeconsole/vault-keys" with KeyID "vault-key" reads from
+	// "/opt/runeconsole/vault-keys/vault-key/{Enc,Sec,Eval}Key(.json|.bin)".
 	Root  string
 	KeyID string
 	Dim   int

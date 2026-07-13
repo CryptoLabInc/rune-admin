@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
-	"github.com/CryptoLabInc/rune-admin/vault/internal/server"
+	"github.com/CryptoLabInc/rune-console/vault/internal/server"
 )
 
 func newStatusCmd() *cobra.Command {

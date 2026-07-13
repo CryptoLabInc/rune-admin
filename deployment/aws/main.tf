@@ -49,8 +49,8 @@ variable "instance_type" {
   default     = "t3.medium"  # 2 vCPU, 4GB RAM
 }
 
-variable "runevault_version" {
-  description = "Pinned runevault release tag — drives the install.sh URL and binary version on the VM."
+variable "runeconsole_version" {
+  description = "Pinned runeconsole release tag — drives the install.sh URL and binary version on the VM."
   type        = string
 }
 
@@ -139,7 +139,7 @@ resource "aws_route_table_association" "vault_rta" {
 # Security Group
 resource "aws_security_group" "vault_sg" {
   name        = "rune-vault-sg-${var.team_name}"
-  description = "Security group for Rune-Vault"
+  description = "Security group for Rune-console"
   vpc_id      = aws_vpc.vault_vpc.id
 
   # gRPC
@@ -199,7 +199,7 @@ resource "aws_instance" "vault" {
     team_name          = var.team_name
     runespace_endpoint = var.runespace_endpoint
     runespace_token  = var.runespace_token
-    runevault_version  = var.runevault_version
+    runeconsole_version  = var.runeconsole_version
   })
 
   root_block_device {
@@ -235,7 +235,7 @@ resource "aws_eip" "vault_eip" {
 
 # Outputs
 output "vault_url" {
-  description = "Rune-Vault gRPC endpoint"
+  description = "Rune-console gRPC endpoint"
   value       = "${aws_eip.vault_eip.public_ip}:50051"
 }
 

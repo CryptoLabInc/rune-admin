@@ -14,11 +14,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/CryptoLabInc/rune-admin/vault/internal/tokens"
+	"github.com/CryptoLabInc/rune-console/vault/internal/tokens"
 )
 
-// adminSocketMode is 0660: owner (runevault) + group (runevault) can connect;
-// other users cannot. Installers add trusted operators to the runevault group.
+// adminSocketMode is 0660: owner (runeconsole) + group (runeconsole) can connect;
+// other users cannot. Installers add trusted operators to the runeconsole group.
 const adminSocketMode = 0o660
 
 // AdminFromConfig is an AdminFactory suitable for production: it binds the

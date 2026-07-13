@@ -1,6 +1,6 @@
-# Rune-Vault (rune-admin)
+# Rune-console (rune-console)
 
-Single-binary Go gRPC server (`runevault`) for FHE-encrypted organizational
+Single-binary Go gRPC server (`runeconsole`) for FHE-encrypted organizational
 memory. Built on `github.com/CryptoLabInc/runespace-sdk`. The secret key
 never leaves this server.
 
@@ -17,15 +17,15 @@ Do NOT run go, gofmt, or buf directly.
 |---------|-------------|
 | `mise run setup` | Bootstrap (Go modules + proto stubs) |
 | `mise run check` | All checks: gofmt + go vet + unit tests (race) |
-| `mise run go:build` | Build the runevault binary to `vault/bin/runevault` |
-| `mise run go:test` | Run all tests including E2E (requires `RUNEVAULT_TEST_BINARY`) |
+| `mise run go:build` | Build the runeconsole binary to `vault/bin/runeconsole` |
+| `mise run go:test` | Run all tests including E2E (requires `RUNECONSOLE_TEST_BINARY`) |
 | `mise run go:test:unit` | Run unit tests only (E2E excluded by build tag) |
 | `mise run go:test:e2e` | Run E2E tests against pre-built binary (run `go:build` first) |
 | `mise run go:vet` | Run go vet on all Go packages |
 | `mise run go:fmt` | Format Go source files |
 | `mise run go:fmt:check` | Check Go formatting without modifying |
 | `mise run proto:go` | Regenerate Go protobuf/gRPC stubs into `vault/pkg/vaultpb` |
-| `mise run dev` | Run runevault daemon in foreground (uses `vault/dev/runevault.conf`) |
+| `mise run dev` | Run runeconsole daemon in foreground (uses `vault/dev/runeconsole.conf`) |
 | `mise run certs` | Generate self-signed TLS certificates |
 | `mise run fixtures:decrypt` | Decrypt test fixtures (requires `FIXTURES_GPG_PASSPHRASE`) |
 | `mise run fixtures:encrypt` | Re-encrypt test fixtures |
@@ -43,7 +43,7 @@ Do NOT run go, gofmt, or buf directly.
 
 - Secret key (`vault-keys/<key-id>/SecKey.json`) must never be logged, returned in API responses, or leave the server process
 - Admin transport is a Unix domain socket (mode 0600, vault-user owned) — never expose externally
-- Token secrets and FHE keys live in `runevault.conf` (mode 0600); secret YAML fields support `*_file` indirection for KMS-backed deployments
+- Token secrets and FHE keys live in `runeconsole.conf` (mode 0600); secret YAML fields support `*_file` indirection for KMS-backed deployments
 - TLS is required for all cloud deployments (`server.grpc.tls.disable: true` is dev-only)
 
 ## Worktree setup

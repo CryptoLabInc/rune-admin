@@ -1,12 +1,12 @@
 # Rune-Admin
 
-**Infrastructure & Team Management for Rune-Vault**
+**Infrastructure & Team Management for Rune-console**
 
-Deploy and manage Rune-Vault infrastructure for your team. This repository contains deployment automation and team onboarding tools for administrators.
+Deploy and manage Rune-console infrastructure for your team. This repository contains deployment automation and team onboarding tools for administrators.
 
 ## What is Rune-Admin?
 
-Rune-Admin provides **infrastructure management** for Rune-Vault:
+Rune-Admin provides **infrastructure management** for Rune-console:
 
 - **Deployment**: Automated Vault deployment to OCI, AWS, or GCP
 - **Key Management**: FHE encryption key generation and secure storage
@@ -19,7 +19,7 @@ For system architecture and data flow details, see [docs/ARCHITECTURE.md](docs/A
 
 ### Platform
 
-- **macOS** or **Linux** (Windows is not supported — `runevault` registers a systemd or launchd service)
+- **macOS** or **Linux** (Windows is not supported — `runeconsole` registers a systemd or launchd service)
 
 ### For Administrators
 
@@ -38,25 +38,25 @@ Team members install [Rune](https://github.com/CryptoLabInc/rune) from Claude Ma
 
 ## Quick Start
 
-### 1. Install Rune-Vault
+### 1. Install Rune-console
 
-The interactive installer downloads the `runevault` binary, verifies its
-`SHA256SUMS` checksum, renders `runevault.conf`, generates TLS certs,
-and registers a `runevault` service (systemd on Linux, launchd on macOS):
+The interactive installer downloads the `runeconsole` binary, verifies its
+`SHA256SUMS` checksum, renders `runeconsole.conf`, generates TLS certs,
+and registers a `runeconsole` service (systemd on Linux, launchd on macOS):
 
 ```bash
 # Local install
-curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/install.sh \
+curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-console/main/install.sh \
   | sudo bash -s -- --target local
 
 # Cloud install (provisions a VM + bootstraps it via Terraform)
-curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-admin/main/install.sh \
+curl -fsSL https://raw.githubusercontent.com/CryptoLabInc/rune-console/main/install.sh \
   | sudo bash -s -- --target aws    # or gcp, oci
 ```
 
 The installer prompts for team name, Runespace endpoint, and CSP-specific
 inputs (region, GCP project ID, OCI compartment OCID). Use `--non-interactive`
-plus the `RUNEVAULT_*` env vars listed in [`install.sh`](install.sh) for CI.
+plus the `RUNECONSOLE_*` env vars listed in [`install.sh`](install.sh) for CI.
 
 If you'd rather inspect the script before running it, download `install.sh`
 and the `SHA256SUMS` file from the release page first, then run `install.sh`
@@ -66,19 +66,19 @@ with the binary it pulls down — see [Release Checksum Verification](#release-c
 
 ```bash
 # gRPC health check (requires grpcurl: brew install grpcurl)
-grpcurl -cacert /opt/runevault/certs/ca.pem <your-vault-host>:50051 grpc.health.v1.Health/Check
+grpcurl -cacert /opt/runeconsole/certs/ca.pem <your-vault-host>:50051 grpc.health.v1.Health/Check
 
 # Expected: { "status": "SERVING" }
 
-# Or use the runevault CLI to query daemon status via the admin socket
-runevault status
+# Or use the runeconsole CLI to query daemon status via the admin socket
+runeconsole status
 ```
 
 ### 3. Onboard Team Members
 
 ```bash
 # Issue a per-user token (90-day expiry)
-sudo runevault token issue --user alice --role member --expires 90d
+sudo runeconsole token issue --user alice --role member --expires 90d
 
 # Share via secure channel (1Password, Signal, etc.):
 #   - Vault Endpoint
@@ -87,64 +87,64 @@ sudo runevault token issue --user alice --role member --expires 90d
 #   - Runespace API Key
 ```
 
-Members of the `runevault` group can run the CLI without `sudo`.
+Members of the `runeconsole` group can run the CLI without `sudo`.
 
 Team members install [Rune](https://github.com/CryptoLabInc/rune) and configure with the provided credentials.
 
 ### From Source (development)
 
 ```bash
-git clone https://github.com/CryptoLabInc/rune-admin.git
-cd rune-admin
+git clone https://github.com/CryptoLabInc/rune-console.git
+cd rune-console
 mise install            # Go 1.26, buf, terraform, cloud CLIs
 mise run setup          # Resolve Go modules + generate proto stubs
-mise run go:build       # Builds vault/bin/runevault
+mise run go:build       # Builds vault/bin/runeconsole
 # Copy + edit a dev config (the vault/dev/ tree is gitignored):
-cp vault/internal/server/testdata/runevault.conf.example vault/dev/runevault.conf
-mise run dev            # Run the daemon in the foreground (uses vault/dev/runevault.conf)
+cp vault/internal/server/testdata/runeconsole.conf.example vault/dev/runeconsole.conf
+mise run dev            # Run the daemon in the foreground (uses vault/dev/runeconsole.conf)
 ```
 
 ## Admin Workflows
 
 All admin commands talk to the daemon over a Unix domain socket
-(`/opt/runevault/admin.sock`). Members of the `runevault` group can run
+(`/opt/runeconsole/admin.sock`). Members of the `runeconsole` group can run
 them without `sudo`.
 
 ### Manage Tokens
 
 ```bash
-runevault token issue   --user alice --role member --expires 90d
-runevault token list
-runevault token rotate  --user alice         # or --all
-runevault token revoke  --user alice
+runeconsole token issue   --user alice --role member --expires 90d
+runeconsole token list
+runeconsole token rotate  --user alice         # or --all
+runeconsole token revoke  --user alice
 ```
 
 ### Manage Roles
 
 ```bash
-runevault role list
-runevault role create --name <name> --scope a,b,c --top-k 10 --rate-limit 30/60s
-runevault role update --name <name> [--scope ...] [--top-k ...] [--rate-limit ...]
-runevault role delete --name <name>
+runeconsole role list
+runeconsole role create --name <name> --scope a,b,c --top-k 10 --rate-limit 30/60s
+runeconsole role update --name <name> [--scope ...] [--top-k ...] [--rate-limit ...]
+runeconsole role delete --name <name>
 ```
 
 ### Daemon Health & Logs
 
 ```bash
-runevault status                              # health + socket liveness
-runevault logs                                # tail audit log
-sudo systemctl restart runevault              # Linux
-sudo launchctl kickstart -k system/com.cryptolabinc.runevault   # macOS
+runeconsole status                              # health + socket liveness
+runeconsole logs                                # tail audit log
+sudo systemctl restart runeconsole              # Linux
+sudo launchctl kickstart -k system/com.cryptolabinc.runeconsole   # macOS
 ```
 
 ## Security
 
 ### Token Management
 
-- Issue per-user tokens via `runevault token issue`
+- Issue per-user tokens via `runeconsole token issue`
 - Share tokens only via encrypted channels (1Password, Signal)
 - Never hardcode tokens in code or commit to git
-- Rotate periodically via `runevault token rotate`
+- Rotate periodically via `runeconsole token rotate`
 
 ### TLS Requirement
 
@@ -172,7 +172,7 @@ of the release page.
 ## Deployment Targets
 
 `install.sh --target <provider>` provisions a VM via Terraform and
-bootstraps `runevault` on it end-to-end. Each target lives under
+bootstraps `runeconsole` on it end-to-end. Each target lives under
 `deployment/`:
 
 - **AWS** (Amazon Web Services): `deployment/aws/`
@@ -185,7 +185,7 @@ Service files for native installs are under `deployment/systemd/` and
 ## Uninstall
 
 ```bash
-# Local: stops the service and removes /opt/runevault (prompts to keep data)
+# Local: stops the service and removes /opt/runeconsole (prompts to keep data)
 sudo bash install.sh --uninstall --target local
 
 # Cloud: runs `terraform destroy` against the install dir created earlier
@@ -203,7 +203,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, commands, and guid
 
 ```bash
 # Check Vault is reachable
-grpcurl -cacert /opt/runevault/certs/ca.pem <vault-host>:50051 grpc.health.v1.Health/Check
+grpcurl -cacert /opt/runeconsole/certs/ca.pem <vault-host>:50051 grpc.health.v1.Health/Check
 
 # Inspect the security group / firewall rule (port 50051 must be open)
 cd "$HOME/rune-vault-<csp>"
@@ -220,21 +220,21 @@ ssh ubuntu@<vault-host>     # or ec2-user@... / opc@... depending on CSP
 top
 
 # Tail audit log for latency
-sudo tail -20 /opt/runevault/logs/audit.log
+sudo tail -20 /opt/runeconsole/logs/audit.log
 # Or via the CLI:
-runevault logs
+runeconsole logs
 ```
 
 ### Issue: Vault crashed
 
 ```bash
 # Inspect logs
-sudo journalctl -u runevault -n 100        # Linux
-sudo log show --predicate 'process == "runevault"' --last 10m   # macOS
+sudo journalctl -u runeconsole -n 100        # Linux
+sudo log show --predicate 'process == "runeconsole"' --last 10m   # macOS
 
 # Restart
-sudo systemctl restart runevault           # Linux
-sudo launchctl kickstart -k system/com.cryptolabinc.runevault   # macOS
+sudo systemctl restart runeconsole           # Linux
+sudo launchctl kickstart -k system/com.cryptolabinc.runeconsole   # macOS
 
 # If persistent, re-provision the VM:
 sudo bash install.sh --uninstall --target <csp> --install-dir "$HOME/rune-vault-<csp>"
@@ -249,8 +249,8 @@ sudo bash install.sh --target <csp>
 
 ## Support
 
-- **Issues**: https://github.com/CryptoLabInc/rune-admin/issues
-- **Discussions**: https://github.com/CryptoLabInc/rune-admin/discussions
+- **Issues**: https://github.com/CryptoLabInc/rune-console/issues
+- **Discussions**: https://github.com/CryptoLabInc/rune-console/discussions
 - **Email**: zotanika@cryptolab.co.kr
 
 ## Related Repositories
