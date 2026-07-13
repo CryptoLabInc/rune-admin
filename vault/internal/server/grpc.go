@@ -431,6 +431,7 @@ func (s *VaultGRPC) GetCentroids(req *pb.GetCentroidsRequest, stream pb.VaultSer
 		Version: cs.Version,
 		Dim:     uint32(cs.Dim),
 		Nlist:   uint32(len(cs.Vectors)),
+		Preset:  cs.Preset,
 	}}}); err != nil {
 		statusStr = "error"
 		msg := err.Error()

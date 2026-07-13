@@ -123,6 +123,10 @@ message CentroidSetHeader {
   string version = 1; // content hash (sha256)
   uint32 dim = 2;
   uint32 nlist = 3;
+  // evi preset the set was trained for (e.g. "IP1") — a version-hash
+  // ingredient, relayed so runed can recompute and verify the content hash.
+  // Empty when the engine predates the field.
+  string preset = 4;
 }
 
 message CentroidBatch {
