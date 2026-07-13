@@ -17,7 +17,7 @@ The CI workflow (`ci.yml`) always references one of these by name. A fixture upd
 
 ### Prerequisites
 
-- Runespace access (`RUNESPACE_ENDPOINT`, `RUNESPACE_API_KEY`)
+- Runespace access (`RUNESPACE_ENDPOINT`, `RUNESPACE_TOKEN`)
 - GitHub repo admin access (to update Secrets)
 - `mise run setup` completed
 
@@ -54,7 +54,7 @@ gh secret set FIXTURES_GPG_PASSPHRASE_ALT
 #### 4. Generate new fixtures
 
 ```bash
-RUNESPACE_ENDPOINT=... RUNESPACE_API_KEY=... python scripts/generate-test-fixtures.py
+RUNESPACE_ENDPOINT=... RUNESPACE_TOKEN=... python scripts/generate-test-fixtures.py
 ```
 
 This connects to Runespace and writes plaintext fixtures to `tests/fixtures/`.

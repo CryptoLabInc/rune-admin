@@ -7,7 +7,7 @@ then generates metadata envelopes locally. All fixtures are saved
 to tests/fixtures/ for use in CI without cloud access.
 
 Usage:
-    RUNESPACE_ENDPOINT=... RUNESPACE_API_KEY=... python scripts/generate-test-fixtures.py
+    RUNESPACE_ENDPOINT=... RUNESPACE_TOKEN=... python scripts/generate-test-fixtures.py
 """
 
 import base64
@@ -31,9 +31,9 @@ INDEX_NAME = "test_fixture_index"
 
 def main():
     endpoint = os.getenv("RUNESPACE_ENDPOINT")
-    api_key = os.getenv("RUNESPACE_API_KEY")
-    if not endpoint or not api_key:
-        print("Error: RUNESPACE_ENDPOINT and RUNESPACE_API_KEY must be set.")
+    token = os.getenv("RUNESPACE_TOKEN")
+    if not endpoint or not token:
+        print("Error: RUNESPACE_ENDPOINT and RUNESPACE_TOKEN must be set.")
         sys.exit(1)
 
     import pyenvector as ev
@@ -68,7 +68,7 @@ def main():
         dim=DIM,
         eval_mode="rmp",
         auto_key_setup=False,
-        access_token=api_key,
+        access_token=token,
         query_encryption="plain",
     )
     try:
@@ -90,7 +90,7 @@ def main():
         dim=DIM,
         eval_mode="rmp",
         auto_key_setup=True,
-        access_token=api_key,
+        access_token=token,
         query_encryption="plain",
     )
     print("    Connected with fresh keys.")

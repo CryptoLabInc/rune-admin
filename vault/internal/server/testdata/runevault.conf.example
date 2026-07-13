@@ -26,8 +26,8 @@ keys:
 
 runespace:
   endpoint: https://runespace.example.com
-  api_key: REPLACE_WITH_API_KEY
-  # Alternative: api_key_file: /run/secrets/runespace_api_key
+  token: REPLACE_WITH_TOKEN
+  # Alternative: token_file: /run/secrets/runespace_token
 
 tokens:
   team_secret: REPLACE_WITH_RANDOM_HEX_32

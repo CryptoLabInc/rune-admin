@@ -7,7 +7,7 @@ write_files:
     content: |
       export RUNEVAULT_TEAM_NAME='${team_name}'
       export RUNEVAULT_RUNESPACE_ENDPOINT='${runespace_endpoint}'
-      export RUNEVAULT_RUNESPACE_API_KEY='${runespace_api_key}'
+      export RUNEVAULT_RUNESPACE_TOKEN='${runespace_token}'
     permissions: '0600'
 
 runcmd:

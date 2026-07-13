@@ -37,7 +37,7 @@ variable "runespace_endpoint" {
   type        = string
 }
 
-variable "runespace_api_key" {
+variable "runespace_token" {
   description = "Runespace API key"
   type        = string
   sensitive   = true
@@ -198,7 +198,7 @@ resource "aws_instance" "vault" {
   user_data = templatefile("${path.module}/cloud-init.yaml", {
     team_name          = var.team_name
     runespace_endpoint = var.runespace_endpoint
-    runespace_api_key  = var.runespace_api_key
+    runespace_token  = var.runespace_token
     runevault_version  = var.runevault_version
   })
 
