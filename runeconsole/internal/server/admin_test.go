@@ -17,7 +17,7 @@ import (
 	"github.com/CryptoLabInc/rune-console/runeconsole/internal/tokens"
 )
 
-func newAdminTestVault(t *testing.T) *Console {
+func newAdminTestConsole(t *testing.T) *Console {
 	t.Helper()
 	cfg := &Config{
 		Tokens: TokensConfig{TeamSecret: "test-secret"},
@@ -31,7 +31,7 @@ func newAdminTestVault(t *testing.T) *Console {
 
 func adminTestServer(t *testing.T) (*httptest.Server, *Console) {
 	t.Helper()
-	v := newAdminTestVault(t)
+	v := newAdminTestConsole(t)
 	ts := httptest.NewServer(buildAdminMux(v))
 	t.Cleanup(ts.Close)
 	return ts, v
@@ -201,7 +201,7 @@ func TestAdminUDSBindMode0660(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("UDS not supported on Windows")
 	}
-	v := newAdminTestVault(t)
+	v := newAdminTestConsole(t)
 	// Darwin's sockaddr_un caps sun_path at ~104 bytes; t.TempDir() with a
 	// long test name plus the framework-injected sequence dir overruns. Use
 	// a shorter MkdirTemp at /tmp to stay safely under the limit.
@@ -238,7 +238,7 @@ func TestAdminUDSStaleSocketRecovered(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("UDS not supported on Windows")
 	}
-	v := newAdminTestVault(t)
+	v := newAdminTestConsole(t)
 	// Darwin's sockaddr_un caps sun_path at ~104 bytes; t.TempDir() with a
 	// long test name plus the framework-injected sequence dir overruns. Use
 	// a shorter MkdirTemp at /tmp to stay safely under the limit.
@@ -270,7 +270,7 @@ func TestAdminUDSShutdownUnlinks(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("UDS not supported on Windows")
 	}
-	v := newAdminTestVault(t)
+	v := newAdminTestConsole(t)
 	// Darwin's sockaddr_un caps sun_path at ~104 bytes; t.TempDir() with a
 	// long test name plus the framework-injected sequence dir overruns. Use
 	// a shorter MkdirTemp at /tmp to stay safely under the limit.

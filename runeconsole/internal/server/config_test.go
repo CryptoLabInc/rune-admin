@@ -19,7 +19,7 @@ func minimalValidConfig(t *testing.T) string {
   admin:
     socket: /tmp/admin.sock
 keys:
-  path: /tmp/vault-keys
+  path: /tmp/runeconsole-keys
   embedding_dim: 1024
 runespace:
   endpoint: https://example.com

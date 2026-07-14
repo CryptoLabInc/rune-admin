@@ -60,7 +60,7 @@ func Serve(ctx context.Context, v *Console, adminFactory AdminFactory) error {
 		opts = append(opts, grpc.Creds(tlsCreds))
 	}
 	gs := grpc.NewServer(opts...)
-	pb.RegisterConsoleServiceServer(gs, NewVaultGRPC(v))
+	pb.RegisterConsoleServiceServer(gs, NewConsoleGRPC(v))
 
 	// Health + reflection (matches Python registration sites:
 	// vault_grpc_server.py:317-331).

@@ -41,8 +41,8 @@ Do NOT run go, gofmt, or buf directly.
 
 ## Security invariants
 
-- Secret key (`vault-keys/<key-id>/SecKey.json`) must never be logged, returned in API responses, or leave the server process
-- Admin transport is a Unix domain socket (mode 0600, vault-user owned) — never expose externally
+- Secret key (`runeconsole-keys/<key-id>/SecKey.json`) must never be logged, returned in API responses, or leave the server process
+- Admin transport is a Unix domain socket (mode 0600, runeconsole-user owned) — never expose externally
 - Token secrets and FHE keys live in `runeconsole.conf` (mode 0600); secret YAML fields support `*_file` indirection for KMS-backed deployments
 - TLS is required for all cloud deployments (`server.grpc.tls.disable: true` is dev-only)
 

@@ -16,9 +16,9 @@ import (
 	pb "github.com/CryptoLabInc/rune-console/runeconsole/pkg/consolepb"
 )
 
-// vaultMethods enumerates the gRPC method paths owned by ConsoleService.
+// consoleMethods enumerates the gRPC method paths owned by ConsoleService.
 // Other services routed through the same gRPC server bypass runtime checks.
-var vaultMethods = map[string]bool{
+var consoleMethods = map[string]bool{
 	"/rune.console.v1.ConsoleService/GetAgentManifest": true,
 	"/rune.console.v1.ConsoleService/Insert":           true,
 	"/rune.console.v1.ConsoleService/Search":           true,
@@ -41,7 +41,7 @@ func NewValidationInterceptor() (grpc.UnaryServerInterceptor, error) {
 				return nil, status.Error(codes.InvalidArgument, err.Error())
 			}
 		}
-		if vaultMethods[info.FullMethod] {
+		if consoleMethods[info.FullMethod] {
 			if err := runtimeCheckToken(req); err != nil {
 				return nil, status.Error(codes.InvalidArgument, err.Error())
 			}

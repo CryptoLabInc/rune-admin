@@ -50,7 +50,7 @@ func NewConsole(cfg *Config, tokenStore *tokens.Store, engine *crypto.Engine, au
 	}
 }
 
-func defaultKeyID(_ *Config) string { return "vault-key" }
+func defaultKeyID(_ *Config) string { return "runeconsole-key" }
 
 // Tokens exposes the token store for the admin UDS server.
 func (v *Console) Tokens() *tokens.Store { return v.tokens }
@@ -72,7 +72,7 @@ type ConsoleGRPC struct {
 	v *Console
 }
 
-func NewVaultGRPC(v *Console) *ConsoleGRPC { return &ConsoleGRPC{v: v} }
+func NewConsoleGRPC(v *Console) *ConsoleGRPC { return &ConsoleGRPC{v: v} }
 
 // envelope is the sealed-metadata shape stored verbatim in runespace:
 // {"a": "<agent_id>", "c": "<base64 AES-CTR ciphertext>"}. The agent_id lets

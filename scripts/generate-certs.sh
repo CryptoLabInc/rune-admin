@@ -12,7 +12,7 @@
 #   <output-dir>/server.key   — Server private key
 #
 # The certificate SAN automatically includes:
-#   - localhost, vault, rune-vault, 127.0.0.1 (always)
+#   - localhost, runeconsole, 127.0.0.1 (always)
 #   - <hostname> argument (if provided)
 #   - Public IP via ifconfig.me (auto-detected)
 
@@ -66,9 +66,8 @@ subjectAltName = @alt_names
 
 [alt_names]
 DNS.1 = localhost
-DNS.2 = vault
-DNS.3 = rune-vault
-DNS.4 = ${HOSTNAME}
+DNS.2 = runeconsole
+DNS.3 = ${HOSTNAME}
 IP.1  = 127.0.0.1
 $([ -n "$PUBLIC_IP" ] && echo "IP.2  = $PUBLIC_IP")
 EOF
@@ -104,6 +103,6 @@ echo "  ca.key      — CA private key (keep secret)"
 echo "  server.pem  — Server certificate"
 echo "  server.key  — Server private key"
 echo ""
-SAN_SUMMARY="localhost, vault, rune-vault, ${HOSTNAME}, 127.0.0.1"
+SAN_SUMMARY="localhost, runeconsole, ${HOSTNAME}, 127.0.0.1"
 [ -n "$PUBLIC_IP" ] && SAN_SUMMARY="${SAN_SUMMARY}, ${PUBLIC_IP}"
 echo "Server cert SANs: ${SAN_SUMMARY}"

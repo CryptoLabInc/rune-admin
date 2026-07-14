@@ -76,23 +76,23 @@ variable "public_key" {
 }
 
 # VPC Network
-resource "google_compute_network" "vault_network" {
-  name                    = "rune-vault-${var.team_name}"
+resource "google_compute_network" "runeconsole_network" {
+  name                    = "runeconsole-${var.team_name}"
   auto_create_subnetworks = false
 }
 
 # Subnet
-resource "google_compute_subnetwork" "vault_subnet" {
-  name          = "rune-vault-subnet-${var.team_name}"
+resource "google_compute_subnetwork" "runeconsole_subnet" {
+  name          = "runeconsole-subnet-${var.team_name}"
   ip_cidr_range = "10.0.1.0/24"
   region        = var.region
-  network       = google_compute_network.vault_network.id
+  network       = google_compute_network.runeconsole_network.id
 }
 
 # Firewall Rules
-resource "google_compute_firewall" "vault_grpc" {
-  name    = "rune-vault-grpc-${var.team_name}"
-  network = google_compute_network.vault_network.name
+resource "google_compute_firewall" "runeconsole_grpc" {
+  name    = "runeconsole-grpc-${var.team_name}"
+  network = google_compute_network.runeconsole_network.name
 
   allow {
     protocol = "tcp"
@@ -100,12 +100,12 @@ resource "google_compute_firewall" "vault_grpc" {
   }
 
   source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["rune-vault"]
+  target_tags   = ["runeconsole"]
 }
 
-resource "google_compute_firewall" "vault_ssh" {
-  name    = "rune-vault-ssh-${var.team_name}"
-  network = google_compute_network.vault_network.name
+resource "google_compute_firewall" "runeconsole_ssh" {
+  name    = "runeconsole-ssh-${var.team_name}"
+  network = google_compute_network.runeconsole_network.name
 
   allow {
     protocol = "tcp"
@@ -113,22 +113,22 @@ resource "google_compute_firewall" "vault_ssh" {
   }
 
   source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["rune-vault"]
+  target_tags   = ["runeconsole"]
 }
 
 # Static IP
-resource "google_compute_address" "vault_ip" {
-  name   = "rune-vault-ip-${var.team_name}"
+resource "google_compute_address" "runeconsole_ip" {
+  name   = "runeconsole-ip-${var.team_name}"
   region = var.region
 }
 
 # Compute Instance
-resource "google_compute_instance" "vault" {
-  name         = "rune-vault-${var.team_name}"
+resource "google_compute_instance" "runeconsole" {
+  name         = "runeconsole-${var.team_name}"
   machine_type = var.machine_type
   zone         = local.zone
 
-  tags = ["rune-vault"]
+  tags = ["runeconsole"]
 
   boot_disk {
     initialize_params {
@@ -139,10 +139,10 @@ resource "google_compute_instance" "vault" {
   }
 
   network_interface {
-    subnetwork = google_compute_subnetwork.vault_subnet.name
+    subnetwork = google_compute_subnetwork.runeconsole_subnet.name
 
     access_config {
-      nat_ip = google_compute_address.vault_ip.address
+      nat_ip = google_compute_address.runeconsole_ip.address
     }
   }
 
@@ -172,27 +172,27 @@ resource "google_compute_instance" "vault" {
 }
 
 # Outputs
-output "vault_url" {
+output "runeconsole_url" {
   description = "Rune-console gRPC endpoint"
-  value       = "${google_compute_address.vault_ip.address}:50051"
+  value       = "${google_compute_address.runeconsole_ip.address}:50051"
 }
 
-output "vault_public_ip" {
+output "runeconsole_public_ip" {
   description = "Public IP address"
-  value       = google_compute_address.vault_ip.address
+  value       = google_compute_address.runeconsole_ip.address
 }
 
-output "vault_private_ip" {
+output "runeconsole_private_ip" {
   description = "Private IP address"
-  value       = google_compute_instance.vault.network_interface[0].network_ip
+  value       = google_compute_instance.runeconsole.network_interface[0].network_ip
 }
 
 output "ssh_command" {
-  description = "SSH command to connect to Vault instance"
-  value       = "gcloud compute ssh ${google_compute_instance.vault.name} --zone=${local.zone}"
+  description = "SSH command to connect to Rune console instance"
+  value       = "gcloud compute ssh ${google_compute_instance.runeconsole.name} --zone=${local.zone}"
 }
 
 output "instance_name" {
   description = "Compute Engine instance name"
-  value       = google_compute_instance.vault.name
+  value       = google_compute_instance.runeconsole.name
 }

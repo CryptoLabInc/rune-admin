@@ -33,7 +33,7 @@ variable "compartment_id" {
 }
 
 variable "team_name" {
-  description = "Team name for Vault instance"
+  description = "Team name for Rune console instance"
   type        = string
 }
 
@@ -65,49 +65,49 @@ variable "public_key" {
   default     = ""
 }
 
-# VCN for Vault
-resource "oci_core_vcn" "vault_vcn" {
+# VCN for Rune console
+resource "oci_core_vcn" "runeconsole_vcn" {
   compartment_id = var.compartment_id
-  display_name   = "vault-${var.team_name}-vcn"
+  display_name   = "runeconsole-${var.team_name}-vcn"
   cidr_block     = "10.0.0.0/16"
-  dns_label      = "vaultvcn"
+  dns_label      = "runeconsolevcn"
 }
 
 # Public subnet
-resource "oci_core_subnet" "vault_subnet" {
+resource "oci_core_subnet" "runeconsole_subnet" {
   compartment_id    = var.compartment_id
-  vcn_id            = oci_core_vcn.vault_vcn.id
-  display_name      = "vault-${var.team_name}-subnet"
+  vcn_id            = oci_core_vcn.runeconsole_vcn.id
+  display_name      = "runeconsole-${var.team_name}-subnet"
   cidr_block        = "10.0.1.0/24"
-  dns_label         = "vaultsub"
-  security_list_ids = [oci_core_security_list.vault_security_list.id]
-  route_table_id    = oci_core_route_table.vault_route_table.id
+  dns_label         = "runeconsolesub"
+  security_list_ids = [oci_core_security_list.runeconsole_security_list.id]
+  route_table_id    = oci_core_route_table.runeconsole_route_table.id
 }
 
 # Internet Gateway
-resource "oci_core_internet_gateway" "vault_ig" {
+resource "oci_core_internet_gateway" "runeconsole_ig" {
   compartment_id = var.compartment_id
-  vcn_id         = oci_core_vcn.vault_vcn.id
-  display_name   = "vault-${var.team_name}-ig"
+  vcn_id         = oci_core_vcn.runeconsole_vcn.id
+  display_name   = "runeconsole-${var.team_name}-ig"
 }
 
 # Route Table
-resource "oci_core_route_table" "vault_route_table" {
+resource "oci_core_route_table" "runeconsole_route_table" {
   compartment_id = var.compartment_id
-  vcn_id         = oci_core_vcn.vault_vcn.id
-  display_name   = "vault-${var.team_name}-rt"
+  vcn_id         = oci_core_vcn.runeconsole_vcn.id
+  display_name   = "runeconsole-${var.team_name}-rt"
 
   route_rules {
     destination       = "0.0.0.0/0"
-    network_entity_id = oci_core_internet_gateway.vault_ig.id
+    network_entity_id = oci_core_internet_gateway.runeconsole_ig.id
   }
 }
 
 # Security List
-resource "oci_core_security_list" "vault_security_list" {
+resource "oci_core_security_list" "runeconsole_security_list" {
   compartment_id = var.compartment_id
-  vcn_id         = oci_core_vcn.vault_vcn.id
-  display_name   = "vault-${var.team_name}-sl"
+  vcn_id         = oci_core_vcn.runeconsole_vcn.id
+  display_name   = "runeconsole-${var.team_name}-sl"
 
   egress_security_rules {
     destination = "0.0.0.0/0"
@@ -137,11 +137,11 @@ resource "oci_core_security_list" "vault_security_list" {
   }
 }
 
-# Compute Instance for Vault
-resource "oci_core_instance" "vault_instance" {
+# Compute Instance for Rune console
+resource "oci_core_instance" "runeconsole_instance" {
   compartment_id      = var.compartment_id
   availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
-  display_name        = "vault-${var.team_name}"
+  display_name        = "runeconsole-${var.team_name}"
   shape               = "VM.Standard.E5.Flex"
 
   shape_config {
@@ -150,8 +150,8 @@ resource "oci_core_instance" "vault_instance" {
   }
 
   create_vnic_details {
-    subnet_id        = oci_core_subnet.vault_subnet.id
-    display_name     = "vault-${var.team_name}-vnic"
+    subnet_id        = oci_core_subnet.runeconsole_subnet.id
+    display_name     = "runeconsole-${var.team_name}-vnic"
     assign_public_ip = true
   }
 
@@ -192,17 +192,17 @@ data "oci_core_images" "ubuntu_image" {
 }
 
 # Outputs
-output "vault_url" {
-  description = "Rune-console gRPC endpoint"
-  value       = "${oci_core_instance.vault_instance.public_ip}:50051"
+output "runeconsole_url" {
+  description = "Rune console gRPC endpoint"
+  value       = "${oci_core_instance.runeconsole_instance.public_ip}:50051"
 }
 
-output "vault_public_ip" {
-  value       = oci_core_instance.vault_instance.public_ip
-  description = "Public IP of Vault instance"
+output "runeconsole_public_ip" {
+  value       = oci_core_instance.runeconsole_instance.public_ip
+  description = "Public IP of Rune console instance"
 }
 
 output "ssh_command" {
-  value       = "ssh ubuntu@${oci_core_instance.vault_instance.public_ip}"
-  description = "SSH command to connect to Vault instance"
+  value       = "ssh ubuntu@${oci_core_instance.runeconsole_instance.public_ip}"
+  description = "SSH command to connect to Rune console instance"
 }

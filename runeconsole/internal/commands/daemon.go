@@ -53,7 +53,7 @@ func runDaemonStart(ctx context.Context) error {
 
 	keyParams := crypto.KeysParams{
 		Root:  cfg.Keys.Path,
-		KeyID: "vault-key",
+		KeyID: "runeconsole-key",
 		Dim:   cfg.Keys.EmbeddingDim,
 	}
 	if err := crypto.EnsureKeys(keyParams); err != nil {

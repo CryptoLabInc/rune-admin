@@ -2,10 +2,10 @@
 #
 # Lookup order:
 #   1. --config <path> CLI flag
-#   2. /opt/rune-vault/configs/runeconsole.conf
+#   2. /opt/runeconsole/configs/runeconsole.conf
 #   3. ./runeconsole.conf (cwd, dev only)
 #
-# This file should be mode 0600, owned by the vault-user.
+# This file should be mode 0600, owned by the runeconsole-user.
 # Replace placeholder values before use.
 
 server:
@@ -13,14 +13,14 @@ server:
     host: 0.0.0.0
     port: 50051
     tls:
-      cert: /opt/rune-vault/certs/server.pem
-      key: /opt/rune-vault/certs/server.key
+      cert: /opt/runeconsole/certs/server.pem
+      key: /opt/runeconsole/certs/server.key
       disable: false        # true for dev only — never in production
   admin:
-    socket: /opt/rune-vault/admin.sock
+    socket: /opt/runeconsole/admin.sock
 
 keys:
-  path: /opt/rune-vault/vault-keys
+  path: /opt/runeconsole/runeconsole-keys
   index_name: my-team
   embedding_dim: 1024
 
@@ -32,9 +32,9 @@ runespace:
 tokens:
   team_secret: REPLACE_WITH_RANDOM_HEX_32
   # Alternative: team_secret_file: /run/secrets/team_secret
-  roles_file: /opt/rune-vault/configs/roles.yml
-  tokens_file: /opt/rune-vault/configs/tokens.yml
+  roles_file: /opt/runeconsole/configs/roles.yml
+  tokens_file: /opt/runeconsole/configs/tokens.yml
 
 audit:
   mode: file+stdout         # one of: "", file, stdout, file+stdout
-  path: /opt/rune-vault/logs/audit.log
+  path: /opt/runeconsole/logs/audit.log
