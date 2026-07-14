@@ -11,7 +11,7 @@
 # Options:
 #   --version <tag>               Install a specific release tag (default: latest)
 #   --target <local|aws|gcp|oci>  Deploy locally or to a cloud provider (default: local)
-#   --install-dir <path>          CSP install directory (default: $HOME/rune-vault-<csp>)
+#   --install-dir <path>          CSP install directory (default: $HOME/runeconsole-<csp>)
 #   --force                       Overwrite existing config and TLS certificates
 #   --non-interactive             Skip all prompts; supply secrets via env vars
 #   --uninstall                   Tear down the install. Local: stop service + remove files
@@ -29,7 +29,7 @@
 # Non-interactive env vars (CSP install — operator workstation):
 #   RUNECONSOLE_RUNESPACE_ENDPOINT     Runespace endpoint URL (required)
 #   RUNECONSOLE_RUNESPACE_TOKEN        Runespace API key (required)
-#   RUNECONSOLE_TEAM_NAME              Team name — used for resource naming and vault index (required)
+#   RUNECONSOLE_TEAM_NAME              Team name — used for resource naming and console index (required)
 #   RUNECONSOLE_TARGET                 Pre-select target without interactive menu
 #   RUNECONSOLE_INSTALL_DIR            Pre-set CSP install directory
 #   RUNECONSOLE_CSP_REGION             Cloud region
@@ -51,7 +51,7 @@ SERVICE_USER=runeconsole
 GRPC_PORT=50051
 
 RAW_BASE="https://raw.githubusercontent.com/${REPO}"
-DEFAULT_INSTALL_DIR_CSP_FMT="%s/rune-vault-%s"
+DEFAULT_INSTALL_DIR_CSP_FMT="%s/runeconsole-%s"
 
 # Overridable by env (used by scripts/install-dev.sh)
 INSTALL_PREFIX="${RUNECONSOLE_INSTALL_PREFIX:-/opt/runeconsole}"
@@ -150,13 +150,13 @@ run_uninstall() {
   if [[ "$NON_INTERACTIVE" -eq 1 ]]; then
     warn "Non-interactive mode: data preserved. Remove manually: rm -rf ${INSTALL_PREFIX}"
   else
-    read -r -p "Delete all vault data including Rune-console Keys? [y/N] " answer
+    read -r -p "Delete all Rune console data including Rune-console Keys? [y/N] " answer
   fi
 
   case "$answer" in
     [Yy]*)
       rm -rf "${INSTALL_PREFIX}"
-      success "Vault data deleted."
+      success "Rune console data deleted."
       ;;
     *)
       info "Data preserved at ${INSTALL_PREFIX}"
@@ -467,8 +467,8 @@ csp_post_deploy() {
   local key_path="${INSTALL_DIR_CSP}/ssh_key"
 
   local public_ip
-  public_ip=$(cd "$tf_dir" && sudo -u "$tf_user" terraform output -raw vault_public_ip 2>/dev/null) \
-    || die "Could not read vault_public_ip from terraform output."
+  public_ip=$(cd "$tf_dir" && sudo -u "$tf_user" terraform output -raw runeconsole_public_ip 2>/dev/null) \
+    || die "Could not read runeconsole_public_ip from terraform output."
   CSP_PUBLIC_IP="$public_ip"
 
   local ssh_user=ubuntu
@@ -529,7 +529,7 @@ csp_uninstall() {
   local csp=$1
   local user_home="${SUDO_USER:+$(eval echo ~"${SUDO_USER}")}"
   user_home="${user_home:-$HOME}"
-  INSTALL_DIR_CSP="${INSTALL_DIR_CSP:-${user_home}/rune-vault-${csp}}"
+  INSTALL_DIR_CSP="${INSTALL_DIR_CSP:-${user_home}/runeconsole-${csp}}"
   local tf_dir="${INSTALL_DIR_CSP}/deployment"
 
   if [[ ! -f "${tf_dir}/terraform.tfstate" ]]; then
@@ -585,7 +585,7 @@ csp_dispatch() {
   local csp="$TARGET"
   local user_home="${SUDO_USER:+$(eval echo ~"${SUDO_USER}")}"
   user_home="${user_home:-$HOME}"
-  INSTALL_DIR_CSP="${INSTALL_DIR_CSP:-${user_home}/rune-vault-${csp}}"
+  INSTALL_DIR_CSP="${INSTALL_DIR_CSP:-${user_home}/runeconsole-${csp}}"
   mkdir -p "$INSTALL_DIR_CSP"
   [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "$INSTALL_DIR_CSP"
 
@@ -846,7 +846,7 @@ _create_system_group() {
       done
       dscl . -create /Groups/"$SERVICE_USER"
       dscl . -create /Groups/"$SERVICE_USER" PrimaryGroupID "$gid"
-      dscl . -create /Groups/"$SERVICE_USER" RealName "Rune Vault Admin Group"
+      dscl . -create /Groups/"$SERVICE_USER" RealName "Rune console Admin Group"
       success "System group '${SERVICE_USER}' created (GID=${gid})."
     else
       info "System group '${SERVICE_USER}' already exists."
@@ -875,7 +875,7 @@ _create_system_user() {
             | awk '{print $2}')
       dscl . -create /Users/"$SERVICE_USER"
       dscl . -create /Users/"$SERVICE_USER" UserShell        /usr/bin/false
-      dscl . -create /Users/"$SERVICE_USER" RealName         "Rune Vault Service"
+      dscl . -create /Users/"$SERVICE_USER" RealName         "Rune console Service"
       dscl . -create /Users/"$SERVICE_USER" UniqueID         "$uid"
       dscl . -create /Users/"$SERVICE_USER" PrimaryGroupID   "$gid"
       dscl . -create /Users/"$SERVICE_USER" NFSHomeDirectory /var/empty
@@ -920,10 +920,10 @@ setup_system() {
     chmod 0750 "$dir"
     [[ "$SKIP_SERVICE" -eq 0 ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "$dir"
   done
-  # vault-keys stays 0700: secret FHE key material must never be group-readable.
-  mkdir -p "${INSTALL_PREFIX}/vault-keys"
-  chmod 0700 "${INSTALL_PREFIX}/vault-keys"
-  [[ "$SKIP_SERVICE" -eq 0 ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "${INSTALL_PREFIX}/vault-keys"
+  # runeconsole-keys stays 0700: secret FHE key material must never be group-readable.
+  mkdir -p "${INSTALL_PREFIX}/runeconsole-keys"
+  chmod 0700 "${INSTALL_PREFIX}/runeconsole-keys"
+  [[ "$SKIP_SERVICE" -eq 0 ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "${INSTALL_PREFIX}/runeconsole-keys"
 
   success "Directories created under ${INSTALL_PREFIX}/"
 
@@ -971,8 +971,7 @@ generate_tls_certs() {
   printf '[v3_req]\nsubjectAltName = @alt_names\n\n' >> "$tmpconf"
   printf '[alt_names]\n'                             >> "$tmpconf"
   printf 'DNS.1 = localhost\n'                       >> "$tmpconf"
-  printf 'DNS.2 = vault\n'                           >> "$tmpconf"
-  printf 'DNS.3 = runeconsole\n'                       >> "$tmpconf"
+  printf 'DNS.2 = runeconsole\n'                     >> "$tmpconf"
   printf 'IP.1  = 127.0.0.1\n'                       >> "$tmpconf"
   [[ -n "$public_ip" ]] && printf 'IP.2  = %s\n' "$public_ip" >> "$tmpconf"
 
@@ -1021,11 +1020,11 @@ collect_and_write_config() {
     if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
       printf '\n'
       printf '══════════════════════════════════════════════════════════\n'
-      printf '  Vault configuration\n'
+      printf '  Rune console configuration\n'
       printf '══════════════════════════════════════════════════════════\n'
       printf '\n'
       [[ -z "$team_name" ]] \
-        && read -r -p "Team name (vault index identifier): " team_name
+        && read -r -p "Team name (Rune console index identifier): " team_name
       [[ -z "$runespace_endpoint" ]] \
         && read -r -p "Runespace endpoint URL: " runespace_endpoint
       if [[ -z "$runespace_token" && -z "$runespace_token_file" ]]; then
@@ -1075,7 +1074,7 @@ collect_and_write_config() {
       "    socket: ${INSTALL_PREFIX}/admin.sock" \
       "" \
       "keys:" \
-      "  path: ${INSTALL_PREFIX}/vault-keys" \
+      "  path: ${INSTALL_PREFIX}/runeconsole-keys" \
       "  index_name: ${team_name}" \
       "  embedding_dim: 1024" \
       "" \
@@ -1255,12 +1254,12 @@ install_service() {
 # ── Phase 8: Post-install summary ─────────────────────────────────────────────
 post_install() {
   if [[ "$SKIP_SERVICE" -eq 0 ]]; then
-    info "Waiting for vault to start..."
+    info "Waiting for runeconsole to start..."
     local i
     for i in $(seq 1 15); do
       "$BINARY_DEST" status \
         --config "${INSTALL_PREFIX}/configs/runeconsole.conf" \
-        >/dev/null 2>&1 && { success "Vault is up."; break; } || true
+        >/dev/null 2>&1 && { success "Rune console is up."; break; } || true
       sleep 1
     done
   fi
@@ -1293,7 +1292,7 @@ post_install() {
   fi
   printf '\n'
   warn "BACKUP: Keep these safe — they cannot be recovered if lost:"
-  warn "  Rune-console Keys: ${INSTALL_PREFIX}/vault-keys/"
+  warn "  Rune-console Keys: ${INSTALL_PREFIX}/runeconsole-keys/"
   warn "  Config:          ${INSTALL_PREFIX}/configs/runeconsole.conf"
 }
 

@@ -6,7 +6,7 @@ import (
 )
 
 func TestKeysExistFalseForMissingDir(t *testing.T) {
-	p := KeysParams{Root: filepath.Join(t.TempDir(), "no-such"), KeyID: "vault-key", Dim: 1024}
+	p := KeysParams{Root: filepath.Join(t.TempDir(), "no-such"), KeyID: "runeconsole-key", Dim: 1024}
 	if KeysExist(p) {
 		t.Error("KeysExist = true for missing dir")
 	}

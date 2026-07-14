@@ -51,7 +51,7 @@ htmlcov/
 *.sec
 *.pub
 *_token
-vault_token.txt
+runeconsole-token.txt
 certs/
 
 # Logs
@@ -109,9 +109,9 @@ runeconsole/**/*.out
 # Credentials
 credentials.json
 service-account.json
-vault-credentials/
+runeconsole-credentials/
 team_keys/
-vault_keys/
+runeconsole-keys/
 
 # Test artifacts
 test-results/

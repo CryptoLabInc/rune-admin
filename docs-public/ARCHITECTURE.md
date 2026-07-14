@@ -28,54 +28,54 @@ Rune-console is the **infrastructure backbone** for team-shared FHE-encrypted or
          └───────────────┴───────────────┘
                          │ MCP tool calls
                          ▼
-            ┌────────────────────────────┐
-            │   runespace-mcp-server(s)  │  ← Scalable
-            │   (Public Keys only)       │
-            │                            │
-            │  Tools:                    │
-            │  - insert, search (direct) │
-            │  - remember (Vault pipeline│
-            │    search → decrypt → meta)│
-            └──────┬──────────────┬──────┘
+            ┌───────────────────────────────┐
+            │   runespace-mcp-server(s)     │  ← Scalable
+            │   (Public Keys only)          │
+            │                               │
+            │  Tools:                       │
+            │  - insert, search (direct)    │
+            │  - remember (Console pipeline)│
+            │    search → decrypt → meta)   │
+            └──────┬──────────────┬─────────┘
                    │              │
     search/insert  │              │ decrypt_scores()
                    │              │ (called by remember)
                    ▼              ▼
-  ┌──────────────────────┐  ┌────────────────────────────┐
-  │ Runespace(SaaS)      │  │        Rune-console           │
-  │  https://runespace.example.com │  │  (Your Infrastructure)     │
-  │                      │  │                            │
-  │  - Encrypted vectors │  │  ┌──────────────────────┐  │
-  │  - Encrypted         │  │  │  FHE Key Manager     │  │
-  │    similarity search │  │  │                      │  │
-  │  - Team isolation    │  │  │  - secret key (isolated)│  │
-  │  - Scalable storage  │  │  │  - EncKey (public)   │  │
-  └──────────────────────┘  │  └──────────────────────┘  │
-                            │                            │
-                            │  ┌──────────────────────┐  │
-                            │  │  gRPC Service (:50051)│  │
-                            │  │  - GetPublicKey()    │  │
-                            │  │  - DecryptScores()   │  │
-                            │  │  - DecryptMetadata() │  │
-                            │  └──────────────────────┘  │
-                            │                            │
-                            │  ┌──────────────────────┐  │
-                            │  │  Auth & Audit        │  │
-                            │  │  - Token validation  │  │
-                            │  │  - Audit logging     │  │
-                            │  └──────────────────────┘  │
-                            └────────────────────────────┘
+  ┌─────────────────────────┐  ┌──────────────────────────────┐
+  │ Runespace(SaaS)         │  │          Rune-console        │
+  │  https://runespace.team │  │     (Your Infrastructure)    │
+  │                         │  │                              │
+  │  - Encrypted vectors    │  │  ┌─────────────────────────┐ │
+  │  - Encrypted            │  │  │  FHE Key Manager        │ │
+  │    similarity search    │  │  │                         │ │
+  │  - Team isolation       │  │  │  - secret key (isolated)│ │
+  │  - Scalable storage     │  │  │  - EncKey (public)      │ │
+  └─────────────────────────┘  │  └─────────────────────────┘ │
+                               │                              │
+                               │  ┌─────────────────────────┐ │
+                               │  │  gRPC Service (:50051)  │ │
+                               │  │  - GetPublicKey()       │ │
+                               │  │  - DecryptScores()      │ │
+                               │  │  - DecryptMetadata()    │ │
+                               │  └─────────────────────────┘ │
+                               │                              │
+                               │  ┌─────────────────────────┐ │
+                               │  │  Auth & Audit           │ │
+                               │  │  - Token validation     │ │
+                               │  │  - Audit logging        │ │
+                               │  └─────────────────────────┘ │
+                               └──────────────────────────────┘
 ```
 
-**Key**: Agents never contact Vault directly. The runespace-mcp-server's
-`remember` tool orchestrates the Vault decryption call as part of its
-3-step pipeline. Secret key never leaves Vault.
+**Key**: Agents never contact Rune console directly. The runespace-mcp-server's
+`remember` tool orchestrates the Rune console decryption call as part of its
+3-step pipeline. Secret key never leaves Rune console.
 
 ## Port Summary
 
 | Endpoint | Protocol | Purpose | Exposure |
 |----------|----------|---------|----------|
-| `:50051` | gRPC + TLS | Vault service, health check, reflection | Public (team members) |
+| `:50051` | gRPC + TLS | Rune console service, health check, reflection | Public (team members) |
 | `/opt/runeconsole/admin.sock` | Unix domain socket (mode 0600) | Admin token/role CRUD + status | Local only — `runeconsole` CLI |
 
 ## Component Details
@@ -94,18 +94,18 @@ Rune-console is the **infrastructure backbone** for team-shared FHE-encrypted or
 - Single-binary Go gRPC daemon (`runeconsole`) — no runtime dependencies beyond TLS
 - gRPC server on port 50051 (used by runespace-mcp-server)
 - gRPC health check via `grpc.health.v1` protocol
-- Admin Unix domain socket at `/opt/runeconsole/admin.sock` (mode 0600, vault-user owned)
+- Admin Unix domain socket at `/opt/runeconsole/admin.sock` (mode 0600, runeconsole-user owned)
 - Registered as a native systemd unit (`runeconsole.service`) on Linux or a launchd job (`com.cryptolabinc.runeconsole`) on macOS
 
-**Key Storage** (`/opt/runeconsole/vault-keys/<key-id>/`, default `<key-id>` = `vault-key`):
+**Key Storage** (`/opt/runeconsole/runeconsole-keys/<key-id>/`, default `<key-id>` = `runeconsole-key`):
 ```
-/opt/runeconsole/vault-keys/vault-key/
+/opt/runeconsole/runeconsole-keys/runeconsole-key/
 ├── EncKey.json      # Public encryption key (distributed to agents)
 ├── EvalKey.json     # Public evaluation key (for FHE operations)
-└── SecKey.json      # Secret decryption key (NEVER leaves Vault)
+└── SecKey.json      # Secret decryption key (NEVER leaves Rune console)
 ```
 
-Keys are auto-generated on first startup by `EnsureVault` (in `vault/internal/server/ensure_vault.go`).
+Keys are auto-generated on first startup by `EnsureKeys` (in `runeconsole/internal/server/ensure.go`).
 
 **Security Properties**:
 - Secret key stored encrypted at rest (filesystem encryption)
@@ -116,7 +116,7 @@ Keys are auto-generated on first startup by `EnsureVault` (in `vault/internal/se
 
 ### 2. gRPC Service (API)
 
-Defined in `proto/vault_service.proto` (`rune.console.v1.ConsoleService`).
+Defined in `proto/service.proto` (`rune.console.v1.ConsoleService`).
 
 **Server Configuration**:
 - Max message size: 256 MB (for EvalKey transfer)
@@ -142,7 +142,7 @@ Defined in `proto/vault_service.proto` (`rune.console.v1.ConsoleService`).
 - Returns: Decrypted metadata (JSON strings)
 - Used by: runespace-mcp-server's `remember` pipeline
 - Auth: Required (validates token + scope check)
-- Vault derives the agent's DEK via HKDF-SHA256 from team secret + agent_id.
+- Rune console derives the agent's DEK via HKDF-SHA256 from team secret + agent_id.
 
 ### 3. Authentication & Access Control
 
@@ -180,8 +180,8 @@ Secret YAML fields (`tokens.team_secret`, `runespace.token`) accept a sibling `*
 
 ### 4. Admin Socket & CLI
 
-**Admin Socket** (`vault/internal/server/admin.go`):
-- Unix domain socket at `/opt/runeconsole/admin.sock` (mode 0600, vault-user owned)
+**Admin Socket** (`runeconsole/internal/server/admin.go`):
+- Unix domain socket at `/opt/runeconsole/admin.sock` (mode 0600, runeconsole-user owned)
 - Filesystem permissions are the only authorization gate; never expose externally
 - Used by the `runeconsole` CLI and by the daemon's lifecycle hooks (e.g. `ErrRestartRequested` after token rotation)
 
@@ -212,7 +212,7 @@ Two-layer validation runs as a gRPC interceptor before requests reach business l
 - **Layer 1: protovalidate** -- Enforces `.proto` annotation constraints (field length, int range, repeated item rules)
 - **Layer 2: Runtime checks** -- Control character rejection, whitespace validation (not expressible in proto annotations)
 
-Non-Vault methods (health check, reflection) pass through untouched.
+Non Rune console methods (health check, reflection) pass through untouched.
 
 ### 6. Per-Agent Metadata Encryption
 
@@ -225,12 +225,12 @@ agent_id = SHA256(token)[:32]
 
 - DEK is distributed to the agent via the `GetPublicKey()` response (`agent_dek` field)
 - Metadata is encrypted client-side with the agent-specific DEK
-- Vault re-derives the DEK from team secret + agent_id to decrypt
+- Rune console re-derives the DEK from team secret + agent_id to decrypt
 - Ensures one agent cannot decrypt another agent's metadata even if both are on the same team
 
 ### 7. Audit Logging
 
-Structured JSON logging for all gRPC operations (`vault/internal/server/audit.go`):
+Structured JSON logging for all gRPC operations (`runeconsole/internal/server/audit.go`):
 
 - One JSON line per request: timestamp, user_id, method, top_k, result_count, status, source_ip, latency_ms, error
 - Source IP extracted from the gRPC peer context
@@ -252,15 +252,15 @@ audit:
 Team Member's Laptop
     │
     ├── 1. Install Rune from Claude Marketplace (github.com/CryptoLabInc/rune)
-    ├── 2. Configure Vault Endpoint + Token
+    ├── 2. Configure Rune console Endpoint + Token
     │
     ▼
 Rune Startup
     │
-    ├── 3. Call GetPublicKey() → Vault (gRPC :50051)
+    ├── 3. Call GetPublicKey() → Rune console (gRPC :50051)
     │
     ▼
-Vault (gRPC)
+Rune console (gRPC)
     │
     ├── 4. Validate token (returns username + role)
     ├── 5. Read EncKey.json, EvalKey.json
@@ -290,10 +290,10 @@ runespace-mcp-server (`remember` orchestration)
     ├── 3. Encrypted similarity scoring on Runespace
     │      → Returns result ciphertext (base64)
     │
-    ├── 4. Call Vault: DecryptScores(token, ciphertext, top_k) via gRPC
+    ├── 4. Call Rune console: DecryptScores(token, ciphertext, top_k) via gRPC
     │
     ▼
-Vault (gRPC — secret key holder)
+Rune console (gRPC — secret key holder)
     │
     ├── 5. Validate token (returns username + role)
     ├── 6. Decrypt result ciphertext with secret key → similarity values
@@ -310,9 +310,9 @@ runespace-mcp-server (continued)
 AI Agent → User: "In Q2 2024, team chose PostgreSQL for JSON support..."
 ```
 
-**Key**: The Agent never contacts Vault directly. The `remember` tool
+**Key**: The Agent never contacts Rune console directly. The `remember` tool
 in runespace-mcp-server orchestrates the entire 3-step pipeline.
-Secret key never leaves Vault.
+Secret key never leaves Rune console.
 
 **`search` vs `remember`**: The `search` tool is for the operator's own
 encrypted data where secret key is held locally by the MCP server runtime.
@@ -328,7 +328,7 @@ indiscriminately decrypting shared vectors.
 - Runespace is **untrusted** (sees only ciphertext)
 - Network is **untrusted** (TLS required)
 - Team members' laptops are **trusted** (Rune runs locally)
-- Vault VM is **trusted** (admin controls infrastructure)
+- Rune console VM is **trusted** (admin controls infrastructure)
 
 **Threats Mitigated**:
 1. **Cloud Provider Breach**: Runespace compromise → no plaintext leak (FHE)
@@ -337,20 +337,20 @@ indiscriminately decrypting shared vectors.
 4. **Key Theft**: secret key extraction → architectural isolation (no export API)
 
 **Threats Not Mitigated** (out of scope):
-- Vault VM compromise (admin responsibility: use secure cloud, enable disk encryption)
+- Rune console VM compromise (admin responsibility: use secure cloud, enable disk encryption)
 - Team member laptop compromise (user responsibility: secure devices)
 - Token leakage (admin responsibility: rotate tokens, use secure distribution)
 
 ### Key Isolation Strategy
 
-**Why Secret Key Never Leaves Vault**:
+**Why Secret Key Never Leaves Rune console**:
 - **Principle**: Decryption capability = highest privilege
-- **Constraint**: Only Vault has secret key, no export API
+- **Constraint**: Only Rune console has secret key, no export API
 - **Benefit**: Even if client compromised, attacker cannot decrypt historical data
 
 **Key Distribution**:
 ```
-Secret key:  Vault only (generated on deployment, never exported)
+Secret key: Rune console only (generated on deployment, never exported)
 EncKey:  Distributed to all team members (safe to share, encryption-only)
 EvalKey: Distributed to all team members (safe to share, FHE operations)
 ```
@@ -358,7 +358,7 @@ EvalKey: Distributed to all team members (safe to share, FHE operations)
 ### Defense in Depth
 
 **Layer 1: Network**
-- TLS 1.3 for all Vault communications
+- TLS 1.3 for all Rune console communications
 - Firewall rules (allow gRPC 50051)
 - Optional: VPN for extra isolation
 
@@ -406,7 +406,7 @@ Cloud Resources Created
     │   └── Security group / list / firewall rule (allow 50051/gRPC)
     │
     ├── Storage
-    │   └── /opt/runeconsole/vault-keys/<key-id>/  (FHE keys)
+    │   └── /opt/runeconsole/runeconsole-keys/<key-id>/  (FHE keys)
     │
     └── Audit Logging
         └── /opt/runeconsole/logs/audit.log
@@ -416,7 +416,7 @@ Common Terraform variables across all CSPs: `team_name`, `tls_mode`,
 `runespace_endpoint`, `runespace_token`, `runeconsole_version`,
 `public_key`, `region`. CSP-specific: `instance_type` (AWS),
 `project_id` / `zone` / `machine_type` (GCP), `oci_profile` /
-`compartment_id` (OCI). Output: `vault_public_ip`.
+`compartment_id` (OCI). Output: `runeconsole_public_ip`.
 
 Horizontal scaling and multi-instance HA are not currently supported.
 For higher capacity, re-provision with a larger VM shape via your cloud
@@ -427,14 +427,14 @@ provider.
 ### Backup & Recovery
 
 **Critical Assets**:
-- `/opt/runeconsole/vault-keys/<key-id>/SecKey.json` — **MUST backup** (cannot regenerate)
+- `/opt/runeconsole/runeconsole-keys/<key-id>/SecKey.json` — **MUST backup** (cannot regenerate)
 - `tokens.team_secret` from `runeconsole.conf` — **MUST backup** (needed for DEK re-derivation)
 - Per-user tokens — rotatable via `runeconsole token rotate`
 
 **Backup Strategy**:
 ```bash
-# Manually back up vault keys (run on the VM)
-sudo tar czf vault-keys_backup_$(date +%Y-%m-%d).tar.gz -C /opt/runeconsole vault-keys/
+# Manually back up runeconsole keys (run on the VM)
+sudo tar czf runeconsole-keys_backup_$(date +%Y-%m-%d).tar.gz -C /opt/runeconsole runeconsole-keys/
 
 # Also archive runeconsole.conf or at minimum the tokens.team_secret value
 # Store in: offline media, a different cloud provider, or a password manager
@@ -448,8 +448,8 @@ sudo bash install.sh --target <aws|gcp|oci>
 # 2. Stop the daemon before restoring keys
 sudo systemctl stop runeconsole
 
-# 3. Restore vault-keys and team_secret
-sudo tar xzf vault-keys_backup_YYYY-MM-DD.tar.gz -C /opt/runeconsole
+# 3. Restore runeconsole-keys and team_secret
+sudo tar xzf runeconsole-keys_backup_YYYY-MM-DD.tar.gz -C /opt/runeconsole
 # Edit /opt/runeconsole/configs/runeconsole.conf and restore tokens.team_secret
 
 # 4. Bring the daemon back up
@@ -471,7 +471,7 @@ runeconsole token rotate --all
 
 ### Scaling Strategy
 
-Re-provision with a larger VM shape via your cloud provider's console or
+Re-provision with a larger VM shape via your cloud provider's runeconsole or
 by editing the relevant `instance_type` (AWS) / `machine_type` (GCP) /
 shape configuration (OCI) and re-running `terraform apply` from your
 install directory.
@@ -485,13 +485,13 @@ When to scale:
 
 | Package | Purpose |
 |---------|---------|
-| `vault/cmd` | Binary entry point — wires Cobra root command and runs `Execute()` |
-| `vault/internal/commands` | CLI subcommands (`daemon`, `token`, `role`, `status`, `logs`, `version`) and admin-socket client |
-| `vault/internal/server` | gRPC server, config loader, audit logger, admin UDS, `EnsureVault` startup hook, interceptors |
-| `vault/internal/tokens` | Per-user RBAC store: tokens, roles, validation, rate limiting, YAML persistence |
-| `vault/internal/crypto` | FHE key management + HKDF/AES wrappers around `runespace-sdk` |
-| `vault/internal/tests` | E2E tests gated by build tag `e2e` (decrypt pipeline + CLI smoke) |
-| `vault/pkg/consolepb` | Generated gRPC stubs from `vault/proto/*.proto` |
+| `runeconsole/cmd` | Binary entry point — wires Cobra root command and runs `Execute()` |
+| `runeconsole/internal/commands` | CLI subcommands (`daemon`, `token`, `role`, `status`, `logs`, `version`) and admin-socket client |
+| `runeconsole/internal/server` | gRPC server, config loader, audit logger, admin UDS, `EnsureKeys` startup hook, interceptors |
+| `runeconsole/internal/tokens` | Per-user RBAC store: tokens, roles, validation, rate limiting, YAML persistence |
+| `runeconsole/internal/crypto` | FHE key management + HKDF/AES wrappers around `runespace-sdk` |
+| `runeconsole/internal/tests` | E2E tests gated by build tag `e2e` (decrypt pipeline + CLI smoke) |
+| `runeconsole/pkg/consolepb` | Generated gRPC stubs from `runeconsole/proto/*.proto` |
 
 ## Troubleshooting
 
@@ -501,8 +501,8 @@ When to scale:
 
 **Diagnosis**:
 ```bash
-# Check Vault CPU on the server
-ssh ubuntu@<vault-host>     # or ec2-user@... / opc@... depending on CSP
+# Check Rune console CPU on the server
+ssh ubuntu@<runeconsole-host>     # or ec2-user@... / opc@... depending on CSP
 top
 
 # Tail the audit log for latency
@@ -536,7 +536,7 @@ sudo journalctl -u runeconsole | grep -i "denied\|unauthenticated"
 - Rate limited → Wait for the window to reset, or adjust the role's `rate_limit`
 - Firewall → Check the security group allows 50051 from team IPs
 
-### Issue: Vault Crashed
+### Issue: Rune console Crashed
 
 **Symptoms**: Health check fails, daemon not responsive
 
@@ -555,9 +555,9 @@ sudo log show --predicate 'process == "runeconsole"' --last 10m
 - OOM killer → Increase VM memory
 - Disk full → Rotate logs (`lumberjack` handles size-based rotation, but free disk first)
 - Crashed process → `sudo systemctl restart runeconsole` (Linux) / `sudo launchctl kickstart -k system/com.cryptolabinc.runeconsole` (macOS)
-- Persistent crash → Re-provision with `install.sh --uninstall` then `install.sh --target <provider>`, restoring `vault-keys/` from backup before first start
+- Persistent crash → Re-provision with `install.sh --uninstall` then `install.sh --target <provider>`, restoring `runeconsole-keys/` from backup before first start
 
 ## Next Steps
 
-- Deploy your first Vault: [Quick Start](../README.md#quick-start)
+- Deploy your first Rune console: [Quick Start](../README.md#quick-start)
 - Contributing: [CONTRIBUTING.md](../CONTRIBUTING.md)

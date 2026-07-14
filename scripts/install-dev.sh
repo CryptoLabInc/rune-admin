@@ -11,7 +11,7 @@
 #
 # Options:
 #   --target <local|aws|gcp|oci>  Install/uninstall target (default: prompt if TTY, else local)
-#   --install-dir <path>          CSP install dir (default: $HOME/rune-vault-<csp>)
+#   --install-dir <path>          CSP install dir (default: $HOME/runeconsole-<csp>)
 #   --prefix <dir>                Local-only: rootless test prefix
 #   --non-interactive             Skip all prompts; supply secrets via env vars
 #   --uninstall                   Forward uninstall to install.sh (local or CSP target)
@@ -181,7 +181,7 @@ dev_preflight() {
     [[ "$(id -u)" -eq 0 ]] || die "This installer must be run as root (use sudo)."
   fi
 
-  [[ -d "${REPO_ROOT}/vault" ]] \
+  [[ -d "${REPO_ROOT}/runeconsole" ]] \
     || die "runeconsole/ directory not found under ${REPO_ROOT}. Run from a clone of Rune-console."
 
   local missing=()
@@ -246,7 +246,7 @@ dev_build_linux_binary() {
   # the user's go module cache is reused for speed.
   sudo -u "$build_user" -H docker run --rm \
     --platform "${TARGET_OS}/${TARGET_ARCH}" \
-    -v "${REPO_ROOT}/vault:/src" \
+    -v "${REPO_ROOT}/runeconsole:/src" \
     -v "${user_home}/go/pkg/mod:/go/pkg/mod" \
     -w /src \
     -e CGO_ENABLED=1 \
@@ -529,8 +529,8 @@ dev_csp_upload_and_install() {
   local ssh_user=ubuntu
 
   local public_ip
-  public_ip=$(cd "$tf_dir" && sudo -u "$tf_user" terraform output -raw vault_public_ip 2>/dev/null) \
-    || die "Could not read vault_public_ip from terraform output."
+  public_ip=$(cd "$tf_dir" && sudo -u "$tf_user" terraform output -raw runeconsole_public_ip 2>/dev/null) \
+    || die "Could not read runeconsole_public_ip from terraform output."
   CSP_PUBLIC_IP="$public_ip"
 
   local ssh_opts="-o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15"
@@ -649,7 +649,7 @@ dev_csp_dispatch() {
   local csp="$TARGET"
   local user_home="${SUDO_USER:+$(eval echo ~"${SUDO_USER}")}"
   user_home="${user_home:-$HOME}"
-  INSTALL_DIR_CSP="${INSTALL_DIR_CSP:-${user_home}/rune-vault-${csp}}"
+  INSTALL_DIR_CSP="${INSTALL_DIR_CSP:-${user_home}/runeconsole-${csp}}"
   mkdir -p "$INSTALL_DIR_CSP"
   [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "$INSTALL_DIR_CSP"
 

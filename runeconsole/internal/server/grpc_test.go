@@ -37,7 +37,7 @@ func TestMapTokenErrorCodes(t *testing.T) {
 
 // ── handler — token error paths (no engine needed; auth runs first) ──
 
-func newTestVault(t *testing.T) *Console {
+func newTestConsole(t *testing.T) *Console {
 	t.Helper()
 	cfg := &Config{
 		Tokens: TokensConfig{TeamSecret: "test-secret"},
@@ -50,7 +50,7 @@ func newTestVault(t *testing.T) *Console {
 }
 
 func TestGetAgentManifestInvalidToken(t *testing.T) {
-	srv := NewVaultGRPC(newTestVault(t))
+	srv := NewConsoleGRPC(newTestConsole(t))
 	resp, err := srv.GetAgentManifest(context.Background(), &pb.GetAgentManifestRequest{
 		Token: "evt_ffffffffffffffffffffffffffffffff",
 	})
@@ -63,7 +63,7 @@ func TestGetAgentManifestInvalidToken(t *testing.T) {
 }
 
 func TestInsertInvalidToken(t *testing.T) {
-	srv := NewVaultGRPC(newTestVault(t))
+	srv := NewConsoleGRPC(newTestConsole(t))
 	_, err := srv.Insert(context.Background(), &pb.InsertRequest{
 		Token:              "evt_ffffffffffffffffffffffffffffffff",
 		Id:                 "test-id-1",
@@ -79,7 +79,7 @@ func TestInsertInvalidToken(t *testing.T) {
 }
 
 func TestSearchInvalidToken(t *testing.T) {
-	srv := NewVaultGRPC(newTestVault(t))
+	srv := NewConsoleGRPC(newTestConsole(t))
 	_, err := srv.Search(context.Background(), &pb.SearchRequest{
 		Token:  "evt_ffffffffffffffffffffffffffffffff",
 		Vector: []float32{0.1, 0.2},
@@ -91,7 +91,7 @@ func TestSearchInvalidToken(t *testing.T) {
 }
 
 func TestSearchTopKExceeded(t *testing.T) {
-	srv := NewVaultGRPC(newTestVault(t))
+	srv := NewConsoleGRPC(newTestConsole(t))
 	// Demo token has admin role with top_k=50; request 51 → rejected before engine.
 	_, err := srv.Search(context.Background(), &pb.SearchRequest{
 		Token:  tokens.DemoToken,

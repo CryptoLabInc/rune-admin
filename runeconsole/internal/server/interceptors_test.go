@@ -46,14 +46,14 @@ func mustInterceptor(t *testing.T) grpc.UnaryServerInterceptor {
 	return ic
 }
 
-func vaultMethodInfo(name string) *grpc.UnaryServerInfo {
+func consoleMethodInfo(name string) *grpc.UnaryServerInfo {
 	return &grpc.UnaryServerInfo{FullMethod: "/rune.console.v1.ConsoleService/" + name}
 }
 
 func TestInterceptorPassesValidRequest(t *testing.T) {
 	ic := mustInterceptor(t)
 	req := &pb.GetAgentManifestRequest{Token: "evt_0123456789abcdef0123456789abcdef"}
-	out, err := ic(context.Background(), req, vaultMethodInfo("GetAgentManifest"), noopHandler)
+	out, err := ic(context.Background(), req, consoleMethodInfo("GetAgentManifest"), noopHandler)
 	if err != nil {
 		t.Fatalf("err = %v, want nil", err)
 	}
@@ -66,7 +66,7 @@ func TestInterceptorRejectsBadProtovalidate(t *testing.T) {
 	ic := mustInterceptor(t)
 	// Token shorter than 36 fails the proto-level constraint.
 	req := &pb.GetAgentManifestRequest{Token: "too_short"}
-	_, err := ic(context.Background(), req, vaultMethodInfo("GetAgentManifest"), noopHandler)
+	_, err := ic(context.Background(), req, consoleMethodInfo("GetAgentManifest"), noopHandler)
 	if err == nil {
 		t.Fatal("err = nil, want validation error")
 	}
@@ -83,7 +83,7 @@ func TestInterceptorRejectsControlCharToken(t *testing.T) {
 	if len(req.Token) != 36 {
 		t.Fatalf("test setup: token length = %d, want 36", len(req.Token))
 	}
-	_, err := ic(context.Background(), req, vaultMethodInfo("GetAgentManifest"), noopHandler)
+	_, err := ic(context.Background(), req, consoleMethodInfo("GetAgentManifest"), noopHandler)
 	if err == nil {
 		t.Fatal("err = nil, want runtime error")
 	}
@@ -92,7 +92,7 @@ func TestInterceptorRejectsControlCharToken(t *testing.T) {
 	}
 }
 
-func TestInterceptorAllowsNonVaultMethod(t *testing.T) {
+func TestInterceptorAllowsNonConsoleMethod(t *testing.T) {
 	ic := mustInterceptor(t)
 	// Whitespace-around token would normally fail runtime check, but
 	// non-Console methods skip runtime checks (and the proto for this

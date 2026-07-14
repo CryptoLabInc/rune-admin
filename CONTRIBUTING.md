@@ -163,7 +163,7 @@ RUNECONSOLE_SKIP_SERVICE=1 \
 
 # Cloud install: cross-compiles linux/amd64 in golang:1.26-bookworm,
 # uploads via SCP, and runs install.sh on the remote VM.
-bash scripts/install-dev.sh --target oci --install-dir "$HOME/rune-vault-oci"
+bash scripts/install-dev.sh --target oci --install-dir "$HOME/runeconsole-oci"
 ```
 
 Flags mirror `install.sh`: `--target`, `--install-dir`, `--prefix`,
@@ -222,7 +222,7 @@ Flags mirror `install.sh`: `--target`, `--install-dir`, `--prefix`,
 ```
 feat: Add Kubernetes deployment support
 
-- Add k8s manifests for Vault deployment
+- Add k8s manifests for Rune console deployment
 - Update install scripts to detect k8s
 - Add documentation for k8s deployment
 
@@ -260,14 +260,14 @@ rune-console/
 └── install.sh                     # Production installer (SHA256SUMS-verified)
 ```
 
-## Vault Architecture
+## Rune Console Architecture
 
 Core server code is in `runeconsole/`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
 
 ## Security Considerations
 
-- Secret key (`vault-keys/<key-id>/SecKey.json`) must never be logged, returned in API responses, or leave the server process
-- Admin transport is a Unix domain socket (mode 0600, vault-user owned) — never expose externally
+- Secret key (`runeconsole-keys/<key-id>/SecKey.json`) must never be logged, returned in API responses, or leave the server process
+- Admin transport is a Unix domain socket (mode 0600, runeconsole-user owned) — never expose externally
 - Never commit private keys (`SecKey.json`) or filled-in `runeconsole.conf` files
 - Token secrets and FHE keys live in `runeconsole.conf` (mode 0600); secret YAML fields support `*_file` indirection for KMS-backed deployments
 - TLS is required for all cloud deployments (`server.grpc.tls.disable: true` is dev-only)

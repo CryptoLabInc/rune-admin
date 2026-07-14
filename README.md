@@ -8,7 +8,7 @@ Deploy and manage Rune-console infrastructure for your team. This repository con
 
 Rune-Admin provides **infrastructure management** for Rune-console:
 
-- **Deployment**: Automated Vault deployment to OCI, AWS, or GCP
+- **Deployment**: Automated Rune console deployment to OCI, AWS, or GCP
 - **Key Management**: FHE encryption key generation and secure storage
 - **Team Onboarding**: Per-user token issuance and credential distribution
 - **Audit Logging**: Structured JSON audit logs for all gRPC operations
@@ -31,10 +31,8 @@ The [installer](#quick-start) auto-checks for the tools it needs (`terraform` an
 ### For Team Members
 
 Team members install [Rune](https://github.com/CryptoLabInc/rune) from Claude Marketplace and configure it with:
-- Vault Endpoint (provided by admin)
-- Vault Token (provided by admin)
-- Runespace Cluster Endpoint (provided by admin)
-- Runespace API Key (provided by admin)
+- Rune console Endpoint (provided by admin)
+- Rune console Token (provided by admin)
 
 ## Quick Start
 
@@ -66,7 +64,7 @@ with the binary it pulls down — see [Release Checksum Verification](#release-c
 
 ```bash
 # gRPC health check (requires grpcurl: brew install grpcurl)
-grpcurl -cacert /opt/runeconsole/certs/ca.pem <your-vault-host>:50051 grpc.health.v1.Health/Check
+grpcurl -cacert /opt/runeconsole/certs/ca.pem <your-runeconsole-host>:50051 grpc.health.v1.Health/Check
 
 # Expected: { "status": "SERVING" }
 
@@ -81,10 +79,8 @@ runeconsole status
 sudo runeconsole token issue --user alice --role member --expires 90d
 
 # Share via secure channel (1Password, Signal, etc.):
-#   - Vault Endpoint
-#   - Vault Token
-#   - Runespace Cluster Endpoint
-#   - Runespace API Key
+#   - Rune console Endpoint
+#   - Rune console Token
 ```
 
 Members of the `runeconsole` group can run the CLI without `sudo`.
@@ -148,11 +144,11 @@ sudo launchctl kickstart -k system/com.cryptolabinc.runeconsole   # macOS
 
 ### TLS Requirement
 
-Vault communications MUST use TLS. The installer automatically configures TLS certificates. Without TLS, tokens are exposed to MITM attacks.
+Rune console communications MUST use TLS. The installer automatically configures TLS certificates. Without TLS, tokens are exposed to MITM attacks.
 
 ### Key Isolation
 
-- **Secret key**: Never leaves Vault VM (architectural constraint)
+- **Secret key**: Never leaves Rune console VM (architectural constraint)
 - **EncKey/EvalKey**: Safe to distribute (public keys)
 - Per-agent metadata encryption uses HKDF-derived DEKs (no separate key file)
 
@@ -190,7 +186,7 @@ sudo bash install.sh --uninstall --target local
 
 # Cloud: runs `terraform destroy` against the install dir created earlier
 sudo bash install.sh --uninstall --target aws \
-  --install-dir "$HOME/rune-vault-aws"
+  --install-dir "$HOME/runeconsole-aws"
 ```
 
 ## Development
@@ -202,11 +198,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, commands, and guid
 ### Issue: Team member can't connect
 
 ```bash
-# Check Vault is reachable
-grpcurl -cacert /opt/runeconsole/certs/ca.pem <vault-host>:50051 grpc.health.v1.Health/Check
+# Check Rune console is reachable
+grpcurl -cacert /opt/runeconsole/certs/ca.pem <runeconsole-host>:50051 grpc.health.v1.Health/Check
 
 # Inspect the security group / firewall rule (port 50051 must be open)
-cd "$HOME/rune-vault-<csp>"
+cd "$HOME/runeconsole-<csp>"
 terraform show | grep -A5 -E 'security_(group|list)'
 
 # Verify the token — have the team member re-enter it carefully
@@ -215,8 +211,8 @@ terraform show | grep -A5 -E 'security_(group|list)'
 ### Issue: Slow decryption
 
 ```bash
-# Check Vault CPU usage — re-provision with a larger VM if >80%
-ssh ubuntu@<vault-host>     # or ec2-user@... / opc@... depending on CSP
+# Check Rune console CPU usage — re-provision with a larger VM if >80%
+ssh ubuntu@<runeconsole-host>     # or ec2-user@... / opc@... depending on CSP
 top
 
 # Tail audit log for latency
@@ -225,7 +221,7 @@ sudo tail -20 /opt/runeconsole/logs/audit.log
 runeconsole logs
 ```
 
-### Issue: Vault crashed
+### Issue: Rune console crashed
 
 ```bash
 # Inspect logs
@@ -237,7 +233,7 @@ sudo systemctl restart runeconsole           # Linux
 sudo launchctl kickstart -k system/com.cryptolabinc.runeconsole   # macOS
 
 # If persistent, re-provision the VM:
-sudo bash install.sh --uninstall --target <csp> --install-dir "$HOME/rune-vault-<csp>"
+sudo bash install.sh --uninstall --target <csp> --install-dir "$HOME/runeconsole-<csp>"
 sudo bash install.sh --target <csp>
 ```
 

@@ -1,7 +1,7 @@
 # Terraform Deployment for CI Runner (OCI)
 #
 # Provisions a self-hosted GitHub Actions runner for Rune-console CI.
-# Runner labels: self-hosted, vault-ci
+# Runner labels: self-hosted, runeconsole-ci
 #
 # Usage:
 #   cd deployment/ci/oci
@@ -56,14 +56,14 @@ variable "github_runner_token" {
 variable "runner_labels" {
   description = "Comma-separated runner labels"
   type        = string
-  default     = "vault-ci"
+  default     = "runeconsole-ci"
 }
 
 
 # VCN for CI Runner
 resource "oci_core_vcn" "ci_vcn" {
   compartment_id = var.compartment_id
-  display_name   = "vault-ci-vcn"
+  display_name   = "runeconsole-ci-vcn"
   cidr_block     = "10.1.0.0/16"
   dns_label      = "civcn"
 }
@@ -72,7 +72,7 @@ resource "oci_core_vcn" "ci_vcn" {
 resource "oci_core_subnet" "ci_subnet" {
   compartment_id    = var.compartment_id
   vcn_id            = oci_core_vcn.ci_vcn.id
-  display_name      = "vault-ci-subnet"
+  display_name      = "runeconsole-ci-subnet"
   cidr_block        = "10.1.1.0/24"
   dns_label         = "cisub"
   security_list_ids = [oci_core_security_list.ci_security_list.id]
@@ -83,14 +83,14 @@ resource "oci_core_subnet" "ci_subnet" {
 resource "oci_core_internet_gateway" "ci_ig" {
   compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.ci_vcn.id
-  display_name   = "vault-ci-ig"
+  display_name   = "runeconsole-ci-ig"
 }
 
 # Route Table
 resource "oci_core_route_table" "ci_route_table" {
   compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.ci_vcn.id
-  display_name   = "vault-ci-rt"
+  display_name   = "runeconsole-ci-rt"
 
   route_rules {
     destination       = "0.0.0.0/0"
@@ -102,7 +102,7 @@ resource "oci_core_route_table" "ci_route_table" {
 resource "oci_core_security_list" "ci_security_list" {
   compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.ci_vcn.id
-  display_name   = "vault-ci-sl"
+  display_name   = "runeconsole-ci-sl"
 
   egress_security_rules {
     destination = "0.0.0.0/0"
@@ -114,7 +114,7 @@ resource "oci_core_security_list" "ci_security_list" {
 resource "oci_core_instance" "ci_runner" {
   compartment_id      = var.compartment_id
   availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
-  display_name        = "vault-ci-runner"
+  display_name        = "runeconsole-ci-runner"
   shape               = "VM.Standard.E5.Flex"
 
   shape_config {
@@ -124,7 +124,7 @@ resource "oci_core_instance" "ci_runner" {
 
   create_vnic_details {
     subnet_id        = oci_core_subnet.ci_subnet.id
-    display_name     = "vault-ci-vnic"
+    display_name     = "runeconsole-ci-vnic"
     assign_public_ip = true
   }
 

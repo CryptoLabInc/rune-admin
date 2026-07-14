@@ -56,7 +56,7 @@ su - "$RUNNER_USER" -c "cd $RUNNER_HOME && ./config.sh \
   --url https://github.com/${github_repo} \
   --token ${github_runner_token} \
   --labels self-hosted,${runner_labels} \
-  --name vault-ci-runner \
+  --name runeconsole-ci-runner \
   --work _work \
   --unattended \
   --replace"

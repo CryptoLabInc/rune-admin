@@ -83,7 +83,7 @@ func TestConsoleServiceL2(t *testing.T) {
 		t.Fatal(err)
 	}
 	gs := grpc.NewServer(grpc.MaxRecvMsgSize(MaxMessageSize), grpc.MaxSendMsgSize(MaxMessageSize))
-	pb.RegisterConsoleServiceServer(gs, NewVaultGRPC(v))
+	pb.RegisterConsoleServiceServer(gs, NewConsoleGRPC(v))
 	go gs.Serve(lis)
 	defer gs.Stop()
 
