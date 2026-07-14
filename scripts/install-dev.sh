@@ -39,10 +39,10 @@ set -euo pipefail
 # ── Constants ──────────────────────────────────────────────────────────────────
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
-LOCAL_BINARY_HOST="${REPO_ROOT}/vault/bin/runeconsole"
+LOCAL_BINARY_HOST="${REPO_ROOT}/runeconsole/bin/runeconsole"
 TARGET_OS=linux
 TARGET_ARCH=amd64
-LINUX_BINARY="${REPO_ROOT}/vault/bin/runeconsole-${TARGET_OS}-${TARGET_ARCH}"
+LINUX_BINARY="${REPO_ROOT}/runeconsole/bin/runeconsole-${TARGET_OS}-${TARGET_ARCH}"
 BUILDER_IMAGE="golang:1.26-bookworm"
 GRPC_PORT=50051
 
@@ -182,7 +182,7 @@ dev_preflight() {
   fi
 
   [[ -d "${REPO_ROOT}/vault" ]] \
-    || die "vault/ directory not found under ${REPO_ROOT}. Run from a clone of Rune-console."
+    || die "runeconsole/ directory not found under ${REPO_ROOT}. Run from a clone of Rune-console."
 
   local missing=()
   for tool in git mise; do
@@ -233,14 +233,14 @@ dev_build_linux_binary() {
   commit=$(cd "$REPO_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo none)
   version=dev
   date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  pkg="github.com/CryptoLabInc/rune-console/vault/internal/commands"
+  pkg="github.com/CryptoLabInc/rune-console/runeconsole/internal/commands"
 
   local ldflags="-X '${pkg}.buildVersion=${version}' -X '${pkg}.buildCommit=${commit}' -X '${pkg}.buildDate=${date}'"
   local out_rel="bin/runeconsole-${TARGET_OS}-${TARGET_ARCH}"
 
   mkdir -p "${user_home}/go/pkg/mod"
-  mkdir -p "${REPO_ROOT}/vault/bin"
-  [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "${REPO_ROOT}/vault/bin"
+  mkdir -p "${REPO_ROOT}/runeconsole/bin"
+  [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "${REPO_ROOT}/runeconsole/bin"
 
   # Run docker as the invoking user so written files are owned correctly and
   # the user's go module cache is reused for speed.

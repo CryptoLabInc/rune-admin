@@ -116,7 +116,7 @@ Keys are auto-generated on first startup by `EnsureVault` (in `vault/internal/se
 
 ### 2. gRPC Service (API)
 
-Defined in `proto/vault_service.proto` (`rune.vault.v1.VaultService`).
+Defined in `proto/vault_service.proto` (`rune.console.v1.ConsoleService`).
 
 **Server Configuration**:
 - Max message size: 256 MB (for EvalKey transfer)
@@ -491,7 +491,7 @@ When to scale:
 | `vault/internal/tokens` | Per-user RBAC store: tokens, roles, validation, rate limiting, YAML persistence |
 | `vault/internal/crypto` | FHE key management + HKDF/AES wrappers around `runespace-sdk` |
 | `vault/internal/tests` | E2E tests gated by build tag `e2e` (decrypt pipeline + CLI smoke) |
-| `vault/pkg/vaultpb` | Generated gRPC stubs from `vault/proto/*.proto` |
+| `vault/pkg/consolepb` | Generated gRPC stubs from `vault/proto/*.proto` |
 
 ## Troubleshooting
 

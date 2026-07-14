@@ -97,9 +97,9 @@ Thumbs.db
 *.dylib
 
 # Go build artifacts
-vault/bin/
-vault/**/*.test
-vault/**/*.out
+runeconsole/bin/
+runeconsole/**/*.test
+runeconsole/**/*.out
 
 # Database
 *.db
@@ -121,4 +121,4 @@ test-results/
 tests/fixtures/
 
 # Local dev runtime files (config, socket, keys, pid)
-vault/dev/
+runeconsole/dev/

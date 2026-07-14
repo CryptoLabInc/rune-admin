@@ -76,7 +76,7 @@ See [CLAUDE.md](CLAUDE.md#commands) (or [AGENTS.md](AGENTS.md#commands)) for the
 ### Test Structure
 
 ```
-vault/internal/
+runeconsole/internal/
 ├── tokens/        # Token store + role/rate-limit unit tests
 ├── crypto/        # HKDF + AES-CTR + runespace-sdk wrappers
 ├── server/        # gRPC handlers, interceptors, audit, admin UDS, config
@@ -88,14 +88,14 @@ vault/internal/
 
 ```bash
 mise run go:test:unit     # Unit tests only (E2E excluded by build tag)
-mise run go:build         # Build vault/bin/runeconsole first…
+mise run go:build         # Build runeconsole/bin/runeconsole first…
 mise run go:test:e2e      # …then run E2E against the built binary
 mise run go:test          # All tests including E2E (requires RUNECONSOLE_TEST_BINARY)
 ```
 
 ### Test Fixtures
 
-Integration tests use GPG-encrypted fixtures containing FHE keys and ciphertext blobs. See [tests/FIXTURES.md](tests/FIXTURES.md) for the full update procedure, including passphrase rotation and re-encryption steps. The fixture-based decrypt-pipeline test under `vault/internal/tests/` skips automatically when `tests/fixtures/` is not decrypted.
+Integration tests use GPG-encrypted fixtures containing FHE keys and ciphertext blobs. See [tests/FIXTURES.md](tests/FIXTURES.md) for the full update procedure, including passphrase rotation and re-encryption steps. The fixture-based decrypt-pipeline test under `runeconsole/internal/tests/` skips automatically when `tests/fixtures/` is not decrypted.
 
 ### Test Requirements
 
@@ -103,8 +103,8 @@ Integration tests use GPG-encrypted fixtures containing FHE keys and ciphertext 
 - Use fixtures for crypto setup to avoid repeated key generation
 - Mock external dependencies
 - Test both success and error paths
-- New gRPC methods need corresponding unit tests in `vault/internal/server/grpc_test.go`
-- Token/auth changes must update `vault/internal/tokens/store_test.go`
+- New gRPC methods need corresponding unit tests in `runeconsole/internal/server/grpc_test.go`
+- Token/auth changes must update `runeconsole/internal/tokens/store_test.go`
 
 ## Code Style
 
@@ -146,8 +146,8 @@ Integration tests use GPG-encrypted fixtures containing FHE keys and ciphertext 
 ### Local Testing
 
 ```bash
-mise run dev         # Run runeconsole daemon in foreground (uses vault/dev/runeconsole.conf)
-mise run go:build    # Build runeconsole binary to vault/bin/runeconsole
+mise run dev         # Run runeconsole daemon in foreground (uses runeconsole/dev/runeconsole.conf)
+mise run go:build    # Build runeconsole binary to runeconsole/bin/runeconsole
 ```
 
 ### Testing the Installer Locally
@@ -241,10 +241,10 @@ Closes #123
 
 ```
 rune-console/
-├── vault/
+├── runeconsole/
 │   ├── cmd/                       # runeconsole binary entry point
 │   ├── internal/                  # commands, server, tokens, crypto, tests
-│   ├── pkg/vaultpb/               # generated gRPC stubs
+│   ├── pkg/consolepb/               # generated gRPC stubs
 │   ├── proto/                     # .proto source
 │   └── dev/                       # local dev config (gitignored)
 ├── deployment/
@@ -262,7 +262,7 @@ rune-console/
 
 ## Vault Architecture
 
-Core server code is in `vault/`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
+Core server code is in `runeconsole/`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
 
 ## Security Considerations
 

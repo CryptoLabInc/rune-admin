@@ -1,0 +1,139 @@
+syntax = "proto3";
+
+package rune.console.v1;
+
+import "buf/validate/validate.proto";
+
+// Rune-console gRPC service.
+// The console generates and custodies the FHE key set. The PUBLIC EncKey and
+// the caller's derived agent_dek are handed to rune-mcp via GetAgentManifest
+// so capture encryption/sealing happens on the developer machine; SecKey,
+// EvalKey, and team_secret never leave this server. The console is the SOLE
+// runespace client — rune-mcp talks only to this service and forwards
+// ciphertext through it.
+service ConsoleService {
+  // Returns the agent manifest: EncKey (RMP+MM, public), the caller's
+  // agent_dek, index config, centroid_set_version, and capability flags.
+  rpc GetAgentManifest(GetAgentManifestRequest) returns (GetAgentManifestResponse);
+
+  // Capture write: forward a client-encrypted item (EncryptFlat +
+  // EncryptClustered blobs, plaintext cluster routing, sealed metadata)
+  // verbatim to runespace. The console sees no plaintext content.
+  rpc Insert(InsertRequest) returns (InsertResponse);
+
+  // Blind vector search over runespace (recall + capture-time novelty check).
+  // The plaintext query is sent to runespace (PCMM); the console decrypts the
+  // score blobs (SecKey), ranks, resolves and opens metadata (agent_dek), and
+  // returns ranked plaintext hits.
+  rpc Search(SearchRequest) returns (SearchResponse);
+
+  // Relays the runespace IVF centroid set (header, then id-ordered batches)
+  // so rune-mcp can push it down to runed for insert routing. Public
+  // structural data — same wire shape as runespace's GetCentroids.
+  rpc GetCentroids(GetCentroidsRequest) returns (stream CentroidChunk);
+}
+
+// ─── GetAgentManifest ─────────────────────────────────────────────
+
+message GetAgentManifestRequest {
+  // Auth token. Required, fixed 36 chars (evt_ + 32 hex).
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
+}
+
+message GetAgentManifestResponse {
+  // JSON bundle:
+  //   "EncKey.json"          RMP EncKey envelope (public, for EncryptFlat)
+  //   "mm_enc_key"           base64(MM EncKey raw bytes, for EncryptClustered)
+  //   "agent_dek"            base64(caller's derived metadata DEK)
+  //   "key_id" "agent_id" "dim" "index_name"
+  //   "centroid_set_version" current engine set (empty = none loaded yet)
+  //   "insert"               capability flag: "pre_encrypted"
+  string manifest_json = 1;
+  string error = 2;  // Non-empty on error
+}
+
+// ─── Insert (capture write) ───────────────────────────────────────
+
+message InsertRequest {
+  // Auth token. Required, fixed 36 chars.
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
+  // Field 2 was the plaintext embedding of the integration experiment.
+  // The console never receives plaintext content anymore.
+  reserved 2;
+  reserved "vector";
+  // Sealed metadata envelope ({"a","c"}), client-sealed with agent_dek.
+  // Stored verbatim; the console does not open or re-seal it on insert.
+  string metadata = 3;
+  // Client-generated opaque UUID. Required: retries at any hop reuse it so
+  // a re-insert is an idempotent no-op.
+  string id = 4 [(buf.validate.field).string = {min_len: 1, max_len: 64}];
+  // EncryptFlat output (flat tier ITEM encoding).
+  bytes rmp_item = 5 [(buf.validate.field).bytes.min_len = 1];
+  // EncryptClustered output (compact MM row).
+  bytes mm_item = 6 [(buf.validate.field).bytes.min_len = 1];
+  // Plaintext IVF routing computed next to the embedding (runed).
+  uint32 cluster_id = 7;
+  // Centroid set version the routing was computed against.
+  string centroid_set_version = 8 [(buf.validate.field).string.min_len = 1];
+}
+
+message InsertResponse {
+  string id = 1;     // echo of the client-supplied id on success
+  string error = 2;  // Non-empty on error
+}
+
+// ─── Search (recall + novelty) ────────────────────────────────────
+
+message SearchRequest {
+  // Auth token. Required, fixed 36 chars.
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
+  // Plaintext query embedding. Length must equal the configured dim.
+  repeated float vector = 2 [(buf.validate.field).repeated.min_items = 1];
+  // Number of top results. Per-role limits enforced at the business logic layer.
+  int32  top_k = 3 [(buf.validate.field).int32 = {gte: 1, lte: 300}];
+}
+
+message SearchHit {
+  string id = 1;
+  double score = 2;
+  string metadata = 3;  // plaintext JSON (console opened the agent_dek envelope)
+}
+
+message SearchResponse {
+  repeated SearchHit hits = 1;  // ranked, score descending
+  string error = 2;             // Non-empty on error
+}
+
+
+// ─── GetCentroids (relay) ─────────────────────────────────────────
+
+message GetCentroidsRequest {
+  // Auth token. Required, fixed 36 chars.
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
+}
+
+message CentroidChunk {
+  oneof payload {
+    CentroidSetHeader header = 1;
+    CentroidBatch batch = 2;
+  }
+}
+
+message CentroidSetHeader {
+  string version = 1; // content hash (sha256)
+  uint32 dim = 2;
+  uint32 nlist = 3;
+  // evi preset the set was trained for (e.g. "IP1") — a version-hash
+  // ingredient, relayed so runed can recompute and verify the content hash.
+  // Empty when the engine predates the field.
+  string preset = 4;
+}
+
+message CentroidBatch {
+  repeated Centroid centroids = 1; // id order (append order == cluster id)
+}
+
+message Centroid {
+  uint32 id = 1;
+  repeated float vec = 2 [packed = true];
+}
