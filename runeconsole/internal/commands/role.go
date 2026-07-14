@@ -48,7 +48,7 @@ func newRoleListCmd() *cobra.Command {
 				fmt.Fprintln(out, "No roles defined.")
 				return nil
 			}
-			// "{:<12} {:<50} {:>6} {:>10}" — match vault_admin_cli.py
+			// "{:<12} {:<50} {:>6} {:>10}"
 			fmt.Fprintf(out, "%-12s %-50s %6s %10s\n", "ROLE", "SCOPE", "TOP_K", "RATE")
 			for _, r := range result.Roles {
 				fmt.Fprintf(out, "%-12s %-50s %6d %10s\n",

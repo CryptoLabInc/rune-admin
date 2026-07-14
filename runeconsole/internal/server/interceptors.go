@@ -27,8 +27,6 @@ var consoleMethods = map[string]bool{
 // NewValidationInterceptor returns a unary server interceptor that runs
 // protovalidate against the request, then a runtime safety check on the
 // token field. Validation errors are returned as InvalidArgument.
-//
-// Mirrors vault/validation_interceptor.py and vault/request_validator.py.
 func NewValidationInterceptor() (grpc.UnaryServerInterceptor, error) {
 	v, err := protovalidate.New()
 	if err != nil {
