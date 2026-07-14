@@ -25,10 +25,10 @@ run = """
 set -euo pipefail
 
 echo "==> Resolving Go modules..."
-cd vault && go mod download && cd ..
+cd runeconsole && go mod download && cd ..
 
 echo "==> Generating Go proto stubs..."
-cd vault && buf generate && cd ..
+cd runeconsole && buf generate && cd ..
 
 echo "==> Configuring git hooks..."
 git config core.hooksPath .githooks
@@ -43,7 +43,7 @@ description = "Run all quality checks (gofmt + go vet + unit tests)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd vault
+cd runeconsole
 echo "==> Checking Go format..."
 diff=$(gofmt -l .)
 if [ -n "$diff" ]; then
@@ -60,19 +60,19 @@ echo "All checks passed."
 """
 
 [tasks."proto:go"]
-description = "Regenerate Go protobuf/gRPC stubs into vault/pkg/vaultpb"
-run = "cd vault && buf generate"
+description = "Regenerate Go protobuf/gRPC stubs into runeconsole/pkg/consolepb"
+run = "cd runeconsole && buf generate"
 
 [tasks."go:build"]
-description = "Build runeconsole binary to vault/bin/runeconsole"
+description = "Build runeconsole binary to runeconsole/bin/runeconsole"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
 VERSION="${VERSION:-dev}"
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-PKG="github.com/CryptoLabInc/rune-console/vault/internal/commands"
-cd vault && go build \
+PKG="github.com/CryptoLabInc/rune-console/runeconsole/internal/commands"
+cd runeconsole && go build \
   -o bin/runeconsole \
   -ldflags "-X '${PKG}.buildVersion=${VERSION}' -X '${PKG}.buildCommit=${COMMIT}' -X '${PKG}.buildDate=${DATE}'" \
   ./cmd
@@ -80,40 +80,40 @@ cd vault && go build \
 
 [tasks."go:test"]
 description = "Run all tests including E2E (requires pre-built binary via RUNECONSOLE_TEST_BINARY)"
-run = "cd vault && go test -race -tags e2e ./..."
+run = "cd runeconsole && go test -race -tags e2e ./..."
 
 [tasks."go:test:unit"]
 description = "Run unit tests only (E2E excluded by build tag)"
-run = "cd vault && go test -race ./..."
+run = "cd runeconsole && go test -race ./..."
 
 [tasks."go:test:e2e"]
 description = "Run E2E tests against the pre-built runeconsole binary (run go:build first)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-BINARY="${RUNECONSOLE_TEST_BINARY:-$(pwd)/vault/bin/runeconsole}"
+BINARY="${RUNECONSOLE_TEST_BINARY:-$(pwd)/runeconsole/bin/runeconsole}"
 if [ ! -x "$BINARY" ]; then
   echo "runeconsole binary not found at $BINARY — run 'mise run go:build' first" >&2
   exit 1
 fi
 export RUNECONSOLE_TEST_BINARY="$BINARY"
-cd vault && go test -race -tags e2e ./internal/tests/...
+cd runeconsole && go test -race -tags e2e ./internal/tests/...
 """
 
 [tasks."go:vet"]
 description = "Run go vet on all Go packages"
-run = "cd vault && go vet ./..."
+run = "cd runeconsole && go vet ./..."
 
 [tasks."go:fmt"]
 description = "Format Go source files"
-run = "cd vault && gofmt -w ."
+run = "cd runeconsole && gofmt -w ."
 
 [tasks."go:fmt:check"]
 description = "Check Go formatting without modifying"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-cd vault
+cd runeconsole
 diff=$(gofmt -l .)
 if [ -n "$diff" ]; then
   echo "gofmt found unformatted files:" >&2
@@ -124,7 +124,7 @@ fi
 
 [tasks.dev]
 description = "Run runeconsole daemon in foreground for development"
-run = "cd vault && go run ./cmd/runeconsole --config dev/runeconsole.conf daemon start"
+run = "cd runeconsole && go run ./cmd/runeconsole --config dev/runeconsole.conf daemon start"
 
 [tasks."fixtures:decrypt"]
 description = "Decrypt test fixtures from GPG archive"

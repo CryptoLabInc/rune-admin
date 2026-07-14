@@ -17,15 +17,15 @@ Do NOT run go, gofmt, or buf directly.
 |---------|-------------|
 | `mise run setup` | Bootstrap (Go modules + proto stubs) |
 | `mise run check` | All checks: gofmt + go vet + unit tests (race) |
-| `mise run go:build` | Build the runeconsole binary to `vault/bin/runeconsole` |
+| `mise run go:build` | Build the runeconsole binary to `runeconsole/bin/runeconsole` |
 | `mise run go:test` | Run all tests including E2E (requires `RUNECONSOLE_TEST_BINARY`) |
 | `mise run go:test:unit` | Run unit tests only (E2E excluded by build tag) |
 | `mise run go:test:e2e` | Run E2E tests against pre-built binary (run `go:build` first) |
 | `mise run go:vet` | Run go vet on all Go packages |
 | `mise run go:fmt` | Format Go source files |
 | `mise run go:fmt:check` | Check Go formatting without modifying |
-| `mise run proto:go` | Regenerate Go protobuf/gRPC stubs into `vault/pkg/vaultpb` |
-| `mise run dev` | Run runeconsole daemon in foreground (uses `vault/dev/runeconsole.conf`) |
+| `mise run proto:go` | Regenerate Go protobuf/gRPC stubs into `runeconsole/pkg/consolepb` |
+| `mise run dev` | Run runeconsole daemon in foreground (uses `runeconsole/dev/runeconsole.conf`) |
 | `mise run certs` | Generate self-signed TLS certificates |
 | `mise run fixtures:decrypt` | Decrypt test fixtures (requires `FIXTURES_GPG_PASSPHRASE`) |
 | `mise run fixtures:encrypt` | Re-encrypt test fixtures |
@@ -35,8 +35,8 @@ Do NOT run go, gofmt, or buf directly.
 - English only in code, commit messages, PR descriptions, and issue bodies
 - Do not amend commits or force-push unless explicitly instructed
 - All exported Go identifiers need a doc comment
-- New gRPC methods need corresponding unit tests in `vault/internal/server/grpc_test.go`
-- Token/auth changes must update `vault/internal/tokens/store_test.go`
+- New gRPC methods need corresponding unit tests in `runeconsole/internal/server/grpc_test.go`
+- Token/auth changes must update `runeconsole/internal/tokens/store_test.go`
 - Run `mise run check` before committing
 
 ## Documentation

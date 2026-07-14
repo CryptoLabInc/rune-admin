@@ -98,10 +98,10 @@ git clone https://github.com/CryptoLabInc/rune-console.git
 cd rune-console
 mise install            # Go 1.26, buf, terraform, cloud CLIs
 mise run setup          # Resolve Go modules + generate proto stubs
-mise run go:build       # Builds vault/bin/runeconsole
-# Copy + edit a dev config (the vault/dev/ tree is gitignored):
-cp vault/internal/server/testdata/runeconsole.conf.example vault/dev/runeconsole.conf
-mise run dev            # Run the daemon in the foreground (uses vault/dev/runeconsole.conf)
+mise run go:build       # Builds runeconsole/bin/runeconsole
+# Copy + edit a dev config (the runeconsole/dev/ tree is gitignored):
+cp runeconsole/internal/server/testdata/runeconsole.conf.example runeconsole/dev/runeconsole.conf
+mise run dev            # Run the daemon in the foreground (uses runeconsole/dev/runeconsole.conf)
 ```
 
 ## Admin Workflows

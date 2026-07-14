@@ -73,7 +73,7 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
-          PKG="github.com/CryptoLabInc/rune-console/vault/internal/commands"
+          PKG="github.com/CryptoLabInc/rune-console/runeconsole/internal/commands"
           COMMIT=$(git rev-parse --short HEAD)
           DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           if [ "${{ matrix.os }}" = "darwin" ] && [ "${{ matrix.arch }}" = "amd64" ]; then
@@ -82,7 +82,7 @@ jobs:
             export CGO_CFLAGS="-arch x86_64 -I/usr/local/opt/openssl@3/include"
             export CGO_LDFLAGS="-arch x86_64 -L/usr/local/opt/openssl@3/lib"
           fi
-          cd vault && go build \
+          cd runeconsole && go build \
             -trimpath \
             -ldflags "-s -w -X '${PKG}.buildVersion=${VERSION}' -X '${PKG}.buildCommit=${COMMIT}' -X '${PKG}.buildDate=${DATE}'" \
             -o bin/runeconsole \
@@ -91,15 +91,15 @@ jobs:
       - name: Smoke test
         run: |
           if [ "${{ matrix.os }}" = "darwin" ] && [ "${{ matrix.arch }}" = "amd64" ]; then
-            arch -x86_64 ./vault/bin/runeconsole version
+            arch -x86_64 ./runeconsole/bin/runeconsole version
           else
-            ./vault/bin/runeconsole version
+            ./runeconsole/bin/runeconsole version
           fi
 
       - name: Package
         run: |
           mkdir -p _dist
-          cp vault/bin/runeconsole _dist/
+          cp runeconsole/bin/runeconsole _dist/
           cp LICENSE _dist/
           tar -czf "${{ steps.meta.outputs.archive }}" -C _dist .
 

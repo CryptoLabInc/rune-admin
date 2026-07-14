@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-OUTPUT_DIR="${1:-vault/certs}"
+OUTPUT_DIR="${1:-runeconsole/certs}"
 HOSTNAME="${2:-localhost}"
 
 CA_DAYS=3650      # 10 years
