@@ -177,7 +177,7 @@ func newTokenListCmd() *cobra.Command {
 				fmt.Fprintln(out, "No tokens issued.")
 				return nil
 			}
-			// "{:<16} {:<10} {:>6} {:>10}  {:<12}" — match vault_admin_cli.py
+			// "{:<16} {:<10} {:>6} {:>10}  {:<12}"
 			fmt.Fprintf(out, "%-16s %-10s %6s %10s  %-12s\n", "USER", "ROLE", "TOP_K", "RATE", "EXPIRES")
 			for _, t := range result.Tokens {
 				fmt.Fprintf(out, "%-16s %-10s %6s %10s  %-12s\n",

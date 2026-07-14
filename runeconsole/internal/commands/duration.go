@@ -9,7 +9,7 @@ import (
 var durationRE = regexp.MustCompile(`^(\d+)([dwm])$`)
 
 // parseDuration converts strings like "90d", "12w", "6m" into days.
-// Mirrors vault_admin_cli.py:_parse_duration (m = 30 days approximation).
+// _parse_duration (m = 30 days approximation)
 func parseDuration(value string) (int, error) {
 	m := durationRE.FindStringSubmatch(value)
 	if m == nil {

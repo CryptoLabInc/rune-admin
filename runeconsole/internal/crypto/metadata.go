@@ -38,8 +38,7 @@ var (
 )
 
 // DeriveAgentKey returns a 32-byte AES-256 DEK derived from the team-wide
-// secret and a per-agent identifier via HKDF-SHA256. Mirrors
-// vault.vault_core.derive_agent_key (HKDF salt=None, info=agent_id utf-8).
+// secret and a per-agent identifier via HKDF-SHA256. (HKDF salt=None, info=agent_id utf-8).
 func DeriveAgentKey(teamSecret, agentID string) ([]byte, error) {
 	if teamSecret == "" {
 		return nil, errors.New("crypto: team_secret is empty")

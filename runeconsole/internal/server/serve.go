@@ -62,8 +62,7 @@ func Serve(ctx context.Context, v *Console, adminFactory AdminFactory) error {
 	gs := grpc.NewServer(opts...)
 	pb.RegisterConsoleServiceServer(gs, NewConsoleGRPC(v))
 
-	// Health + reflection (matches Python registration sites:
-	// vault_grpc_server.py:317-331).
+	// Health + reflection
 	healthSvc := health.NewServer()
 	healthSvc.SetServingStatus("rune.console.v1.ConsoleService", healthpb.HealthCheckResponse_SERVING)
 	healthSvc.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)

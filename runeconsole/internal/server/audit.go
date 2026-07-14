@@ -38,8 +38,7 @@ func ParseAuditMode(mode string) AuditMode {
 	return out
 }
 
-// AuditEntry is the JSON structure written per request. Fields and order
-// must match vault/audit.py:118-145 to keep golden compat tests aligned.
+// AuditEntry is the JSON structure written per request.
 type AuditEntry struct {
 	Timestamp   string  `json:"timestamp"`
 	UserID      string  `json:"user_id"`
@@ -154,8 +153,7 @@ func roundTo(v float64, decimals int) float64 {
 	return float64(int64(v*mult-0.5)) / mult
 }
 
-// ExtractSourceIP mirrors vault/audit.py:55-78 — peer addresses come in
-// gRPC's "ipv4:H:P", "ipv6:[::1]:P", or "unix:/path" form.
+// Peer addresses come in gRPC's "ipv4:H:P", "ipv6:[::1]:P", or "unix:/path" form.
 func ExtractSourceIP(p *peer.Peer) string {
 	if p == nil || p.Addr == nil {
 		return "unknown"
