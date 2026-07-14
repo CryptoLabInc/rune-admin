@@ -4,8 +4,8 @@ buf.build/go/protovalidate v1.2.0 h1:DQVrUWkmGTBij+kOYv/x2LLxwcLaGKMdzShj1/6/3H0
 buf.build/go/protovalidate v1.2.0/go.mod h1:7rYiQEhqvAipoazpVNBBH2S2f8bjG4huMVy1V2Yofn4=
 cel.dev/expr v0.25.1 h1:1KrZg61W6TWSxuNZ37Xy49ps13NUovb66QLprthtwi4=
 cel.dev/expr v0.25.1/go.mod h1:hrXvqGP6G6gyx8UAHSHJ5RGk//1Oj5nXQ2NI02Nrsg4=
-github.com/CryptoLabInc/runespace-sdk v0.1.0 h1:0TvUxqC0YZiFmLhUqw3dsEX0lTjSgRAQDWkSQdwK6yQ=
-github.com/CryptoLabInc/runespace-sdk v0.1.0/go.mod h1:7z/jS0mcQ0v2kKKEHsEh36PnsMr0TOEuska4vwj2jJ0=
+github.com/CryptoLabInc/runespace-sdk v0.1.3 h1:BLM/pCrDLewEAbVWngKXpcB4o2RHjpVSSh4gWiY7kys=
+github.com/CryptoLabInc/runespace-sdk v0.1.3/go.mod h1:63NTNvd8QnawsxJXCtcG6wkfKCARSqQpkyyuK7/LcU0=
 github.com/antlr4-go/antlr/v4 v4.13.1 h1:SqQKkuVZ+zWkMMNkjy5FZe5mr5WURWnlpmOuzYWrPrQ=
 github.com/antlr4-go/antlr/v4 v4.13.1/go.mod h1:GKmUxMtwp6ZgGwZSva4eWPC5mS6vUAmOABFgjdkM7Nw=
 github.com/brianvoe/gofakeit/v6 v6.28.0 h1:Xib46XXuQfmlLS2EXRuJpqcw8St6qSZz75OUo0tgAW4=

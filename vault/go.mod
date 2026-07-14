@@ -5,8 +5,8 @@ go 1.26.4
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260415201107-50325440f8f2.1
 	buf.build/go/protovalidate v1.2.0
+	github.com/CryptoLabInc/runespace-sdk v0.1.3
 	github.com/google/uuid v1.6.0
-	github.com/CryptoLabInc/runespace-sdk v0.1.0
 	github.com/spf13/cobra v1.8.1
 	golang.org/x/crypto v0.47.0
 	google.golang.org/grpc v1.80.0
@@ -28,6 +28,3 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260120221211-b8f7ae30c516 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260120221211-b8f7ae30c516 // indirect
 )
-
-// Local runespace SDK (integration test) — replaces envector-go-sdk.
-replace github.com/CryptoLabInc/runespace-sdk => ../../runespace-sdk
