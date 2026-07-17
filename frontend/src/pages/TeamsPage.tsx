@@ -10,8 +10,8 @@ import TreeDetailView from "@/components/teams/TreeDetailView";
 import { useCreateTeamMutation } from "@/hooks/mutations/useTeamMutations";
 import { useTeamsTreeQuery } from "@/hooks/queries/useTeamsTreeQuery";
 import { parseErrorCode } from "@/api/parseError";
+import { useNoticeStore } from "@/stores/noticeStore";
 import { cn } from "@/utils/cn";
-import { useToastStore } from "@/stores/toastStore";
 
 /** Create-team error codes → SC-07 copy (shared with TreeDetailView). */
 const CREATE_TEAM_REASON: Record<string, string> = {
@@ -60,7 +60,7 @@ const TeamsPage = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const createTeam = useCreateTeamMutation();
-  const showToast = useToastStore((s) => s.showToast);
+  const showNotice = useNoticeStore((s) => s.showNotice);
 
   const handleCreate = (name: string, parentId: string | null) => {
     setCreateError(null);
@@ -69,7 +69,7 @@ const TeamsPage = () => {
       {
         onSuccess: () => {
           setCreateOpen(false);
-          showToast("팀이 생성되었습니다.", "success");
+          showNotice("팀 생성", "팀이 생성되었습니다.", "success");
         },
         onError: async (res) => {
           const code = await parseErrorCode(res);
