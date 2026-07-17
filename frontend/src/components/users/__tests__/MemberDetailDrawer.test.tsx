@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import MemberDetailDrawer from "@/components/users/MemberDetailDrawer";
 import type { TBatchResult, TTeamTree } from "@/types/teamTypes";
 import type { TUserListItem } from "@/types/userTypes";
-import { useToastStore } from "@/stores/toastStore";
+import { useNoticeStore } from "@/stores/noticeStore";
 
 /** Minimal team fixture — matches the user's one membership plus a
     second, unjoined team for the add picker. */
@@ -71,7 +71,6 @@ describe("MemberDetailDrawer", () => {
   it("stages a role change, confirms, and calls onUpdateRoles with {updates}", async () => {
     const user = userEvent.setup();
     const props = baseProps();
-    const showToastSpy = vi.spyOn(useToastStore.getState(), "showToast");
     render(<MemberDetailDrawer {...props} />);
 
     await user.click(screen.getByRole("button", { name: "백엔드 role" }));
@@ -83,13 +82,6 @@ describe("MemberDetailDrawer", () => {
     expect(props.onUpdateRoles).toHaveBeenCalledWith([
       { teamId: "t_b", role: "write" },
     ]);
-
-    await waitFor(() => {
-      expect(showToastSpy).toHaveBeenCalledWith(
-        "변경사항이 저장되었습니다.",
-        "success",
-      );
-    });
   });
 
   it("keeps the changed team/role visible in the confirm modal after success", async () => {
@@ -138,7 +130,7 @@ describe("MemberDetailDrawer", () => {
   it("removes a checked membership and calls onRemoveMemberships(teamIds)", async () => {
     const user = userEvent.setup();
     const props = baseProps();
-    const showToastSpy = vi.spyOn(useToastStore.getState(), "showToast");
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     render(<MemberDetailDrawer {...props} />);
 
     await user.click(screen.getByRole("checkbox", { name: "백엔드 선택" }));
@@ -150,7 +142,8 @@ describe("MemberDetailDrawer", () => {
     expect(props.onRemoveMemberships).toHaveBeenCalledWith(["t_b"]);
 
     await waitFor(() => {
-      expect(showToastSpy).toHaveBeenCalledWith(
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        "멤버십 제거",
         "멤버십이 제거되었습니다.",
         "success",
       );
@@ -189,7 +182,7 @@ describe("MemberDetailDrawer", () => {
   it("cancels the invitation through the confirm modal", async () => {
     const user = userEvent.setup();
     const props = { ...baseProps(), user: PENDING_USER };
-    const showToastSpy = vi.spyOn(useToastStore.getState(), "showToast");
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     render(<MemberDetailDrawer {...props} />);
 
     await user.click(screen.getByRole("button", { name: "초대 취소" }));
@@ -202,11 +195,15 @@ describe("MemberDetailDrawer", () => {
 
     await waitFor(() => expect(props.onCancelInvitation).toHaveBeenCalled());
     await waitFor(() =>
-      expect(showToastSpy).toHaveBeenCalledWith("초대를 취소했습니다."),
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        "초대 취소",
+        "초대를 취소했습니다.",
+        "info",
+      ),
     );
   });
 
-  it("shows a not-pending toast when cancel rejects with INVITATION_NOT_PENDING", async () => {
+  it("shows a not-pending notice when cancel rejects with INVITATION_NOT_PENDING", async () => {
     const user = userEvent.setup();
     const props = {
       ...baseProps(),
@@ -217,14 +214,15 @@ describe("MemberDetailDrawer", () => {
         }),
       ),
     };
-    const showToastSpy = vi.spyOn(useToastStore.getState(), "showToast");
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     render(<MemberDetailDrawer {...props} />);
 
     await user.click(screen.getByRole("button", { name: "초대 취소" }));
     await user.click(screen.getByRole("button", { name: "취소하기" }));
 
     await waitFor(() =>
-      expect(showToastSpy).toHaveBeenCalledWith(
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        "초대 취소",
         "취소할 초대가 없습니다.",
         "error",
       ),

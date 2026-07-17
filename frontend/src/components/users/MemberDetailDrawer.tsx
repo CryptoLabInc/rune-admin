@@ -22,7 +22,7 @@ import { parseErrorCode } from "@/api/parseError";
 import { formatDate, formatDateTime } from "@/utils/formatDate";
 import type { TBatchResult, TTeamTree } from "@/types/teamTypes";
 import type { TUserListItem } from "@/types/userTypes";
-import { useToastStore } from "@/stores/toastStore";
+import { useNoticeStore } from "@/stores/noticeStore";
 
 const styles = {
   statusRow:
@@ -144,7 +144,7 @@ const MemberDetailDrawer = ({
   const [batchFailures, setBatchFailures] = useState<
     { account: string; reason: string }[] | null
   >(null);
-  const showToast = useToastStore((state) => state.showToast);
+  const showNotice = useNoticeStore((state) => state.showNotice);
   const teamOptions = buildTeamOptions(teams);
 
   const changes = memberships.filter((m) => m.role !== m.baseRole);
@@ -179,9 +179,13 @@ const MemberDetailDrawer = ({
     setResending(true);
     try {
       await onResendCode();
-      showToast("초대 코드를 재전송했습니다.");
+      showNotice("초대 코드 재전송", "초대 코드를 재전송했습니다.", "info");
     } catch {
-      showToast("초대 코드 재전송에 실패했습니다. 다시 시도해주세요.", "error");
+      showNotice(
+        "초대 코드 재전송",
+        "초대 코드 재전송에 실패했습니다. 다시 시도해주세요.",
+        "error",
+      );
     } finally {
       setResending(false);
     }
@@ -219,11 +223,12 @@ const MemberDetailDrawer = ({
           checked: false,
         },
       ]);
-      showToast("팀에 추가되었습니다.");
+      showNotice("팀 추가", "팀에 추가되었습니다.", "info");
       resetAdd();
     } catch (err) {
       const code = err instanceof Response ? await parseErrorCode(err) : "";
-      showToast(
+      showNotice(
+        "팀 추가",
         code === "ALREADY_TEAM_MEMBER"
           ? "이미 소속된 팀입니다."
           : "팀 추가에 실패했습니다. 다시 시도해주세요.",
@@ -415,9 +420,7 @@ const MemberDetailDrawer = ({
                   : m,
               ),
             );
-            if (result.failed.length === 0) {
-              showToast("변경사항이 저장되었습니다.", "success");
-            } else {
+            if (result.failed.length > 0) {
               setBatchFailures(
                 result.failed.map((f) => ({
                   account:
@@ -452,7 +455,7 @@ const MemberDetailDrawer = ({
               ),
             );
             if (result.failed.length === 0) {
-              showToast("멤버십이 제거되었습니다.", "success");
+              showNotice("멤버십 제거", "멤버십이 제거되었습니다.", "success");
             } else {
               setBatchFailures(
                 result.failed.map((f) => ({
@@ -490,12 +493,14 @@ const MemberDetailDrawer = ({
           onConfirm={async () => {
             try {
               await onDeactivateSession();
-              showToast("세션을 비활성화했습니다.");
               setOpenModal(null);
+              showNotice("세션 비활성화", "세션을 비활성화했습니다.", "info");
             } catch (err) {
               const code =
                 err instanceof Response ? await parseErrorCode(err) : "";
-              showToast(
+              setOpenModal(null);
+              showNotice(
+                "세션 비활성화",
                 code === "SESSION_NOT_ACTIVE"
                   ? "이미 만료된 세션입니다."
                   : "세션 비활성화에 실패했습니다. 다시 시도해주세요.",
@@ -513,12 +518,14 @@ const MemberDetailDrawer = ({
           onConfirm={async () => {
             try {
               await onCancelInvitation();
-              showToast("초대를 취소했습니다.");
               setOpenModal(null);
+              showNotice("초대 취소", "초대를 취소했습니다.", "info");
             } catch (err) {
               const code =
                 err instanceof Response ? await parseErrorCode(err) : "";
-              showToast(
+              setOpenModal(null);
+              showNotice(
+                "초대 취소",
                 code === "INVITATION_NOT_PENDING"
                   ? "취소할 초대가 없습니다."
                   : "초대 취소에 실패했습니다. 다시 시도해주세요.",
