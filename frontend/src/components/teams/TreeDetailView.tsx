@@ -41,7 +41,7 @@ import type {
   TTeamMemberStatus,
   TTeamTree,
 } from "@/types/teamTypes";
-import { useToastStore } from "@/stores/toastStore";
+import { useNoticeStore } from "@/stores/noticeStore";
 
 const styles = {
   body: "flex min-h-[340px] flex-1",
@@ -226,7 +226,7 @@ const TreeDetailView = ({
       return next;
     });
 
-  const showToast = useToastStore((state) => state.showToast);
+  const showNotice = useNoticeStore((state) => state.showNotice);
 
   const baseRole = (userId: string, fallback: TTeamMemberRole) =>
     savedRoles.get(userId) ?? fallback;
@@ -246,7 +246,7 @@ const TreeDetailView = ({
   const applyRoleChanges = () => {
     setSavedRoles((prev) => new Map([...prev, ...pendingRoles]));
     setPendingRoles(new Map());
-    showToast("변경사항이 저장되었습니다.", "success");
+    showNotice("역할 변경", "변경사항이 저장되었습니다.", "success");
   };
 
   /* Modals (SC-07~10 + SC-06 state E). All confirm handlers below call
@@ -312,7 +312,7 @@ const TreeDetailView = ({
       {
         onSuccess: () => {
           closeModal();
-          showToast("팀이 생성되었습니다.", "success");
+          showNotice("팀 생성", "팀이 생성되었습니다.", "success");
         },
         onError: async (res) => {
           const code = await parseErrorCode(res);
@@ -328,7 +328,7 @@ const TreeDetailView = ({
       {
         onSuccess: () => {
           closeModal();
-          showToast("팀 이름이 변경되었습니다.", "success");
+          showNotice("팀 이름 변경", "팀 이름이 변경되었습니다.", "success");
         },
         onError: async (res) => {
           const code = await parseErrorCode(res);
@@ -347,11 +347,13 @@ const TreeDetailView = ({
       {
         onSuccess: () => {
           closeModal();
-          showToast("팀이 삭제되었습니다.", "success");
-          onSelectTeam(
-            teams.find((t) => t.parentId === null && t.id !== selectedTeam.id)
-              ?.id ?? "",
-          );
+          showNotice("팀 삭제", "팀이 삭제되었습니다.", "success", () => {
+            onSelectTeam(
+              teams.find(
+                (t) => t.parentId === null && t.id !== selectedTeam.id,
+              )?.id ?? "",
+            );
+          });
         },
         onError: async (res) => {
           const code = await parseErrorCode(res);
@@ -367,7 +369,7 @@ const TreeDetailView = ({
       {
         onSuccess: () => {
           closeModal();
-          showToast("멤버를 추가했습니다.", "success");
+          showNotice("멤버 추가", "멤버를 추가했습니다.", "success");
         },
         onError: async (res) => {
           const code = await parseErrorCode(res);
@@ -415,7 +417,7 @@ const TreeDetailView = ({
         },
         onError: () => {
           closeModal();
-          showToast("role 변경에 실패했습니다.", "error");
+          showNotice("역할 변경", "role 변경에 실패했습니다.", "error");
         },
       },
     );
@@ -434,12 +436,12 @@ const TreeDetailView = ({
             })),
           );
         } else {
-          showToast("멤버십이 제거되었습니다.", "success");
+          showNotice("멤버십 제거", "멤버십이 제거되었습니다.", "success");
         }
       },
       onError: () => {
         closeModal();
-        showToast("멤버십 제거에 실패했습니다.", "error");
+        showNotice("멤버십 제거", "멤버십 제거에 실패했습니다.", "error");
       },
     });
   };
