@@ -69,7 +69,9 @@ describe("LoginPage", () => {
       jsonRes({ logged_in: false }),
     );
     renderLogin("/login?error=exchange_failed");
-    expect(await screen.findByRole("alert")).toHaveTextContent("로그인 실패");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "로그인 중 문제가 발생했습니다.",
+    );
   });
 
   it("starts login and redirects the browser to authorize_url", async () => {
@@ -105,7 +107,9 @@ describe("LoginPage", () => {
     await user.click(
       await screen.findByRole("button", { name: BTN_TEXT.login }),
     );
-    expect(await screen.findByRole("alert")).toHaveTextContent("로그인 실패");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "로그인 중 문제가 발생했습니다.",
+    );
   });
 
   it("redirects an already logged-in user to /teams", async () => {

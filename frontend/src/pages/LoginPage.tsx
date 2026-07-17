@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navigate, useSearchParams } from "react-router";
 
 import Button from "@/components/elements/Button";
+import RuneMark from "@/components/elements/RuneMark";
 import PublicNavbar from "@/components/navigation/PublicNavbar";
 import { useSessionQuery } from "@/hooks/queries/useSessionQuery";
 import { postAuthStart } from "@/api/authAPIs";
@@ -47,31 +48,36 @@ const LoginPage = () => {
     <div className="bg-background flex min-h-screen flex-col">
       <PublicNavbar />
       <main className="grid flex-1 place-items-center px-4">
-        <div className="border-border bg-panel-solid w-[320px] rounded-lg border p-7 text-center">
-          <h1 className="mb-4 text-lg font-semibold">{BRAND_WORDMARK}</h1>
+        <div className="border-border bg-panel-solid flex w-100 flex-col gap-8 rounded-lg border p-7 text-center">
+          <div className="flex items-center justify-center gap-2">
+            <RuneMark />
+            <h1 className="text-lg font-semibold">{BRAND_WORDMARK}</h1>
+          </div>
           {failed && (
-            <p role="alert" className="text-negative mb-4 text-sm">
-              로그인 실패
-              <br />
+            <p role="alert" className="text-negative text-md mb-4">
               <span className="text-muted-foreground">
-                문제가 발생했습니다. 다시 시도해 주세요.
+                로그인 중 문제가 발생했습니다.
+                <br />
+                다시 시도해 주세요.
               </span>
             </p>
           )}
-          <Button
-            btnText={BTN_TEXT.login}
-            btnSize="lg"
-            btnColor="mintFilled"
-            handleClick={handleLogin}
-            disabled={starting}
-          />
-          {!failed && (
-            <p className="text-muted-foreground mt-3 text-xs">
-              로그인을 위해 Runespace로 이동합니다.
-              <br />
-              로그인이 완료되면 관리자 페이지로 되돌아옵니다.
-            </p>
-          )}
+          <div className="flex flex-col gap-5">
+            <Button
+              btnText={BTN_TEXT.login}
+              btnSize="lg"
+              btnColor="mintFilled"
+              handleClick={handleLogin}
+              disabled={starting}
+            />
+            {!failed && (
+              <p className="text-muted-foreground mt-3 text-sm">
+                로그인을 위해 Runespace로 이동합니다.
+                <br />
+                로그인이 완료되면 관리자 페이지로 되돌아옵니다.
+              </p>
+            )}
+          </div>
         </div>
       </main>
     </div>

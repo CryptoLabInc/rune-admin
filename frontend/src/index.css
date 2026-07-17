@@ -31,9 +31,9 @@
   --color-subtle: #bfcfe4; /* tier-2 text — long prose/card body (no UIKIT source, added 2026-07-12) */
   --color-muted-foreground: #93a6c2; /* --rn-muted */
   --color-faint: #64768f; /* --rn-faint — labels/captions only */
-  --color-border: rgba(146, 168, 196, 0.14); /* --rn-hair */
+  --color-border: rgba(146, 168, 196, 0.4); /* --rn-hair */
   --color-border-strong: rgba(146, 168, 196, 0.32); /* --rn-hair-strong */
-  --color-panel: rgba(14, 24, 42, 0.55); /* --rn-panel */
+  --color-panel: rgba(14, 24, 42, 0.9); /* --rn-panel */
   --color-panel-solid: #0e182a; /* --rn-panel-solid — popover/dialog/drawer */
   --color-well: #040a13; /* --rn-bg-deep — input wells */
   --color-scrim: #040a13; /* overlay scrims — stays dark in both themes */
