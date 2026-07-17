@@ -33,10 +33,10 @@ describe("ToastContainer", () => {
   it("announces error toasts as alerts", () => {
     render(<ToastContainer />);
     act(() => {
-      useToastStore.getState().showToast("역할 변경에 실패했습니다.", "error");
+      useToastStore.getState().showToast("권한 변경에 실패했습니다.", "error");
     });
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "역할 변경에 실패했습니다.",
+      "권한 변경에 실패했습니다.",
     );
   });
 

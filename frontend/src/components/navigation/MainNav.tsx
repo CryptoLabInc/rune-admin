@@ -14,7 +14,7 @@ const MainNav = () => {
   const { data: stats } = useUsersStatsQuery();
 
   return (
-    <nav className="flex w-40 shrink-0 flex-col gap-1">
+    <nav className="flex w-36 shrink-0 flex-col gap-1">
       {NAV_LIST.map(({ title, url }) => (
         <NavLink
           key={url}

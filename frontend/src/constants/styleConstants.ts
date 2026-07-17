@@ -15,7 +15,8 @@ export const BTN_SIZE_VAR = {
 
 /* Theme roles (2026-07-13): filled = mintFilled(primary) /
    grayFilled(secondary) / redFilled(warning); outline =
-   mintOutline(primary) / grayOutline(secondary). The disabled face is
+   mintOutline(primary) / grayOutline(secondary) / redOutline(danger).
+   The disabled face is
    shared across every theme — a flat gray fill defined once in the
    Button base styles, so a disabled/loading button always reads the
    same regardless of theme. */
@@ -40,6 +41,12 @@ export const BTN_COLOR_VAR = {
      mint at rest (no UIKIT source, added 2026-07-13). */
   mintOutline:
     "border-mint/50 bg-mint/5 light:bg-white text-mint hover:enabled:border-mint/75 hover:enabled:bg-mint/10 hover:enabled:text-mint-hot focus-visible:border-mint/75 focus-visible:bg-mint/10 focus-visible:text-mint-hot active:enabled:scale-[0.985] active:enabled:bg-mint/14",
+  /* Outline danger — same flat outline grammar as mintOutline in red;
+     for destructive actions that shouldn't carry a filled emphasis
+     (no negative "hot" token, so the label stays text-negative and only
+     the border/face deepen on hover). */
+  redOutline:
+    "border-negative/50 bg-negative/5 light:bg-white text-negative hover:enabled:border-negative/75 hover:enabled:bg-negative/10 focus-visible:border-negative/75 focus-visible:bg-negative/10 active:enabled:scale-[0.985] active:enabled:bg-negative/14",
   /* UIKIT soft — quiet secondary fill */
   grayFilled:
     "bg-muted-foreground/8 text-muted-foreground hover:enabled:bg-muted-foreground/14 hover:enabled:text-foreground focus-visible:bg-muted-foreground/14 focus-visible:text-foreground",
@@ -57,6 +64,7 @@ export const BTN_HOT_VAR = {
     "bg-[color-mix(in_srgb,var(--color-negative)_88%,#fff)] shadow-[inset_0_0_0_1px_rgba(58,8,14,0.16),0_0_0_3px_color-mix(in_srgb,var(--color-negative)_14%,transparent)]",
   grayOutline: "border-muted-foreground/60 bg-muted-foreground/10",
   mintOutline: "border-mint/75 bg-mint/10 text-mint-hot",
+  redOutline: "border-negative/75 bg-negative/10",
   grayFilled: "bg-muted-foreground/14 text-foreground",
 } as const;
 

@@ -5,11 +5,11 @@ const styles = {
   scrim: "bg-scrim/60 fixed inset-0 z-80 flex justify-end backdrop-blur-[6px]",
   panel:
     "border-muted-foreground/26 animate-drawer-slide flex h-full w-[472px] flex-col border-l bg-[color:color-mix(in_srgb,var(--color-panel-solid)_60%,var(--color-well))] shadow-[-24px_0_70px_rgba(0,0,0,0.38)] motion-reduce:animate-none",
-  header: "relative border-b px-[22px] pt-[22px] pb-[18px]",
+  header: "relative border-b p-5 pb-4",
   eyebrow: "text-tag text-mint m-0 mb-2 font-mono tracking-[0.11em]",
   title: "text-xl font-semibold",
   subtitle: "text-faint mt-2 block font-mono text-xs",
-  body: "flex-1 overflow-auto px-[22px] py-5",
+  body: "flex-1 overflow-auto p-5 flex-col gap-6 flex",
   footer:
     "bg-muted-foreground/[2%] grid grid-cols-[minmax(0,92px)_minmax(0,1fr)] gap-2 border-t px-[22px] py-[14px]",
 };
@@ -19,6 +19,9 @@ interface DrawerLayoutProps {
   title: string;
   eyebrow?: string;
   subtitle?: string;
+  /** Right-aligned action on the title line (e.g. a destructive delete);
+      the title takes the remaining width and truncates with an ellipsis. */
+  headerAction?: ReactNode;
   onClose: () => void;
   footer?: ReactNode;
   children: ReactNode;
@@ -35,6 +38,7 @@ const DrawerLayout = ({
   title,
   eyebrow,
   subtitle,
+  headerAction,
   onClose,
   footer,
   children,
@@ -82,9 +86,16 @@ const DrawerLayout = ({
       >
         <header className={styles.header}>
           {eyebrow && <p className={styles.eyebrow}>{eyebrow}</p>}
-          <h2 id={titleId} className={styles.title}>
-            {title}
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2
+              id={titleId}
+              title={title}
+              className={`${styles.title} min-w-0 flex-1 truncate`}
+            >
+              {title}
+            </h2>
+            {headerAction && <div className="flex-none">{headerAction}</div>}
+          </div>
           {subtitle && <span className={styles.subtitle}>{subtitle}</span>}
         </header>
         <div className={styles.body}>{children}</div>

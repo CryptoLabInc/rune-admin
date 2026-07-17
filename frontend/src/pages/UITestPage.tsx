@@ -44,13 +44,14 @@ import { useToastStore } from "@/stores/toastStore";
 type TUITestModal = "alert" | "confirm" | "wide" | "scroll" | null;
 
 /* Button theme roles (2026-07-13): filled primary/secondary/warning +
-   outline primary/secondary. Disabled is the shared gray fill. */
+   outline primary/secondary/danger. Disabled is the shared gray fill. */
 const BTN_THEMES: { color: TBTNColor; role: string; text: string }[] = [
   { color: "mintFilled", role: "filled · primary", text: "초대하기" },
   { color: "grayFilled", role: "filled · secondary", text: "나중에" },
   { color: "redFilled", role: "filled · warning", text: "팀 삭제" },
   { color: "mintOutline", role: "outline · primary", text: "새 팀 만들기" },
   { color: "grayOutline", role: "outline · secondary", text: "닫기" },
+  { color: "redOutline", role: "outline · danger", text: "멤버 삭제" },
 ];
 
 const ROLE_OPTIONS = [
@@ -316,7 +317,7 @@ const UITestPage = () => {
 
       <Section
         title="Button"
-        note="폼 컨트롤 — w-full 내장, 부모가 폭 제한. btnColor 5종 / btnSize 3종(높이 32·36·42px) · disabled는 전 테마 공통 gray fill(요청 진행 중에도 disabled 전달 — 별도 loading UI 없음)"
+        note="폼 컨트롤 — w-full 내장, 부모가 폭 제한. btnColor 6종 / btnSize 3종(높이 32·36·42px) · disabled는 전 테마 공통 gray fill(요청 진행 중에도 disabled 전달 — 별도 loading UI 없음)"
       >
         <h3 className="text-tag text-faint font-mono tracking-[0.07em]">
           THEME × STATE — btnSize=md 고정 · hover = focus-visible 동일 UI(박제)
@@ -734,7 +735,7 @@ const UITestPage = () => {
           </Notice>
           <Notice tone="success">변경사항이 저장되었습니다.</Notice>
           <Notice tone="error">
-            멤버 추가에 실패했습니다. 다시 시도해주세요.
+            멤버 추가에 실패했습니다. 다시 시도해 주세요.
           </Notice>
         </div>
       </Section>
@@ -914,7 +915,10 @@ const UITestPage = () => {
             btnColor="grayOutline"
             className="w-fit"
             handleClick={() =>
-              showToast("역할 변경에 실패했습니다. 다시 시도해주세요.", "error")
+              showToast(
+                "권한 변경에 실패했습니다. 다시 시도해 주세요.",
+                "error",
+              )
             }
           />
         </div>

@@ -31,12 +31,12 @@ describe("NoticeModal", () => {
       .getState()
       .showNotice(
         "세션 비활성화",
-        "세션 비활성화에 실패했습니다. 다시 시도해주세요.",
+        "세션 비활성화에 실패했습니다. 다시 시도해 주세요.",
         "error",
       );
     await waitFor(() => {
       expect(
-        screen.getByText("세션 비활성화에 실패했습니다. 다시 시도해주세요."),
+        screen.getByText("세션 비활성화에 실패했습니다. 다시 시도해 주세요."),
       ).toHaveClass("text-negative");
     });
   });

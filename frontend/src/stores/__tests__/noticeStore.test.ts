@@ -30,7 +30,9 @@ describe("noticeStore", () => {
 
   it("dismissNotice runs onConfirm then clears the notice", () => {
     const onConfirm = vi.fn();
-    useNoticeStore.getState().showNotice("팀 삭제", "팀이 삭제되었습니다.", "success", onConfirm);
+    useNoticeStore
+      .getState()
+      .showNotice("팀 삭제", "팀이 삭제되었습니다.", "success", onConfirm);
     useNoticeStore.getState().dismissNotice();
     expect(onConfirm).toHaveBeenCalledOnce();
     expect(useNoticeStore.getState().notice).toBeNull();

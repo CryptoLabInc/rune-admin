@@ -1,7 +1,7 @@
 import { cn } from "@/utils/cn";
 
 const styles = {
-  wrap: "flex w-fit items-center gap-1 font-mono text-sm",
+  wrap: "flex w-fit items-center gap-2 font-mono text-sm",
   /* Arrows use the control-grade border + ink (border-strong /
      foreground — same grammar as Input/Dropdown controls). */
   arrow:
