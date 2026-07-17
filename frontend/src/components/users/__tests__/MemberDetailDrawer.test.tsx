@@ -69,6 +69,19 @@ describe("MemberDetailDrawer", () => {
     expect(screen.getByText("백엔드")).toBeInTheDocument();
   });
 
+  it("shows a placeholder — — row when the member belongs to no team", () => {
+    render(
+      <MemberDetailDrawer
+        {...baseProps()}
+        user={{ ...USER, memberships: [] }}
+      />,
+    );
+    expect(screen.getByText("소속 팀 (0)")).toBeInTheDocument();
+    /* Two em-dash cells (team + role) in the single placeholder row. */
+    const dashes = screen.getAllByText("—");
+    expect(dashes.length).toBeGreaterThanOrEqual(2);
+  });
+
   it("stages a role change, confirms, and calls onUpdateRoles with {updates}", async () => {
     const user = userEvent.setup();
     const props = baseProps();
@@ -101,9 +114,9 @@ describe("MemberDetailDrawer", () => {
     /* Regression: a successful apply makes the drawer recompute its
        `changes` prop to empty (baseRole catches up), which used to blank
        the modal table. The success view must still list what changed. */
-    await screen.findByText("role이 변경되었습니다.");
+    await screen.findByText("권한이 변경되었습니다.");
     const modalBody = screen
-      .getByText("다음 멤버의 role을 변경합니다:")
+      .getByText("다음 멤버의 권한을 변경합니다:")
       .closest("div")!;
     expect(within(modalBody).getByText("백엔드")).toBeInTheDocument();
     expect(within(modalBody).getByText("write")).toBeInTheDocument();
@@ -150,7 +163,7 @@ describe("MemberDetailDrawer", () => {
 
     await waitFor(() => {
       expect(showNoticeSpy).toHaveBeenCalledWith(
-        "멤버십 제거",
+        MODAL_TITLES.removeMembership,
         "멤버십이 제거되었습니다.",
         "success",
       );
@@ -165,11 +178,35 @@ describe("MemberDetailDrawer", () => {
     await user.click(screen.getByRole("button", { name: BTN_TEXT.addTeam }));
     await user.click(screen.getByRole("button", { name: "추가할 팀" }));
     await user.click(screen.getByRole("option", { name: "디자인" }));
+    /* No default role — the picker requires an explicit selection. */
+    await user.click(screen.getByRole("button", { name: "추가할 role" }));
+    await user.click(screen.getByRole("option", { name: "write" }));
     await user.click(screen.getByRole("button", { name: BTN_TEXT.add }));
 
     await waitFor(() =>
-      expect(props.onAddMembership).toHaveBeenCalledWith("t_d", "read"),
+      expect(props.onAddMembership).toHaveBeenCalledWith("t_d", "write"),
     );
+  });
+
+  it("disables the role picker when no team is left to join", async () => {
+    const user = userEvent.setup();
+    /* Member already in every team in the fixture → nothing addable. */
+    render(
+      <MemberDetailDrawer
+        {...baseProps()}
+        user={{
+          ...USER,
+          memberships: [
+            { teamId: "t_b", teamName: "백엔드", role: "edit" },
+            { teamId: "t_d", teamName: "디자인", role: "read" },
+          ],
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.addTeam }));
+    expect(screen.getByRole("button", { name: "추가할 팀" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "추가할 role" })).toBeDisabled();
   });
 
   it("deactivates the session through the confirm modal", async () => {
