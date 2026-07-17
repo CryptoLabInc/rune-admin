@@ -8,7 +8,7 @@ import DeleteTeamModal from "@/components/teams/DeleteTeamModal";
 import RemoveMembershipModal from "@/components/teams/RemoveMembershipModal";
 import RenameTeamModal from "@/components/teams/RenameTeamModal";
 import RoleChangeConfirmModal from "@/components/teams/RoleChangeConfirmModal";
-import { BTN_TEXT } from "@/constants/commonConstants";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TTeamTree } from "@/types/teamTypes";
 
 /** Minimal team fixture — a root team (플랫폼), a sibling of it (디자인),
@@ -158,7 +158,9 @@ describe("DeleteTeamModal", () => {
         onDelete={() => {}}
       />,
     );
-    expect(screen.getByText("팀을 삭제할 수 없습니다")).toBeInTheDocument();
+    expect(
+      screen.getByText(MODAL_TITLES.deleteTeamBlocked),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: BTN_TEXT.deleteTeam }),
     ).not.toBeInTheDocument();
@@ -289,7 +291,7 @@ describe("RemoveMembershipModal", () => {
         onConfirm={onConfirm}
       />,
     );
-    expect(screen.getByText("멤버십 제거")).toBeInTheDocument();
+    expect(screen.getByText(MODAL_TITLES.removeMembership)).toBeInTheDocument();
     expect(screen.getByText("k@corp.com")).toBeInTheDocument();
     expect(screen.getByText(/하위 팀 소속은 유지됩니다/)).toBeInTheDocument();
 

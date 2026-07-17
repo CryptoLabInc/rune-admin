@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import Button from "@/components/elements/Button";
 import ModalLayout from "@/components/layout/ModalLayout";
-import { BTN_TEXT } from "@/constants/commonConstants";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 
 interface CancelInvitationModalProps {
   account: string;
@@ -36,7 +36,7 @@ const CancelInvitationModal = ({
   };
 
   return (
-    <ModalLayout title="초대 취소" isOpen>
+    <ModalLayout title={MODAL_TITLES.cancelInvitation} isOpen>
       <p className="text-base">
         {account}의 미사용 초대 코드가 모두 만료됩니다. 유저는 삭제되지
         않습니다.

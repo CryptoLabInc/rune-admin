@@ -1,6 +1,6 @@
 import Button from "@/components/elements/Button";
 import ModalLayout from "@/components/layout/ModalLayout";
-import { BTN_TEXT } from "@/constants/commonConstants";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 
 export interface TRoleChange {
   account: string;
@@ -33,7 +33,7 @@ const RoleChangeConfirmModal = ({
   onConfirm,
 }: RoleChangeConfirmModalProps) => {
   return (
-    <ModalLayout title="role 변경" isOpen>
+    <ModalLayout title={MODAL_TITLES.roleChange} isOpen>
       <div className="flex w-full flex-col gap-4">
         <p className="text-base">다음 멤버의 role을 변경합니다:</p>
         <table className={styles.table}>

@@ -1,7 +1,7 @@
 import Button from "@/components/elements/Button";
 import Notice from "@/components/elements/Notice";
 import ModalLayout from "@/components/layout/ModalLayout";
-import { BTN_TEXT } from "@/constants/commonConstants";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TTeamMemberRole } from "@/types/teamTypes";
 
 export interface TMembershipRemoval {
@@ -35,7 +35,7 @@ const RemoveMembershipModal = ({
   onConfirm,
 }: RemoveMembershipModalProps) => {
   return (
-    <ModalLayout title="멤버십 제거" isOpen>
+    <ModalLayout title={MODAL_TITLES.removeMembership} isOpen>
       <div className="flex w-full flex-col gap-4">
         <p className="text-base">다음 멤버십을 제거합니다:</p>
         <table className={styles.table}>

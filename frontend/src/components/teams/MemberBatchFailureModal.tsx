@@ -1,6 +1,6 @@
 import Button from "@/components/elements/Button";
 import ModalLayout from "@/components/layout/ModalLayout";
-import { BTN_TEXT } from "@/constants/commonConstants";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 
 interface MemberBatchFailureModalProps {
   failures: { account: string; reason: string }[];
@@ -17,7 +17,7 @@ const MemberBatchFailureModal = ({
   onClose,
 }: MemberBatchFailureModalProps) => {
   return (
-    <ModalLayout title="일부 항목을 처리하지 못했습니다" isOpen>
+    <ModalLayout title={MODAL_TITLES.batchFailure} isOpen>
       <ul className="my-2 flex flex-col gap-1 text-sm">
         {failures.map((f) => (
           <li key={f.account} className="flex justify-between gap-3">

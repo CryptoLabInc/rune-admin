@@ -49,6 +49,31 @@ export const BTN_TEXT = {
   deleteMember: "멤버 삭제",
 } as const;
 
+/** MODAL_TITLES is the single source of truth for ModalLayout titles across
+ * the console modals, mirroring BTN_TEXT so a wording change lands in one
+ * place. Titles that embed a name or count are functions; the rest are plain
+ * strings. */
+export const MODAL_TITLES = {
+  // Workspace
+  workspaceManage: "워크스페이스 관리",
+  workspaceDelete: "워크스페이스 삭제",
+  // Teams
+  createTeam: "새 팀 만들기",
+  renameTeam: "팀 이름 변경",
+  deleteTeamBlocked: "팀을 삭제할 수 없습니다",
+  deleteTeam: (teamName: string) => `팀 삭제 — ${teamName}`,
+  addMember: (teamName: string) => `멤버 추가 — ${teamName}`,
+  batchFailure: "일부 항목을 처리하지 못했습니다",
+  // Members / roles / invitations
+  roleChange: "role 변경",
+  removeMembership: "멤버십 제거",
+  inviteMember: "멤버 초대",
+  cancelInvitation: "초대 취소",
+  deactivateSession: "세션 비활성화",
+  deleteMemberSingle: (account: string) => `멤버 삭제 — ${account}`,
+  deleteMemberBulk: (count: number) => `멤버 삭제 (${count}명)`,
+} as const;
+
 export const PATH_LIST = {
   home: "/",
   login: "/login",

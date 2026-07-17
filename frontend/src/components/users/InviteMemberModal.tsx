@@ -9,7 +9,7 @@ import ModalLayout from "@/components/layout/ModalLayout";
 import { buildTeamOptions, ROLE_OPTIONS } from "@/components/teams/teamOptions";
 import { buildInvitePreview } from "@/components/users/invitePreview";
 import ModalTable from "@/components/users/ModalTable";
-import { BTN_TEXT } from "@/constants/commonConstants";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TTeamTree } from "@/types/teamTypes";
 import type { TInvitePayload, TInviteResult } from "@/types/userTypes";
 
@@ -132,7 +132,7 @@ const InviteMemberModal = ({
   };
 
   return (
-    <ModalLayout title="멤버 초대" isOpen isWide>
+    <ModalLayout title={MODAL_TITLES.inviteMember} isOpen isWide>
       <div className="flex flex-col gap-4">
         <Input
           id="invite-email"

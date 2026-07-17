@@ -8,7 +8,7 @@ import UsersPage from "@/pages/UsersPage";
 import * as invitationAPIs from "@/api/invitationAPIs";
 import * as teamAPIs from "@/api/teamAPIs";
 import * as userAPIs from "@/api/userAPIs";
-import { BTN_TEXT } from "@/constants/commonConstants";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TUserListItem } from "@/types/userTypes";
 import { useNoticeStore } from "@/stores/noticeStore";
 
@@ -241,7 +241,9 @@ describe("UsersPage", () => {
       }),
     );
     await waitFor(() =>
-      expect(screen.queryByText("멤버 초대")).not.toBeInTheDocument(),
+      expect(
+        screen.queryByText(MODAL_TITLES.inviteMember),
+      ).not.toBeInTheDocument(),
     );
   });
 
@@ -354,9 +356,9 @@ describe("UsersPage", () => {
       screen.getByRole("button", { name: BTN_TEXT.resendInvitationCode }),
     );
 
-    const modal = (
-      await screen.findByText("일부 항목을 처리하지 못했습니다")
-    ).closest("div") as HTMLElement;
+    const modal = (await screen.findByText(MODAL_TITLES.batchFailure)).closest(
+      "div",
+    ) as HTMLElement;
     expect(within(modal).getByText("m@corp.com")).toBeInTheDocument();
     expect(within(modal).queryByText("k@corp.com")).not.toBeInTheDocument();
   });
@@ -381,9 +383,9 @@ describe("UsersPage", () => {
     );
 
     expect(deleteSpy).toHaveBeenCalledWith(["u_1", "u_2"]);
-    const modal = (
-      await screen.findByText("일부 항목을 처리하지 못했습니다")
-    ).closest("div") as HTMLElement;
+    const modal = (await screen.findByText(MODAL_TITLES.batchFailure)).closest(
+      "div",
+    ) as HTMLElement;
     expect(within(modal).getByText("m@corp.com")).toBeInTheDocument();
     expect(
       within(modal).getByText("사용자를 찾을 수 없습니다"),
@@ -417,7 +419,7 @@ describe("UsersPage", () => {
     );
     await waitFor(() =>
       expect(
-        screen.queryByText("일부 항목을 처리하지 못했습니다"),
+        screen.queryByText(MODAL_TITLES.batchFailure),
       ).not.toBeInTheDocument(),
     );
     await waitFor(() =>

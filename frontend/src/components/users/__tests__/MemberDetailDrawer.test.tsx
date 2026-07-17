@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import MemberDetailDrawer from "@/components/users/MemberDetailDrawer";
-import { BTN_TEXT } from "@/constants/commonConstants";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TBatchResult, TTeamTree } from "@/types/teamTypes";
 import type { TUserListItem } from "@/types/userTypes";
 import { useNoticeStore } from "@/stores/noticeStore";
@@ -126,7 +126,7 @@ describe("MemberDetailDrawer", () => {
     await user.click(screen.getByRole("button", { name: BTN_TEXT.change }));
 
     expect(
-      await screen.findByText("일부 항목을 처리하지 못했습니다"),
+      await screen.findByText(MODAL_TITLES.batchFailure),
     ).toBeInTheDocument();
     expect(screen.getByText("팀을 찾을 수 없습니다")).toBeInTheDocument();
     const failureItem = screen.getByText("팀을 찾을 수 없습니다").closest("li");
@@ -181,7 +181,7 @@ describe("MemberDetailDrawer", () => {
       screen.getByRole("button", { name: BTN_TEXT.deactivateSession }),
     );
     expect(
-      screen.getByRole("heading", { name: "세션 비활성화" }),
+      screen.getByRole("heading", { name: MODAL_TITLES.deactivateSession }),
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: BTN_TEXT.deactivate }));
 

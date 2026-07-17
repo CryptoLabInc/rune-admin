@@ -8,7 +8,7 @@ import Radio from "@/components/elements/Radio";
 import ModalLayout from "@/components/layout/ModalLayout";
 import { buildTeamOptions } from "@/components/teams/teamOptions";
 import { cn } from "@/utils/cn";
-import { BTN_TEXT } from "@/constants/commonConstants";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TTeamTree } from "@/types/teamTypes";
 
 const styles = {
@@ -67,7 +67,7 @@ const DeleteTeamModal = ({
 
   if (hasChildren) {
     return (
-      <ModalLayout title="팀을 삭제할 수 없습니다" isOpen>
+      <ModalLayout title={MODAL_TITLES.deleteTeamBlocked} isOpen>
         <p className="text-center text-base">
           하위 팀이 있는 팀은 삭제할 수 없습니다.
           <br />
@@ -111,7 +111,7 @@ const DeleteTeamModal = ({
   };
 
   return (
-    <ModalLayout title={`팀 삭제 — ${teamName}`} isOpen isWide>
+    <ModalLayout title={MODAL_TITLES.deleteTeam(teamName)} isOpen isWide>
       <div className="flex w-full flex-col gap-4">
         <Notice tone="info">
           삭제하려는 팀의 기억 처리 방식을 선택해 주세요.

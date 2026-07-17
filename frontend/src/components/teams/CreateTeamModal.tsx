@@ -10,7 +10,7 @@ import {
   TEAM_NAME_PATTERN,
   TEAM_NAME_RULE_TEXT,
 } from "@/components/teams/teamOptions";
-import { BTN_TEXT } from "@/constants/commonConstants";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TTeamTree } from "@/types/teamTypes";
 
 interface CreateTeamModalProps {
@@ -57,7 +57,7 @@ const CreateTeamModal = ({
       : undefined;
 
   return (
-    <ModalLayout title="새 팀 만들기" isOpen>
+    <ModalLayout title={MODAL_TITLES.createTeam} isOpen>
       <div className="flex w-full flex-col gap-5">
         <Input
           id="create-team-name"

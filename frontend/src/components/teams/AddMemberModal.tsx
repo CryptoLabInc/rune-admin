@@ -7,7 +7,7 @@ import MemberStatus from "@/components/elements/MemberStatus";
 import Notice from "@/components/elements/Notice";
 import ModalLayout from "@/components/layout/ModalLayout";
 import { ROLE_OPTIONS } from "@/components/teams/teamOptions";
-import { BTN_TEXT } from "@/constants/commonConstants";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -40,7 +40,7 @@ const AddMemberModal = ({
   const canSubmit = trimmed.length > 0 && !invalidFormat && role !== "";
 
   return (
-    <ModalLayout title={`멤버 추가 — ${teamName}`} isOpen isWide>
+    <ModalLayout title={MODAL_TITLES.addMember(teamName)} isOpen isWide>
       <div className="flex w-full flex-col gap-5">
         <Input
           id="add-member-account"

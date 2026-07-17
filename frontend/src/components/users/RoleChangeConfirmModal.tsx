@@ -4,7 +4,7 @@ import Button from "@/components/elements/Button";
 import Notice from "@/components/elements/Notice";
 import ModalLayout from "@/components/layout/ModalLayout";
 import ModalTable from "@/components/users/ModalTable";
-import { BTN_TEXT } from "@/constants/commonConstants";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TRoleChange } from "@/types/userTypes";
 
 const UPDATE_FAILED_MESSAGE = "역할 변경에 실패했습니다. 다시 시도해주세요.";
@@ -59,7 +59,7 @@ const RoleChangeConfirmModal = ({
   };
 
   return (
-    <ModalLayout title="role 변경" isOpen>
+    <ModalLayout title={MODAL_TITLES.roleChange} isOpen>
       <div className="flex flex-col gap-4">
         <p className="text-base">다음 멤버의 role을 변경합니다:</p>
         <ModalTable

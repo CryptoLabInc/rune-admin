@@ -3,7 +3,7 @@ import { useState } from "react";
 import Button from "@/components/elements/Button";
 import ModalLayout from "@/components/layout/ModalLayout";
 import ModalTable from "@/components/users/ModalTable";
-import { BTN_TEXT } from "@/constants/commonConstants";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TMemberDeleteTarget } from "@/types/userTypes";
 
 const DELETE_FAILED_MESSAGE = "멤버 삭제에 실패했습니다. 다시 시도해주세요.";
@@ -36,8 +36,8 @@ const MemberDeleteModal = ({
 
   const single = targets.length === 1 ? targets[0] : null;
   const title = single
-    ? `멤버 삭제 — ${single.account}`
-    : `멤버 삭제 (${targets.length}명)`;
+    ? MODAL_TITLES.deleteMemberSingle(single.account)
+    : MODAL_TITLES.deleteMemberBulk(targets.length);
 
   const handleConfirm = async () => {
     setSubmitting(true);

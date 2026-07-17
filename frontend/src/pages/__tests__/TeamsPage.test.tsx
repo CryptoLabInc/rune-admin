@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import TeamsPage from "@/pages/TeamsPage";
 import * as teamAPIs from "@/api/teamAPIs";
+import { MODAL_TITLES } from "@/constants/commonConstants";
 
 const jsonRes = (body: unknown) =>
   ({ ok: true, json: async () => body }) as unknown as Response;
@@ -107,7 +108,7 @@ describe("TeamsPage empty state (SC-06 B)", () => {
     await user.click(viewButton("새 팀 만들기"));
 
     expect(
-      await screen.findByRole("heading", { name: "새 팀 만들기" }),
+      await screen.findByRole("heading", { name: MODAL_TITLES.createTeam }),
     ).toBeInTheDocument();
   });
 });
