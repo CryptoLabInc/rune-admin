@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Generate self-signed CA + server certificate for Rune-Vault TLS.
+# Generate self-signed CA + server certificate for Rune-Console TLS.
 #
 # Usage:
 #   ./scripts/generate-certs.sh [output-dir] [hostname]
@@ -12,13 +12,13 @@
 #   <output-dir>/server.key   — Server private key
 #
 # The certificate SAN automatically includes:
-#   - localhost, vault, rune-vault, 127.0.0.1 (always)
+#   - localhost, runeconsole, rune-console, 127.0.0.1 (always)
 #   - <hostname> argument (if provided)
 #   - Public IP via ifconfig.me (auto-detected)
 
 set -euo pipefail
 
-OUTPUT_DIR="${1:-vault/certs}"
+OUTPUT_DIR="${1:-certs}"
 HOSTNAME="${2:-localhost}"
 
 CA_DAYS=3650      # 10 years
@@ -43,7 +43,7 @@ openssl req -new -x509 \
     -key "$OUTPUT_DIR/ca.key" \
     -out "$OUTPUT_DIR/ca.pem" \
     -days "$CA_DAYS" \
-    -subj "/CN=Rune-Vault CA" \
+    -subj "/CN=Rune-Console CA" \
     -sha256
 
 echo "==> Generating server key (2048-bit)..."
@@ -66,8 +66,8 @@ subjectAltName = @alt_names
 
 [alt_names]
 DNS.1 = localhost
-DNS.2 = vault
-DNS.3 = rune-vault
+DNS.2 = runeconsole
+DNS.3 = rune-console
 DNS.4 = ${HOSTNAME}
 IP.1  = 127.0.0.1
 $([ -n "$PUBLIC_IP" ] && echo "IP.2  = $PUBLIC_IP")
@@ -104,6 +104,6 @@ echo "  ca.key      — CA private key (keep secret)"
 echo "  server.pem  — Server certificate"
 echo "  server.key  — Server private key"
 echo ""
-SAN_SUMMARY="localhost, vault, rune-vault, ${HOSTNAME}, 127.0.0.1"
+SAN_SUMMARY="localhost, runeconsole, rune-console, ${HOSTNAME}, 127.0.0.1"
 [ -n "$PUBLIC_IP" ] && SAN_SUMMARY="${SAN_SUMMARY}, ${PUBLIC_IP}"
 echo "Server cert SANs: ${SAN_SUMMARY}"

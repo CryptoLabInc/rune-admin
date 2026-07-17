@@ -1,0 +1,248 @@
+syntax = "proto3";
+
+package rune.console.v1;
+
+import "buf/validate/validate.proto";
+
+// Rune-Console gRPC service.
+// The console holds the FHE SecKey and is the SOLE runespace client; it proxies
+// pre-encrypted writes and blind searches to runespace. rune-mcp holds the
+// PUBLIC EncKey + the agent_dek, so it encrypts the vector (RMP+MM) and seals
+// the metadata locally, then hands the console ciphertext to forward verbatim.
+service ConsoleService {
+  // Returns the agent manifest: config + the PUBLIC EncKey pair + agent_dek +
+  // the current centroid-set version, so rune-mcp can encrypt/seal and route
+  // IVF locally. SecKey never leaves the console.
+  rpc GetAgentManifest(GetAgentManifestRequest) returns (GetAgentManifestResponse);
+
+  // GetCACert returns the console's CA certificate (PEM) for bootstrap stage 1.
+  // Pre-auth and servable over the initial no-TLS connection: the client pins
+  // it against the SHA-256 carried in its registration string, then reconnects
+  // over TLS. No token; leaks nothing (a public certificate).
+  rpc GetCACert(GetCACertRequest) returns (GetCACertResponse);
+
+  // Capture write (pre-encrypted): rune-mcp sends the FHE-encrypted RMP+MM
+  // blobs, the IVF cluster assignment, and the sealed metadata; the console
+  // forwards them verbatim to runespace (SDK InsertPreEncrypted) — it holds no
+  // key for this path and performs no encryption.
+  rpc Insert(InsertRequest) returns (InsertResponse);
+
+  // Streams the runespace IVF centroid set (header + id-ordered batches) so
+  // rune-mcp can assign each vector's cluster locally before encrypting. The
+  // cheap version pointer is in GetAgentManifest; fetch this only on mismatch.
+  rpc GetCentroids(GetCentroidsRequest) returns (stream CentroidChunk);
+
+  // Blind vector search over runespace (recall + capture-time novelty check).
+  // The plaintext query is sent to runespace (PCMM); the console decrypts the
+  // score blobs (SecKey), ranks, resolves and opens metadata (agent_dek), and
+  // returns ranked plaintext hits.
+  rpc Search(SearchRequest) returns (SearchResponse);
+
+  // Returns the caller's own memberships and the depth-annotated group tree
+  // they can reach by effective role (recall scope) — requirements 4 and 12.
+  // include_member_roles adds the per-user (group, role) listing and is
+  // restricted to the organization admin (plan §5, §6-D8, D11).
+  rpc GetPermissions(GetPermissionsRequest) returns (GetPermissionsResponse);
+
+  // Invite redemption (design-decisions §8.3/§8.4, model P) — the only two
+  // calls made WITHOUT a token. The invite code (handle) is a one-time claim
+  // ticket, like a coat-check tag: the real access token stays sealed inside
+  // the console until Unwrap exchanges the ticket for it, exactly once.
+
+  // Pre-validates an invite code and returns who/what it is for, so the
+  // client can show the invite before consuming it. Read-only: never consumes
+  // the code, never returns the token.
+  rpc LookupWrap(LookupWrapRequest) returns (LookupWrapResponse);
+
+  // Exchanges a pending invite code for its sealed access token, exactly
+  // once. The consumed state is written to disk before the token is released
+  // (a crash can lose an invite, never double-release a token), and the
+  // member is advanced invited→active in the same call.
+  rpc Unwrap(UnwrapRequest) returns (UnwrapResponse);
+}
+
+// ─── GetAgentManifest ─────────────────────────────────────────────
+
+message GetAgentManifestRequest {
+  // Auth token. Required, fixed 36 chars (evt_ + 32 hex).
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
+}
+
+message GetAgentManifestResponse {
+  // JSON consumed by rune-mcp's ParseManifestJSON:
+  //   {"agent_id","key_id","dim",
+  //    "rmp_enc_key": "<RMP (flat) EncKey envelope, verbatim JSON>",
+  //    "mm_enc_key":  "<MM (clustered) EncKey envelope, verbatim JSON>",
+  //    "agent_dek":   "<base64 32-byte metadata seal key>",
+  //    "centroid_set_version": "..."}
+  // The PUBLIC EncKey pair + agent_dek travel here; SecKey never does.
+  string manifest_json = 1;
+  string error = 2;  // Non-empty on error
+}
+
+// ─── GetCACert (no-TLS bootstrap: CA distribution) ────────────────
+
+message GetCACertRequest {}
+
+message GetCACertResponse {
+  bytes  ca_pem = 1;  // PEM-encoded CA certificate chain (installer-issued ca.pem)
+  string sha256 = 2;  // hex SHA-256 of ca_pem; the client verifies it against its pin
+  string error  = 3;  // Non-empty on error
+}
+
+// ─── Insert (pre-encrypted capture write) ─────────────────────────
+
+message InsertRequest {
+  // Auth token. Required, fixed 36 chars.
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
+  // Caller-generated opaque UUID. Idempotency key: a re-insert of an existing
+  // id is a server-side no-op, so an ack-loss retry MUST reuse the same id.
+  string id = 2 [(buf.validate.field).string.min_len = 1];
+  // FHE-encrypted flat-tier blob (SDK Keys.EncryptFlat output).
+  bytes rmp_item = 3 [(buf.validate.field).bytes.min_len = 1];
+  // FHE-encrypted clustered-tier blob (SDK Keys.EncryptClustered output).
+  bytes mm_item = 4 [(buf.validate.field).bytes.min_len = 1];
+  // Hard single IVF cluster assignment (0..nlist-1), routed by rune-mcp against
+  // the centroid set named by centroid_set_version.
+  uint32 cluster_id = 5;
+  // The centroid-set version the assignment was routed against. Required so the
+  // server can reject a stale routing (ErrCentroidVersionMismatch).
+  string centroid_set_version = 6 [(buf.validate.field).string.min_len = 1];
+  // Client-sealed metadata envelope ({"a","c"}), stored verbatim; may be empty.
+  string metadata = 7;
+}
+
+message InsertResponse {
+  string id = 1;     // runespace-issued opaque id
+  string error = 2;  // Non-empty on error
+}
+
+// ─── GetCentroids (IVF centroid relay) ────────────────────────────
+
+message GetCentroidsRequest {
+  // Auth token. Required, fixed 36 chars.
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
+}
+
+// CentroidChunk is one framed piece of the centroid stream: exactly one Header
+// arrives first, then any number of Batch messages (id-ordered centroid vectors).
+message CentroidChunk {
+  oneof payload {
+    CentroidSetHeader header = 1;
+    CentroidBatch     batch  = 2;
+  }
+}
+
+message CentroidSetHeader {
+  string version = 1;  // centroid-set version (matches GetAgentManifest)
+  int32  dim     = 2;  // centroid vector dimension
+  string preset  = 3;  // version-hash ingredient relayed to runed ("" if none)
+  int32  nlist   = 4;  // total centroid count (stream length hint)
+}
+
+message CentroidBatch {
+  repeated Centroid centroids = 1;
+}
+
+message Centroid {
+  uint32 id  = 1;          // centroid index (0..nlist-1) == the cluster id
+  repeated float vec = 2;  // centroid vector
+}
+
+// ─── Search (recall + novelty) ────────────────────────────────────
+
+message SearchRequest {
+  // Auth token. Required, fixed 36 chars.
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
+  // Plaintext query embedding. Length must equal the configured dim.
+  repeated float vector = 2 [(buf.validate.field).repeated.min_items = 1];
+  // Number of top results. Per-role limits enforced at the business logic layer.
+  int32  top_k = 3 [(buf.validate.field).int32 = {gte: 1, lte: 300}];
+}
+
+message SearchHit {
+  string id = 1;
+  double score = 2;
+  string metadata = 3;  // plaintext JSON (console opened the agent_dek envelope)
+}
+
+message SearchResponse {
+  repeated SearchHit hits = 1;  // ranked, score descending
+  string error = 2;             // Non-empty on error
+}
+
+// ─── GetPermissions (auth query — requirements 4, 8, 12) ──────────
+
+message GetPermissionsRequest {
+  // Auth token. Required, fixed 36 chars.
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
+  // Optional: restrict the returned tree to this group's subtree (id or name).
+  string root_group = 2;
+  // When true, populate member_roles with the org-wide per-user (group, role)
+  // listing. Organization admin only — a non-admin request is PermissionDenied.
+  bool include_member_roles = 3;
+}
+
+// MembershipEntry is one direct (group, role) binding the caller holds.
+message MembershipEntry {
+  string group_id = 1;
+  string group_name = 2;
+  string role = 3;  // read | write | edit
+}
+
+// TreeNode is one group the caller can reach by effective role, depth-annotated.
+message TreeNode {
+  string group_id = 1;
+  string name = 2;
+  string parent_id = 3;    // empty for a root group
+  int32  depth = 4;        // 0 = root of the group tree
+  string effective_role = 5;
+}
+
+// MemberRole is one org-wide (user, group, role) row (admin-only listing).
+message MemberRole {
+  string user = 1;         // email (the person key, plan §0)
+  string group_id = 2;
+  string group_name = 3;
+  string role = 4;
+}
+
+message GetPermissionsResponse {
+  string me = 1;                            // caller email
+  repeated MembershipEntry memberships = 2; // caller's direct bindings
+  repeated TreeNode tree = 3;               // reachable groups, depth-annotated
+  repeated MemberRole member_roles = 4;     // populated only for admin + include_member_roles
+  string error = 5;                         // Non-empty on error
+}
+
+// ─── LookupWrap / Unwrap (invite redemption — pre-auth) ───────────
+
+message LookupWrapRequest {
+  // Invite code from the invite mail. Not a secret — a one-time claim ticket
+  // pointing at the sealed token. Fixed 32 hex chars.
+  string handle = 1 [(buf.validate.field).string = {min_len: 32, max_len: 32}];
+}
+
+message LookupWrapResponse {
+  string email = 1;      // who the invite is for
+  string role = 2;       // token role the invite grants
+  string expires_at = 3; // RFC3339 UTC
+  // Wrap-path binding (§8.3): which surface issued this wrap. The client
+  // compares it against its baked expected constant to detect a wrap minted
+  // by any other surface.
+  string creation_path = 4;
+  string error = 5;      // Non-empty on error
+}
+
+message UnwrapRequest {
+  // Invite code to consume — same one-time ticket LookupWrap pre-validates.
+  string handle = 1 [(buf.validate.field).string = {min_len: 32, max_len: 32}];
+}
+
+message UnwrapResponse {
+  // The released access token (evt_...). This is the only moment it ever
+  // leaves the console; the client must store it and never display it.
+  string token = 1;
+  string member_id = 2; // activated member's immutable id
+  string error = 3;     // Non-empty on error
+}

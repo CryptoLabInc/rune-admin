@@ -65,7 +65,7 @@ jobs:
             VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "archive=runevault_${VERSION}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "archive=runeconsole_${VERSION}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz" >> "$GITHUB_OUTPUT"
 
       - name: Build binary
         env:
@@ -73,7 +73,7 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
-          PKG="github.com/CryptoLabInc/rune-admin/vault/internal/commands"
+          PKG="github.com/CryptoLabInc/rune-console/internal/commands"
           COMMIT=$(git rev-parse --short HEAD)
           DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           if [ "${{ matrix.os }}" = "darwin" ] && [ "${{ matrix.arch }}" = "amd64" ]; then
@@ -82,24 +82,24 @@ jobs:
             export CGO_CFLAGS="-arch x86_64 -I/usr/local/opt/openssl@3/include"
             export CGO_LDFLAGS="-arch x86_64 -L/usr/local/opt/openssl@3/lib"
           fi
-          cd vault && go build \
+          go build \
             -trimpath \
             -ldflags "-s -w -X '${PKG}.buildVersion=${VERSION}' -X '${PKG}.buildCommit=${COMMIT}' -X '${PKG}.buildDate=${DATE}'" \
-            -o bin/runevault \
+            -o bin/runeconsole \
             ./cmd
 
       - name: Smoke test
         run: |
           if [ "${{ matrix.os }}" = "darwin" ] && [ "${{ matrix.arch }}" = "amd64" ]; then
-            arch -x86_64 ./vault/bin/runevault version
+            arch -x86_64 ./bin/runeconsole version
           else
-            ./vault/bin/runevault version
+            ./bin/runeconsole version
           fi
 
       - name: Package
         run: |
           mkdir -p _dist
-          cp vault/bin/runevault _dist/
+          cp bin/runeconsole _dist/
           cp LICENSE _dist/
           tar -czf "${{ steps.meta.outputs.archive }}" -C _dist .
 

@@ -1,36 +1,3 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-.venv/
-venv/
-ENV/
-env/
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
 # IDE
 .vscode/
 .idea/
@@ -51,7 +18,6 @@ htmlcov/
 *.sec
 *.pub
 *_token
-vault_token.txt
 certs/
 
 # Logs
@@ -97,9 +63,8 @@ Thumbs.db
 *.dylib
 
 # Go build artifacts
-vault/bin/
-vault/**/*.test
-vault/**/*.out
+*.test
+*.out
 
 # Database
 *.db
@@ -109,16 +74,30 @@ vault/**/*.out
 # Credentials
 credentials.json
 service-account.json
-vault-credentials/
 team_keys/
-vault_keys/
+rune-console-keys/
 
 # Test artifacts
 test-results/
 .test_cache/
 
-# Test fixtures (plaintext — decrypted from fixtures.tar.gz.gpg)
-tests/fixtures/
-
 # Local dev runtime files (config, socket, keys, pid)
-vault/dev/
+dev/
+
+# Local dev verification tools (live-test harnesses)
+livetest/
+
+# Korean local docs
+*.ko.md
+*.ko.html
+
+# Go build output
+/bin/
+
+# Generated proto stubs
+buf/
+
+# Embedded frontend build output (populated by `mise run fe:build`, then baked
+# into the runeconsole binary via go:embed). Keep the .gitkeep placeholder.
+/internal/console/webdist/*
+!/internal/console/webdist/.gitkeep

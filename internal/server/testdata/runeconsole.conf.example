@@ -1,0 +1,54 @@
+# runeconsole.conf — example deployment configuration.
+#
+# Lookup order:
+#   1. --config <path> CLI flag
+#   2. /opt/rune-console/configs/runeconsole.conf
+#   3. ./runeconsole.conf (cwd, dev only)
+#
+# This file should be mode 0600, owned by the console-user.
+# Replace placeholder values before use.
+
+server:
+  grpc:
+    host: 0.0.0.0
+    port: 50051
+    tls:
+      cert: /opt/rune-console/certs/server.pem
+      key: /opt/rune-console/certs/server.key
+      disable: false        # true for dev only — never in production
+  console:
+    enabled: true           # loopback HTTP console (auth + SPA + admin); 127.0.0.1 only
+    port: 8787
+    frontend_dir: ""        # empty serves the embedded SPA build
+    # db_path defaults beside tokens_file (console-session.db)
+
+cloud:
+  api_base_url: https://api.runespace.click   # runespace-cloud API (server-to-server)
+  web_base_url: https://runespace.click        # visible /signin page the browser passes through
+
+keys:
+  path: /opt/rune-console/rune-console-keys
+  embedding_dim: 1024
+
+runespace:
+  endpoint: https://runespace.example.com
+  api_key: REPLACE_WITH_API_KEY
+  # Alternative: api_key_file: /run/secrets/runespace_api_key
+  insecure: false        # true = plaintext dial (local dev only)
+
+tokens:
+  team_secret: REPLACE_WITH_RANDOM_HEX_32
+  # Alternative: team_secret_file: /run/secrets/team_secret
+  roles_file: /opt/rune-console/configs/roles.yml
+  tokens_file: /opt/rune-console/configs/tokens.yml
+
+audit:
+  mode: file+stdout         # one of: "", file, stdout, file+stdout
+  path: /opt/rune-console/logs/audit.log
+
+# storage.db_path — unified store database (runeconsole.db); defaults beside
+# tokens_file. Keep this key commented out: a config carrying storage: cannot
+# be parsed by pre-migration binaries (strict decode), which would break the
+# rollback path.
+# storage:
+#   db_path: /opt/rune-console/configs/runeconsole.db

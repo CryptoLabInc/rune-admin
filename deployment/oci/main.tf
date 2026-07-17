@@ -24,7 +24,7 @@ variable "oci_profile" {
 variable "region" {
   description = "OCI region"
   type        = string
-  default     = "us-ashburn-1"
+  default     = "ap-seoul-1"
 }
 
 variable "compartment_id" {
@@ -33,8 +33,9 @@ variable "compartment_id" {
 }
 
 variable "team_name" {
-  description = "Team name for Vault instance"
+  description = "Team name for Console instance"
   type        = string
+  default     = "runeconsole"
 }
 
 variable "tls_mode" {
@@ -43,19 +44,8 @@ variable "tls_mode" {
   default     = "self-signed"
 }
 
-variable "envector_endpoint" {
-  description = "enVector Cloud endpoint"
-  type        = string
-}
-
-variable "envector_api_key" {
-  description = "enVector Cloud API key"
-  type        = string
-  sensitive   = true
-}
-
-variable "runevault_version" {
-  description = "Pinned runevault release tag — drives the install.sh URL and binary version on the VM."
+variable "runeconsole_version" {
+  description = "Pinned runeconsole release tag — drives the install.sh URL and binary version on the VM."
   type        = string
 }
 
@@ -65,49 +55,49 @@ variable "public_key" {
   default     = ""
 }
 
-# VCN for Vault
-resource "oci_core_vcn" "vault_vcn" {
+# VCN for Console
+resource "oci_core_vcn" "console_vcn" {
   compartment_id = var.compartment_id
-  display_name   = "vault-${var.team_name}-vcn"
+  display_name   = "console-${var.team_name}-vcn"
   cidr_block     = "10.0.0.0/16"
-  dns_label      = "vaultvcn"
+  dns_label      = "consolevcn"
 }
 
 # Public subnet
-resource "oci_core_subnet" "vault_subnet" {
+resource "oci_core_subnet" "console_subnet" {
   compartment_id    = var.compartment_id
-  vcn_id            = oci_core_vcn.vault_vcn.id
-  display_name      = "vault-${var.team_name}-subnet"
+  vcn_id            = oci_core_vcn.console_vcn.id
+  display_name      = "console-${var.team_name}-subnet"
   cidr_block        = "10.0.1.0/24"
-  dns_label         = "vaultsub"
-  security_list_ids = [oci_core_security_list.vault_security_list.id]
-  route_table_id    = oci_core_route_table.vault_route_table.id
+  dns_label         = "consolesub"
+  security_list_ids = [oci_core_security_list.console_security_list.id]
+  route_table_id    = oci_core_route_table.console_route_table.id
 }
 
 # Internet Gateway
-resource "oci_core_internet_gateway" "vault_ig" {
+resource "oci_core_internet_gateway" "console_ig" {
   compartment_id = var.compartment_id
-  vcn_id         = oci_core_vcn.vault_vcn.id
-  display_name   = "vault-${var.team_name}-ig"
+  vcn_id         = oci_core_vcn.console_vcn.id
+  display_name   = "console-${var.team_name}-ig"
 }
 
 # Route Table
-resource "oci_core_route_table" "vault_route_table" {
+resource "oci_core_route_table" "console_route_table" {
   compartment_id = var.compartment_id
-  vcn_id         = oci_core_vcn.vault_vcn.id
-  display_name   = "vault-${var.team_name}-rt"
+  vcn_id         = oci_core_vcn.console_vcn.id
+  display_name   = "console-${var.team_name}-rt"
 
   route_rules {
     destination       = "0.0.0.0/0"
-    network_entity_id = oci_core_internet_gateway.vault_ig.id
+    network_entity_id = oci_core_internet_gateway.console_ig.id
   }
 }
 
 # Security List
-resource "oci_core_security_list" "vault_security_list" {
+resource "oci_core_security_list" "console_security_list" {
   compartment_id = var.compartment_id
-  vcn_id         = oci_core_vcn.vault_vcn.id
-  display_name   = "vault-${var.team_name}-sl"
+  vcn_id         = oci_core_vcn.console_vcn.id
+  display_name   = "console-${var.team_name}-sl"
 
   egress_security_rules {
     destination = "0.0.0.0/0"
@@ -137,11 +127,11 @@ resource "oci_core_security_list" "vault_security_list" {
   }
 }
 
-# Compute Instance for Vault
-resource "oci_core_instance" "vault_instance" {
+# Compute Instance for Console
+resource "oci_core_instance" "console_instance" {
   compartment_id      = var.compartment_id
   availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
-  display_name        = "vault-${var.team_name}"
+  display_name        = "console-${var.team_name}"
   shape               = "VM.Standard.E5.Flex"
 
   shape_config {
@@ -150,8 +140,8 @@ resource "oci_core_instance" "vault_instance" {
   }
 
   create_vnic_details {
-    subnet_id        = oci_core_subnet.vault_subnet.id
-    display_name     = "vault-${var.team_name}-vnic"
+    subnet_id        = oci_core_subnet.console_subnet.id
+    display_name     = "console-${var.team_name}-vnic"
     assign_public_ip = true
   }
 
@@ -163,10 +153,7 @@ resource "oci_core_instance" "vault_instance" {
   metadata = {
     ssh_authorized_keys = var.public_key
     user_data = base64encode(templatefile("${path.module}/startup-script.sh", {
-      team_name          = var.team_name
-      envector_endpoint  = var.envector_endpoint
-      envector_api_key   = var.envector_api_key
-      runevault_version  = var.runevault_version
+      runeconsole_version = var.runeconsole_version
     }))
   }
 }
@@ -192,17 +179,17 @@ data "oci_core_images" "ubuntu_image" {
 }
 
 # Outputs
-output "vault_url" {
-  description = "Rune-Vault gRPC endpoint"
-  value       = "${oci_core_instance.vault_instance.public_ip}:50051"
+output "console_url" {
+  description = "Rune-Console gRPC endpoint"
+  value       = "${oci_core_instance.console_instance.public_ip}:50051"
 }
 
-output "vault_public_ip" {
-  value       = oci_core_instance.vault_instance.public_ip
-  description = "Public IP of Vault instance"
+output "console_public_ip" {
+  value       = oci_core_instance.console_instance.public_ip
+  description = "Public IP of Console instance"
 }
 
 output "ssh_command" {
-  value       = "ssh ubuntu@${oci_core_instance.vault_instance.public_ip}"
-  description = "SSH command to connect to Vault instance"
+  value       = "ssh ubuntu@${oci_core_instance.console_instance.public_ip}"
+  description = "SSH command to connect to Console instance"
 }
