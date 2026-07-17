@@ -336,51 +336,61 @@ const UsersPage = () => {
     <section className={styles.page} aria-label="멤버 관리">
       <Table
         fluid
+        /* Fixed page height: thead 36px + 10 rows × 49px (h-8 status chip
+        + py-2). Short pages, empty, and loading all keep this height so
+        pagination never shifts the layout. */
+        scrollClassName="min-h-[526px]"
         toolbar={
           <div className="px-4 py-4">
-            <div className="flex flex-col items-start gap-2">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-end justify-between gap-4">
+              <div className="flex flex-col flex-wrap gap-5">
                 <SearchInput
                   value={search}
                   onChange={withPageReset(setSearch)}
                   placeholder="계정 검색"
                   maxLength={100}
-                  className="w-[200px]"
+                  className="w-50"
                 />
-                <Dropdown
-                  options={STATUS_OPTIONS}
-                  value={statusFilter}
-                  onChange={withPageReset(setStatusFilter)}
-                  size="sm"
-                  ariaLabel="status 필터"
-                  className="w-[150px]"
-                />
-                <Dropdown
-                  options={groupOptions}
-                  value={groupFilter}
-                  onChange={withPageReset(setGroupFilter)}
-                  size="sm"
-                  ariaLabel="group 필터"
-                  className="w-[150px]"
-                />
-                <Dropdown
-                  options={SORT_OPTIONS}
-                  value={sort}
-                  onChange={withPageReset(setSort)}
-                  size="sm"
-                  ariaLabel="정렬"
-                  className="w-[180px]"
-                />
+                {/* filter/order dropdown */}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-md text-faint">정렬 기준 </span>
+                    <Dropdown
+                      options={SORT_OPTIONS}
+                      value={sort}
+                      onChange={withPageReset(setSort)}
+                      size="sm"
+                      ariaLabel="정렬"
+                      className="w-36"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-md text-faint">status </span>
+                    <Dropdown
+                      options={STATUS_OPTIONS}
+                      value={statusFilter}
+                      onChange={withPageReset(setStatusFilter)}
+                      size="sm"
+                      ariaLabel="status 필터"
+                      className="w-32"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-md text-faint">team </span>
+                    <Dropdown
+                      options={groupOptions}
+                      value={groupFilter}
+                      onChange={withPageReset(setGroupFilter)}
+                      size="sm"
+                      ariaLabel="group 필터"
+                      className="w-40"
+                    />
+                  </div>
+                </div>
               </div>
+
               {/* Actions — second row, left-aligned (SC-11 no.4–6) */}
-              <div className="flex items-center gap-2">
-                <Button
-                  btnText={BTN_TEXT.inviteMember}
-                  btnSize="sm"
-                  btnColor="mintFilled"
-                  className="w-fit"
-                  handleClick={() => setInviteOpen(true)}
-                />
+              <div className="flex items-center gap-2 self-end">
                 <Button
                   btnText={BTN_TEXT.resendInvitationCode}
                   btnSize="sm"
@@ -397,11 +407,13 @@ const UsersPage = () => {
                   disabled={selectedIds.size === 0}
                   handleClick={() => setBulkDeleteOpen(true)}
                 />
-                {selectedIds.size > 0 && (
-                  <span className="text-tag text-muted-foreground font-mono tracking-[0.08em]">
-                    {selectedIds.size} SELECTED
-                  </span>
-                )}
+                <Button
+                  btnText={BTN_TEXT.inviteMember}
+                  btnSize="sm"
+                  btnColor="mintFilled"
+                  className="w-fit"
+                  handleClick={() => setInviteOpen(true)}
+                />
               </div>
             </div>
           </div>

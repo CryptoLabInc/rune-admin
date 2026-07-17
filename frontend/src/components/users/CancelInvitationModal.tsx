@@ -37,9 +37,9 @@ const CancelInvitationModal = ({
 
   return (
     <ModalLayout title={MODAL_TITLES.cancelInvitation} isOpen>
-      <p className="text-base">
-        {account}의 미사용 초대 코드가 모두 만료됩니다. 유저는 삭제되지
-        않습니다.
+      <p className="text-center text-base">
+        {account}의 미사용 초대 코드가 모두 만료됩니다. <br />
+        유저는 삭제되지 않습니다.
       </p>
       <div className="flex w-full items-center gap-4">
         <Button

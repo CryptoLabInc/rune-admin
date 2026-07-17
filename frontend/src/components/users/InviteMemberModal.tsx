@@ -27,7 +27,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EMAIL_FORMAT_ERROR = "올바른 이메일 형식이 아닙니다";
 const DUPLICATE_ACCOUNT_ERROR =
   "이미 등록된 계정입니다. 멤버 추가 또는 초대 코드 재전송을 사용하세요.";
-const SEND_FAILED_MESSAGE = "초대 전송에 실패했습니다. 다시 시도해주세요.";
+const SEND_FAILED_MESSAGE = "초대 전송에 실패했습니다. 다시 시도해 주세요.";
 
 /** One editable team/role set row; id keys the row across removals. */
 type TSetDraft = { id: number; teamId: string; role: string };
@@ -47,7 +47,7 @@ interface InviteMemberModalProps {
 /**
  * InviteMemberModal is the 유저 초대 모달 (SC-12): email + team/role
  * sets (one team per set, first set not removable) with the 하위 팀
- * 역할 미리보기 showing the R1 downward copy. Duplicate-account and
+ * 권한 미리보기 showing the R1 downward copy. Duplicate-account and
  * send-failure verdicts come from the server on [초대 전송]. Mount
  * conditionally — internal state resets by unmounting.
  */
@@ -133,7 +133,7 @@ const InviteMemberModal = ({
 
   return (
     <ModalLayout title={MODAL_TITLES.inviteMember} isOpen isWide>
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <Input
           id="invite-email"
           type="email"
@@ -150,7 +150,7 @@ const InviteMemberModal = ({
         />
 
         <div className="flex flex-col gap-2">
-          <span className={styles.fieldLabel}>팀 / Role</span>
+          <span className={styles.fieldLabel}>팀 / 권한</span>
           {sets.map((set, index) => (
             <div key={set.id} className={styles.setRow}>
               <div className={styles.teamSlot}>
@@ -165,7 +165,7 @@ const InviteMemberModal = ({
               <div className={styles.roleSlot}>
                 <Dropdown
                   options={ROLE_OPTIONS}
-                  placeholder="role 선택"
+                  placeholder="권한 선택"
                   value={set.role}
                   onChange={(role) => patchSet(set.id, { role })}
                   ariaLabel={`세트 ${index + 1} role`}
@@ -199,9 +199,9 @@ const InviteMemberModal = ({
 
         {showPreview && (
           <div className="flex flex-col gap-2">
-            <span className={styles.fieldLabel}>하위 팀 역할 미리보기</span>
+            <span className={styles.fieldLabel}>하위 팀 권한 미리보기</span>
             <ModalTable
-              head={["팀", "role", "사유"]}
+              head={["팀", "권한", "사유"]}
               rows={previewRows.map((row) => [
                 row.indent ? `└ ${row.teamName}` : row.teamName,
                 row.role,
@@ -215,13 +215,13 @@ const InviteMemberModal = ({
           <Notice tone="error">{SEND_FAILED_MESSAGE}</Notice>
         ) : (
           <Notice>
-            초대 시 사용자에게 초대 코드가 발송됩니다. 사용자가 24시간 내 rune을
+            초대 시 사용자에게 초대 코드가 발송되어 사용자가 24시간 내 rune을
             연결하면{" "}
             <MemberStatus
               status="online"
-              className="h-auto cursor-default p-0 align-baseline"
-            />
-            으로 전환되며, 미연결 시 초대 코드가 만료됩니다. 초대 코드
+              className="h-auto cursor-default p-0 align-middle"
+            />{" "}
+            으로 전환됩니다. <br /> 미연결 시 코드가 만료되고 초대 코드
             재전송으로 사용자를 다시 초대할 수 있습니다.
           </Notice>
         )}

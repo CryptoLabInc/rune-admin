@@ -127,7 +127,9 @@ describe("UsersPage", () => {
     await typer.click(
       screen.getByRole("checkbox", { name: "k@corp.com 선택" }),
     );
-    expect(screen.getByText("1 SELECTED")).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: "k@corp.com 선택" }),
+    ).toBeChecked();
 
     /* Checked rows may drop out of the new result, so changing what's
        listed must reset the selection. */
@@ -135,7 +137,9 @@ describe("UsersPage", () => {
     await typer.click(screen.getByRole("option", { name: "세션 만료" }));
 
     await waitFor(() =>
-      expect(screen.queryByText("1 SELECTED")).not.toBeInTheDocument(),
+      expect(
+        screen.getByRole("checkbox", { name: "k@corp.com 선택" }),
+      ).not.toBeChecked(),
     );
   });
 
@@ -153,12 +157,16 @@ describe("UsersPage", () => {
     await typer.click(
       screen.getByRole("checkbox", { name: "k@corp.com 선택" }),
     );
-    expect(screen.getByText("1 SELECTED")).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: "k@corp.com 선택" }),
+    ).toBeChecked();
 
     await typer.click(screen.getByRole("button", { name: "2" }));
 
     await waitFor(() =>
-      expect(screen.queryByText("1 SELECTED")).not.toBeInTheDocument(),
+      expect(
+        screen.getByRole("checkbox", { name: "k@corp.com 선택" }),
+      ).not.toBeChecked(),
     );
   });
 

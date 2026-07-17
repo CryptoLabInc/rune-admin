@@ -5,7 +5,7 @@ import {
 import type { TTeamTree } from "@/types/teamTypes";
 import type { TInviteSet } from "@/types/userTypes";
 
-/** One row of the 하위 팀 역할 미리보기 table (SC-12 no.3). */
+/** One row of the 하위 팀 권한 미리보기 table (SC-12 no.3). */
 export type TInvitePreviewRow = {
   teamId: string;
   teamName: string;

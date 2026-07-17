@@ -36,8 +36,9 @@ const SessionDeactivateModal = ({
 
   return (
     <ModalLayout title={MODAL_TITLES.deactivateSession} isOpen>
-      <p className="text-base">
-        {account}의 세션을 비활성화하시겠습니까? 모든 MCP 세션이 종료됩니다.
+      <p className="text-center text-base">
+        {account}의 세션을 비활성화하시겠습니까? <br />
+        모든 MCP 세션이 종료됩니다.
       </p>
       <div className="flex w-full items-center gap-4">
         <Button
