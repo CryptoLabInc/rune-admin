@@ -1,7 +1,6 @@
 import Button from "@/components/elements/Button";
 import Notice from "@/components/elements/Notice";
 import StorageStatus from "@/components/elements/StorageStatus";
-import TextButton from "@/components/elements/TextButton";
 import ModalLayout from "@/components/layout/ModalLayout";
 import {
   useDeleteWorkspaceMutation,
@@ -12,7 +11,7 @@ import {
   isTransitionalStatus,
   useWorkspaceQuery,
 } from "@/hooks/queries/useWorkspaceQuery";
-import { BTN_TEXT } from "@/constants/commonConstants";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 const FAIL_COPY = {
@@ -63,7 +62,7 @@ const WorkspaceModal = () => {
   if (deleteConfirmOpen) {
     if (deleteMutation.isError) {
       return (
-        <ModalLayout title="워크스페이스 삭제" isOpen>
+        <ModalLayout title={MODAL_TITLES.workspaceDelete} isOpen>
           <p className="text-negative text-center text-base">
             워크스페이스 삭제에 실패했습니다. 다시 시도해주세요.
           </p>
@@ -72,7 +71,7 @@ const WorkspaceModal = () => {
       );
     }
     return (
-      <ModalLayout title="워크스페이스 삭제" isOpen>
+      <ModalLayout title={MODAL_TITLES.workspaceDelete} isOpen>
         <p className="text-center text-base">
           워크스페이스를 삭제하시겠습니까?
           <br />
@@ -102,7 +101,7 @@ const WorkspaceModal = () => {
   /* D-2 — workspace info failed to load: message + [닫기] only. */
   if (isError && !workspace) {
     return (
-      <ModalLayout title="rune 워크스페이스 관리" isOpen>
+      <ModalLayout title={MODAL_TITLES.workspaceManage} isOpen>
         <p className="text-center text-base">
           워크스페이스 정보를 불러올 수 없습니다.
           <br />
@@ -113,10 +112,11 @@ const WorkspaceModal = () => {
     );
   }
 
-  /* D — detail view. [중지] shows unless stopped; [재실행] replaces it when
-     stopped (spec no.6–7). [삭제] is the quieter bottom-right text button
-     (spec no.8). A successful stop/restart closes the modal; a failure keeps
-     it open with an inline message (D-3/D-4). */
+  /* D — detail view. [중지]/[재실행] and [삭제] share the bottom-right action row
+     under the info box (spec 2026-07-17): [중지] shows unless stopped, [재실행]
+     replaces it when stopped (spec no.6–7); [삭제] is the red-filled action
+     (spec no.8). A successful stop/restart closes the modal; a failure keeps it
+     open with an inline message (D-3/D-4). */
   const actionError = stopMutation.isError
     ? FAIL_COPY.stop
     : startMutation.isError
@@ -124,34 +124,8 @@ const WorkspaceModal = () => {
       : null;
 
   return (
-    <ModalLayout title="rune 워크스페이스 관리" isOpen>
+    <ModalLayout title={MODAL_TITLES.workspaceManage} isOpen>
       <div className="flex w-full flex-col gap-3">
-        <div className="flex justify-end">
-          {status === "stopped" ? (
-            <Button
-              btnText={BTN_TEXT.restart}
-              btnSize="sm"
-              btnColor="grayOutline"
-              className="w-fit"
-              disabled={busy || startMutation.isPending}
-              handleClick={() =>
-                startMutation.mutate(undefined, { onSuccess: closeModal })
-              }
-            />
-          ) : (
-            <Button
-              btnText={BTN_TEXT.stop}
-              btnSize="sm"
-              btnColor="grayOutline"
-              className="w-fit"
-              disabled={busy || stopMutation.isPending}
-              handleClick={() =>
-                stopMutation.mutate(undefined, { onSuccess: closeModal })
-              }
-            />
-          )}
-        </div>
-
         <div className="border-border flex flex-col gap-2.5 rounded-md border p-4">
           <div className={styles.field}>
             <span className={styles.label}>Endpoint URL</span>
@@ -173,10 +147,35 @@ const WorkspaceModal = () => {
 
         {actionError && <Notice tone="error">{actionError}</Notice>}
 
-        <div className="flex justify-end">
-          <TextButton
+        <div className="flex justify-end gap-4">
+          {status === "stopped" ? (
+            <Button
+              btnText={BTN_TEXT.restart}
+              btnSize="sm"
+              btnColor="grayOutline"
+              className="w-20"
+              disabled={busy || startMutation.isPending}
+              handleClick={() =>
+                startMutation.mutate(undefined, { onSuccess: closeModal })
+              }
+            />
+          ) : (
+            <Button
+              btnText={BTN_TEXT.stop}
+              btnSize="sm"
+              btnColor="grayOutline"
+              className="w-20"
+              disabled={busy || stopMutation.isPending}
+              handleClick={() =>
+                stopMutation.mutate(undefined, { onSuccess: closeModal })
+              }
+            />
+          )}
+          <Button
             btnText={BTN_TEXT.delete}
-            tone="red"
+            btnSize="sm"
+            btnColor="redFilled"
+            className="w-20"
             disabled={busy}
             handleClick={openDeleteConfirm}
           />
