@@ -8,6 +8,7 @@ import UsersPage from "@/pages/UsersPage";
 import * as invitationAPIs from "@/api/invitationAPIs";
 import * as teamAPIs from "@/api/teamAPIs";
 import * as userAPIs from "@/api/userAPIs";
+import { useNoticeStore } from "@/stores/noticeStore";
 import type { TUserListItem } from "@/types/userTypes";
 
 const jsonRes = (body: unknown) =>
@@ -375,11 +376,12 @@ describe("UsersPage", () => {
     expect(within(modal).queryByText("k@corp.com")).not.toBeInTheDocument();
   });
 
-  it("clears selection and shows success toast on a full-success bulk delete", async () => {
+  it("clears selection and shows success notice on a full-success bulk delete", async () => {
     mockListSuccess();
     vi.spyOn(userAPIs, "deleteUsers").mockResolvedValue(
       jsonRes({ succeeded: ["u_1", "u_2"], failed: [] }),
     );
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     const typer = userEvent.setup();
     renderPage();
     await screen.findByText("k@corp.com");
@@ -391,6 +393,13 @@ describe("UsersPage", () => {
       screen.getAllByRole("button", { name: "삭제" }).slice(-1)[0],
     );
 
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        "멤버 삭제",
+        "멤버를 삭제했습니다.",
+        "info",
+      ),
+    );
     await waitFor(() =>
       expect(
         screen.queryByText("일부 항목을 처리하지 못했습니다"),

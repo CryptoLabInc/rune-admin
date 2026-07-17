@@ -43,7 +43,7 @@ import type {
   TInviteResult,
   TUserListItem,
 } from "@/types/userTypes";
-import { useToastStore } from "@/stores/toastStore";
+import { useNoticeStore } from "@/stores/noticeStore";
 
 const styles = {
   page: "flex flex-col gap-3.5 p-4",
@@ -119,7 +119,7 @@ const UsersPage = () => {
   const [batchFailures, setBatchFailures] = useState<
     { account: string; reason: string }[] | null
   >(null);
-  const showToast = useToastStore((state) => state.showToast);
+  const showNotice = useNoticeStore((state) => state.showNotice);
 
   const { data: teams } = useTeamsTreeQuery();
   const detailQuery = useUserQuery(drawerUserId ?? "");
@@ -234,7 +234,7 @@ const UsersPage = () => {
     );
     const failed = targets.filter((_, i) => results[i].status === "rejected");
     if (failed.length === 0) {
-      showToast("초대 코드를 재전송했습니다.");
+      showNotice("초대 코드 재전송", "초대 코드를 재전송했습니다.", "info");
       return;
     }
     setBatchFailures(
@@ -265,7 +265,7 @@ const UsersPage = () => {
     }
 
     if (result.failed.length === 0) {
-      showToast("멤버를 삭제했습니다.");
+      showNotice("멤버 삭제", "멤버를 삭제했습니다.", "info");
       return;
     }
     if (succeededIds.length === 0) {
