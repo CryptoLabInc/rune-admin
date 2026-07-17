@@ -219,8 +219,11 @@ dev_build_linux_binary() {
   # Docker go build below embeds the host's internal/console/webdist via the
   # bind mount — so without this the CSP binary embeds an empty webdist and
   # serves the placeholder page instead of the console UI.
+  # Retry with fe:setup (pnpm install) if the first build fails — a fresh
+  # checkout has no frontend/node_modules, so `tsc`/`vite` are missing.
   info "Building frontend SPA on host (mise run fe:build)..."
-  (cd "$REPO_ROOT" && sudo -u "$build_user" -H bash -lc 'mise run fe:build')
+  (cd "$REPO_ROOT" && sudo -u "$build_user" -H bash -lc \
+    'mise run fe:build || { mise run fe:setup && mise run fe:build; }')
 
   info "Building runeconsole for ${TARGET_OS}/${TARGET_ARCH} via Docker (${BUILDER_IMAGE})..."
   local user_home commit version date pkg
