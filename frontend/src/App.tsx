@@ -9,6 +9,7 @@ import UsersPage from "@/pages/UsersPage";
 import WorkspacePage from "@/pages/WorkspacePage";
 import RequireAuth from "@/components/auth/RequireAuth";
 import AppLayout from "@/components/layout/AppLayout";
+import NoticeModal from "@/components/elements/NoticeModal";
 import ToastContainer from "@/components/toast/ToastContainer";
 import { PATH_LIST } from "@/constants/commonConstants";
 
@@ -33,6 +34,7 @@ const App = () => {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <ToastContainer />
+      <NoticeModal />
     </>
   );
 };
