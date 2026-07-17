@@ -83,7 +83,7 @@ describe("WorkspaceModal", () => {
     stopState = { isPending: false, isError: true };
     render(<WorkspaceModal />);
     expect(
-      screen.getByText("워크스페이스 중지에 실패했습니다. 다시 시도해주세요."),
+      screen.getByText("워크스페이스 중지에 실패했습니다. 다시 시도해 주세요."),
     ).toBeInTheDocument();
   });
 
@@ -106,7 +106,7 @@ describe("WorkspaceModal", () => {
     deleteState = { isPending: false, isError: true };
     render(<WorkspaceModal />);
     expect(
-      screen.getByText("워크스페이스 삭제에 실패했습니다. 다시 시도해주세요."),
+      screen.getByText("워크스페이스 삭제에 실패했습니다. 다시 시도해 주세요."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: BTN_TEXT.delete })).toBeNull();
     expect(

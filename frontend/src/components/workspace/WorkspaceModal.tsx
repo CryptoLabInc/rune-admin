@@ -15,8 +15,8 @@ import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 const FAIL_COPY = {
-  stop: "워크스페이스 중지에 실패했습니다. 다시 시도해주세요.",
-  restart: "워크스페이스 재실행에 실패했습니다. 다시 시도해주세요.",
+  stop: "워크스페이스 중지에 실패했습니다. 다시 시도해 주세요.",
+  restart: "워크스페이스 재실행에 실패했습니다. 다시 시도해 주세요.",
 } as const;
 
 const styles = {
@@ -64,7 +64,7 @@ const WorkspaceModal = () => {
       return (
         <ModalLayout title={MODAL_TITLES.workspaceDelete} isOpen>
           <p className="text-negative text-center text-base">
-            워크스페이스 삭제에 실패했습니다. 다시 시도해주세요.
+            워크스페이스 삭제에 실패했습니다. 다시 시도해 주세요.
           </p>
           {closeButton}
         </ModalLayout>
@@ -98,25 +98,20 @@ const WorkspaceModal = () => {
     );
   }
 
-  /* D-2 — workspace info failed to load: message + [닫기] only. */
+  /* D-2 — workspace info failed to load */
   if (isError && !workspace) {
     return (
       <ModalLayout title={MODAL_TITLES.workspaceManage} isOpen>
         <p className="text-center text-base">
           워크스페이스 정보를 불러올 수 없습니다.
           <br />
-          잠시 후 다시 시도해주세요.
+          잠시 후 다시 시도해 주세요.
         </p>
         {closeButton}
       </ModalLayout>
     );
   }
 
-  /* D — detail view. [중지]/[재실행] and [삭제] share the bottom-right action row
-     under the info box (spec 2026-07-17): [중지] shows unless stopped, [재실행]
-     replaces it when stopped (spec no.6–7); [삭제] is the red-filled action
-     (spec no.8). A successful stop/restart closes the modal; a failure keeps it
-     open with an inline message (D-3/D-4). */
   const actionError = stopMutation.isError
     ? FAIL_COPY.stop
     : startMutation.isError
