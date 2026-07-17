@@ -67,11 +67,11 @@ const DeleteTeamModal = ({
 
   if (hasChildren) {
     return (
-      <ModalLayout title={MODAL_TITLES.deleteTeamBlocked} isOpen>
+      <ModalLayout title={MODAL_TITLES.deleteTeam(teamName)} isOpen>
         <p className="text-center text-base">
           하위 팀이 있는 팀은 삭제할 수 없습니다.
           <br />
-          하위 팀을 먼저 삭제한 후 다시 시도해주세요.
+          하위 팀을 먼저 삭제한 후 다시 시도해 주세요.
         </p>
         <Button
           btnText={BTN_TEXT.close}
@@ -144,7 +144,7 @@ const DeleteTeamModal = ({
             />
             <Input
               id="delete-team-transfer-confirm"
-              labelText="확인 — 타겟 팀명 입력"
+              labelText="확인 - 타겟 팀명 입력"
               placeholder={targetName || "팀을 먼저 선택하세요"}
               maxLength={50}
               value={transferConfirm}
@@ -176,7 +176,7 @@ const DeleteTeamModal = ({
           <div className={styles.optionFields}>
             <Input
               id="delete-team-purge-confirm"
-              labelText="확인 — 삭제할 팀명 입력"
+              labelText="확인 - 삭제할 팀명 입력"
               placeholder={teamName}
               maxLength={50}
               value={purgeConfirm}

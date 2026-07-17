@@ -41,10 +41,10 @@ const AddMemberModal = ({
 
   return (
     <ModalLayout title={MODAL_TITLES.addMember(teamName)} isOpen isWide>
-      <div className="flex w-full flex-col gap-5">
+      <div className="flex w-full flex-col gap-6">
         <Input
           id="add-member-account"
-          labelText="계정명 (email)"
+          labelText="이메일 (account)"
           type="email"
           placeholder="user@corp.com"
           maxLength={100}
@@ -53,8 +53,8 @@ const AddMemberModal = ({
           error={invalidFormat ? "올바른 이메일 형식이 아닙니다." : undefined}
         />
         <Dropdown
-          label="role"
-          placeholder="role 선택"
+          label="권한 (role)"
+          placeholder="권한 선택"
           options={ROLE_OPTIONS}
           value={role}
           onChange={setRole}

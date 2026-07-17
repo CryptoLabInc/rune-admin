@@ -35,12 +35,12 @@ const RoleChangeConfirmModal = ({
   return (
     <ModalLayout title={MODAL_TITLES.roleChange} isOpen>
       <div className="flex w-full flex-col gap-4">
-        <p className="text-base">다음 멤버의 role을 변경합니다:</p>
+        <p className="text-base">다음 멤버의 권한을 변경합니다:</p>
         <table className={styles.table}>
           <thead>
             <tr>
               <th className={styles.th}>account</th>
-              <th className={styles.th}>role 변경</th>
+              <th className={styles.th}>권한 변경</th>
             </tr>
           </thead>
           <tbody>

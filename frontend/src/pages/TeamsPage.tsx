@@ -179,7 +179,7 @@ const TeamsPage = () => {
             onChange={setTeamSearch}
             placeholder="팀 검색"
             maxLength={50}
-            className="ml-auto w-[220px]"
+            className="ml-auto w-55"
           />
         )}
       </div>

@@ -42,9 +42,7 @@ const CreateTeamModal = ({
   const trimmed = name.trim();
   const isInvalidFormat =
     trimmed.length > 0 && !TEAM_NAME_PATTERN.test(trimmed);
-  /* Client-side dup hint checks siblings of the chosen parent only — the
-     server is the authority (409 TEAM_NAME_DUPLICATE) since a duplicate
-     name is fine across different parents. */
+
   const isDuplicate = teams.some(
     (team) => team.parentId === (parentId || null) && team.name === trimmed,
   );
@@ -77,7 +75,7 @@ const CreateTeamModal = ({
           onChange={setParentId}
         />
         <Notice tone="info">
-          상위 팀을 선택하면 상위 팀의 멤버와 역할이 새 팀에 자동 복사됩니다.
+          상위 팀을 선택하면 상위 팀의 멤버가 새 팀에 자동 복사됩니다. <br />
           멤버 편집은 팀 생성 후 상세 페이지에서 할 수 있습니다.
         </Notice>
         {error && <Notice tone="error">{error}</Notice>}

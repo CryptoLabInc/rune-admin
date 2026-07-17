@@ -159,7 +159,7 @@ describe("DeleteTeamModal", () => {
       />,
     );
     expect(
-      screen.getByText(MODAL_TITLES.deleteTeamBlocked),
+      screen.getByText(MODAL_TITLES.deleteTeam("플랫폼")),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: BTN_TEXT.deleteTeam }),
@@ -187,7 +187,7 @@ describe("DeleteTeamModal", () => {
     await user.click(screen.getByRole("option", { name: "프로덕트" }));
     expect(submit).toBeDisabled(); // confirmation not typed yet
 
-    const confirm = screen.getByLabelText("확인 — 타겟 팀명 입력");
+    const confirm = screen.getByLabelText("확인 - 타겟 팀명 입력");
     await user.type(confirm, "프로덕");
     expect(
       screen.getByText("타겟 팀명이 일치하지 않습니다."),
@@ -219,7 +219,7 @@ describe("DeleteTeamModal", () => {
     await user.click(screen.getByRole("radio", { name: /팀 내 기억 삭제/ }));
     expect(submit).toBeDisabled(); // confirmation required now
 
-    await user.type(screen.getByLabelText("확인 — 삭제할 팀명 입력"), "디자인");
+    await user.type(screen.getByLabelText("확인 - 삭제할 팀명 입력"), "디자인");
     expect(submit).toBeEnabled();
 
     await user.click(submit);
@@ -240,7 +240,7 @@ describe("DeleteTeamModal", () => {
       />,
     );
     await user.click(screen.getByRole("radio", { name: /팀 내 기억 삭제/ }));
-    await user.type(screen.getByLabelText("확인 — 삭제할 팀명 입력"), "디자인");
+    await user.type(screen.getByLabelText("확인 - 삭제할 팀명 입력"), "디자인");
     expect(
       screen.getByText("하위 팀이 있어 삭제할 수 없습니다."),
     ).toBeInTheDocument();
@@ -259,7 +259,7 @@ describe("AddMemberModal", () => {
     );
     const submit = screen.getByRole("button", { name: BTN_TEXT.invite });
 
-    await user.type(screen.getByLabelText("계정명 (email)"), "not-an-email");
+    await user.type(screen.getByLabelText("이메일 (account)"), "not-an-email");
     expect(
       screen.getByText("올바른 이메일 형식이 아닙니다."),
     ).toBeInTheDocument();
