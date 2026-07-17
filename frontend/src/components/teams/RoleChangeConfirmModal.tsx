@@ -1,5 +1,6 @@
 import Button from "@/components/elements/Button";
 import ModalLayout from "@/components/layout/ModalLayout";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 export interface TRoleChange {
   account: string;
@@ -60,13 +61,13 @@ const RoleChangeConfirmModal = ({
       </div>
       <div className="flex w-full gap-2">
         <Button
-          btnText="취소"
+          btnText={BTN_TEXT.cancel}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="변경하기"
+          btnText={BTN_TEXT.change}
           btnSize="md"
           btnColor="mintFilled"
           handleClick={onConfirm}

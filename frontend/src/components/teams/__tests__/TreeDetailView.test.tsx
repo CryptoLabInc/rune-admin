@@ -7,8 +7,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import TreeDetailView from "@/components/teams/TreeDetailView";
 import * as teamAPIs from "@/api/teamAPIs";
 import * as teamMemberAPIs from "@/api/teamMemberAPIs";
-import { useNoticeStore } from "@/stores/noticeStore";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TTeamMember, TTeamTree } from "@/types/teamTypes";
+import { useNoticeStore } from "@/stores/noticeStore";
 
 const jsonRes = (body: unknown) =>
   ({ ok: true, json: async () => body }) as unknown as Response;
@@ -259,9 +260,11 @@ describe("TreeDetailView", () => {
     );
     const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     renderView();
-    await user.click(screen.getByRole("button", { name: "그룹 생성" }));
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.createGroup }),
+    );
     await user.type(screen.getByLabelText("팀 이름"), "New");
-    await user.click(screen.getByRole("button", { name: "생성" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.create }));
     await waitFor(() =>
       expect(create).toHaveBeenCalledWith({ name: "New", parentId: null }),
     );
@@ -294,9 +297,11 @@ describe("TreeDetailView", () => {
       json: async () => ({ code: "TEAM_NAME_DUPLICATE" }),
     } as unknown as Response);
     renderView();
-    await user.click(screen.getByRole("button", { name: "그룹 생성" }));
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.createGroup }),
+    );
     await user.type(screen.getByLabelText("팀 이름"), "Infra");
-    await user.click(screen.getByRole("button", { name: "생성" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.create }));
     expect(
       await screen.findByText("같은 상위 팀에 동일한 이름이 이미 있습니다."),
     ).toBeInTheDocument();
@@ -329,11 +334,11 @@ describe("TreeDetailView", () => {
     );
     const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     renderView();
-    await user.click(screen.getByRole("button", { name: "이름 변경" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.rename }));
     const input = screen.getByLabelText("팀 이름");
     await user.clear(input);
     await user.type(input, "Renamed");
-    await user.click(screen.getByRole("button", { name: "저장" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.save }));
     await waitFor(() =>
       expect(rename).toHaveBeenCalledWith("t_1", { name: "Renamed" }),
     );
@@ -384,7 +389,7 @@ describe("TreeDetailView", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    await user.click(screen.getByRole("button", { name: "팀 삭제" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.deleteTeam }));
     await user.click(screen.getByRole("radio", { name: /팀 내 기억 삭제/ }));
     await user.type(
       screen.getByLabelText("확인 — 삭제할 팀명 입력"),
@@ -392,7 +397,9 @@ describe("TreeDetailView", () => {
     );
     /* Two "팀 삭제" buttons exist once the confirm modal opens (the card
        trigger + the modal's confirm) — the confirm one is the last. */
-    const confirmButtons = screen.getAllByRole("button", { name: "팀 삭제" });
+    const confirmButtons = screen.getAllByRole("button", {
+      name: BTN_TEXT.deleteTeam,
+    });
     await user.click(confirmButtons[confirmButtons.length - 1]);
     await waitFor(() =>
       expect(del).toHaveBeenCalledWith("t_1", "purge", undefined),
@@ -435,11 +442,11 @@ describe("TreeDetailView", () => {
       json: async () => ({ code: "ALREADY_TEAM_MEMBER", message: "x" }),
     } as unknown as Response);
     renderView();
-    await user.click(screen.getByRole("button", { name: "+ 멤버 추가" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.addMember }));
     await user.type(screen.getByLabelText("계정명 (email)"), "kim@corp.com");
     await user.click(screen.getByLabelText("role"));
     await user.click(screen.getByRole("option", { name: "edit" }));
-    await user.click(screen.getByRole("button", { name: "초대하기" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.invite }));
     expect(
       await screen.findByText("이미 초대된 사용자입니다."),
     ).toBeInTheDocument();
@@ -447,7 +454,7 @@ describe("TreeDetailView", () => {
        while the modal is mounted, and the modal's own cancel/submit
        buttons are still present. */
     expect(
-      screen.getByRole("button", { name: "초대하기" }),
+      screen.getByRole("button", { name: BTN_TEXT.invite }),
     ).toBeInTheDocument();
   });
 
@@ -471,11 +478,11 @@ describe("TreeDetailView", () => {
     );
     const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     renderView();
-    await user.click(screen.getByRole("button", { name: "+ 멤버 추가" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.addMember }));
     await user.type(screen.getByLabelText("계정명 (email)"), "kim@corp.com");
     await user.click(screen.getByLabelText("role"));
     await user.click(screen.getByRole("option", { name: "edit" }));
-    await user.click(screen.getByRole("button", { name: "초대하기" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.invite }));
     await waitFor(() =>
       expect(showNoticeSpy).toHaveBeenCalledWith(
         "멤버 추가",
@@ -509,9 +516,9 @@ describe("TreeDetailView", () => {
     await user.click(screen.getByLabelText("kim@corp.com role"));
     await user.click(screen.getByRole("option", { name: "read" }));
     await user.click(
-      screen.getByRole("button", { name: "변경사항 업데이트" }),
+      screen.getByRole("button", { name: BTN_TEXT.updateChanges }),
     );
-    await user.click(screen.getByRole("button", { name: "변경하기" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.change }));
     await waitFor(() =>
       expect(showNoticeSpy).toHaveBeenCalledWith(
         "역할 변경",
@@ -547,9 +554,9 @@ describe("TreeDetailView", () => {
     await user.click(screen.getByLabelText("kim@corp.com role"));
     await user.click(screen.getByRole("option", { name: "read" }));
     await user.click(
-      screen.getByRole("button", { name: "변경사항 업데이트" }),
+      screen.getByRole("button", { name: BTN_TEXT.updateChanges }),
     );
-    await user.click(screen.getByRole("button", { name: "변경하기" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.change }));
     await waitFor(() =>
       expect(showNoticeSpy).toHaveBeenCalledWith(
         "역할 변경",
@@ -583,8 +590,10 @@ describe("TreeDetailView", () => {
     await user.click(
       screen.getByRole("checkbox", { name: "kim@corp.com 선택" }),
     );
-    await user.click(screen.getByRole("button", { name: "제거" }));
-    const confirmButtons = screen.getAllByRole("button", { name: "제거" });
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.remove }));
+    const confirmButtons = screen.getAllByRole("button", {
+      name: BTN_TEXT.remove,
+    });
     await user.click(confirmButtons[confirmButtons.length - 1]);
     await waitFor(() =>
       expect(showNoticeSpy).toHaveBeenCalledWith(
@@ -621,8 +630,10 @@ describe("TreeDetailView", () => {
     await user.click(
       screen.getByRole("checkbox", { name: "kim@corp.com 선택" }),
     );
-    await user.click(screen.getByRole("button", { name: "제거" }));
-    const confirmButtons = screen.getAllByRole("button", { name: "제거" });
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.remove }));
+    const confirmButtons = screen.getAllByRole("button", {
+      name: BTN_TEXT.remove,
+    });
     await user.click(confirmButtons[confirmButtons.length - 1]);
     await waitFor(() =>
       expect(showNoticeSpy).toHaveBeenCalledWith(
@@ -657,13 +668,15 @@ describe("TreeDetailView", () => {
     /* t_1 has childCount: 0 in the TEAMS fixture, so DeleteTeamModal's
        client-side hasChildren gate passes and the confirm flow reaches
        the server, whose 409 drives the inline error mapping below. */
-    await user.click(screen.getByRole("button", { name: "팀 삭제" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.deleteTeam }));
     await user.click(screen.getByRole("radio", { name: /팀 내 기억 삭제/ }));
     await user.type(
       screen.getByLabelText("확인 — 삭제할 팀명 입력"),
       "Platform",
     );
-    const confirmButtons = screen.getAllByRole("button", { name: "팀 삭제" });
+    const confirmButtons = screen.getAllByRole("button", {
+      name: BTN_TEXT.deleteTeam,
+    });
     await user.click(confirmButtons[confirmButtons.length - 1]);
     expect(
       await screen.findByText("하위 팀이 있어 삭제할 수 없습니다."),
@@ -696,10 +709,12 @@ describe("TreeDetailView", () => {
     await user.click(
       screen.getByRole("checkbox", { name: "kim@corp.com 선택" }),
     );
-    await user.click(screen.getByRole("button", { name: "제거" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.remove }));
     /* Two "제거" buttons exist once the confirm modal opens (the table
        trigger + the modal's confirm) — the confirm one is the last. */
-    const confirmButtons = screen.getAllByRole("button", { name: "제거" });
+    const confirmButtons = screen.getAllByRole("button", {
+      name: BTN_TEXT.remove,
+    });
     await user.click(confirmButtons[confirmButtons.length - 1]);
     expect(await screen.findByText("팀 멤버가 아닙니다")).toBeInTheDocument();
   });

@@ -8,8 +8,9 @@ import UsersPage from "@/pages/UsersPage";
 import * as invitationAPIs from "@/api/invitationAPIs";
 import * as teamAPIs from "@/api/teamAPIs";
 import * as userAPIs from "@/api/userAPIs";
-import { useNoticeStore } from "@/stores/noticeStore";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TUserListItem } from "@/types/userTypes";
+import { useNoticeStore } from "@/stores/noticeStore";
 
 const jsonRes = (body: unknown) =>
   ({ ok: true, json: async () => body }) as unknown as Response;
@@ -218,7 +219,9 @@ describe("UsersPage", () => {
     renderPage();
     await screen.findByText("k@corp.com");
 
-    await typer.click(screen.getByRole("button", { name: "+ 멤버 초대" }));
+    await typer.click(
+      screen.getByRole("button", { name: BTN_TEXT.inviteMember }),
+    );
     await typer.type(
       screen.getByPlaceholderText("user@corp.com"),
       "new@corp.com",
@@ -227,7 +230,9 @@ describe("UsersPage", () => {
     await typer.click(screen.getByRole("option", { name: "백엔드" }));
     await typer.click(screen.getByRole("button", { name: "세트 1 role" }));
     await typer.click(screen.getByRole("option", { name: "edit" }));
-    await typer.click(screen.getByRole("button", { name: "초대 전송" }));
+    await typer.click(
+      screen.getByRole("button", { name: BTN_TEXT.sendInvitation }),
+    );
 
     await waitFor(() =>
       expect(postSpy).toHaveBeenCalledWith({
@@ -272,7 +277,9 @@ describe("UsersPage", () => {
     renderPage();
     await screen.findByText("k@corp.com");
 
-    await typer.click(screen.getByRole("button", { name: "+ 멤버 초대" }));
+    await typer.click(
+      screen.getByRole("button", { name: BTN_TEXT.inviteMember }),
+    );
     await typer.type(
       screen.getByPlaceholderText("user@corp.com"),
       "growth@corp.com",
@@ -284,7 +291,9 @@ describe("UsersPage", () => {
     await typer.click(screen.getByRole("option", { name: "그로스" }));
     await typer.click(screen.getByRole("button", { name: "세트 1 role" }));
     await typer.click(screen.getByRole("option", { name: "edit" }));
-    await typer.click(screen.getByRole("button", { name: "초대 전송" }));
+    await typer.click(
+      screen.getByRole("button", { name: BTN_TEXT.sendInvitation }),
+    );
 
     await waitFor(() =>
       expect(postSpy).toHaveBeenCalledWith({
@@ -305,7 +314,9 @@ describe("UsersPage", () => {
     renderPage();
     await screen.findByText("k@corp.com");
 
-    await typer.click(screen.getByRole("button", { name: "+ 멤버 초대" }));
+    await typer.click(
+      screen.getByRole("button", { name: BTN_TEXT.inviteMember }),
+    );
     await typer.type(
       screen.getByPlaceholderText("user@corp.com"),
       "k@corp.com",
@@ -314,7 +325,9 @@ describe("UsersPage", () => {
     await typer.click(screen.getByRole("option", { name: "백엔드" }));
     await typer.click(screen.getByRole("button", { name: "세트 1 role" }));
     await typer.click(screen.getByRole("option", { name: "edit" }));
-    await typer.click(screen.getByRole("button", { name: "초대 전송" }));
+    await typer.click(
+      screen.getByRole("button", { name: BTN_TEXT.sendInvitation }),
+    );
 
     expect(
       await screen.findByText(
@@ -337,7 +350,9 @@ describe("UsersPage", () => {
 
     await typer.click(screen.getByLabelText("k@corp.com 선택"));
     await typer.click(screen.getByLabelText("m@corp.com 선택"));
-    await typer.click(screen.getByRole("button", { name: "초대 코드 재전송" }));
+    await typer.click(
+      screen.getByRole("button", { name: BTN_TEXT.resendInvitationCode }),
+    );
 
     const modal = (
       await screen.findByText("일부 항목을 처리하지 못했습니다")
@@ -360,9 +375,9 @@ describe("UsersPage", () => {
 
     await typer.click(screen.getByLabelText("k@corp.com 선택"));
     await typer.click(screen.getByLabelText("m@corp.com 선택"));
-    await typer.click(screen.getByRole("button", { name: "삭제" }));
+    await typer.click(screen.getByRole("button", { name: BTN_TEXT.delete }));
     await typer.click(
-      screen.getAllByRole("button", { name: "삭제" }).slice(-1)[0],
+      screen.getAllByRole("button", { name: BTN_TEXT.delete }).slice(-1)[0],
     );
 
     expect(deleteSpy).toHaveBeenCalledWith(["u_1", "u_2"]);
@@ -388,9 +403,9 @@ describe("UsersPage", () => {
 
     await typer.click(screen.getByLabelText("k@corp.com 선택"));
     await typer.click(screen.getByLabelText("m@corp.com 선택"));
-    await typer.click(screen.getByRole("button", { name: "삭제" }));
+    await typer.click(screen.getByRole("button", { name: BTN_TEXT.delete }));
     await typer.click(
-      screen.getAllByRole("button", { name: "삭제" }).slice(-1)[0],
+      screen.getAllByRole("button", { name: BTN_TEXT.delete }).slice(-1)[0],
     );
 
     await waitFor(() =>

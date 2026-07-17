@@ -12,6 +12,7 @@ import {
   isTransitionalStatus,
   useWorkspaceQuery,
 } from "@/hooks/queries/useWorkspaceQuery";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 const FAIL_COPY = {
@@ -51,7 +52,7 @@ const WorkspaceModal = () => {
 
   const closeButton = (
     <Button
-      btnText="닫기"
+      btnText={BTN_TEXT.close}
       btnSize="md"
       btnColor="grayOutline"
       handleClick={closeModal}
@@ -79,13 +80,13 @@ const WorkspaceModal = () => {
         </p>
         <div className="flex w-full gap-2">
           <Button
-            btnText="닫기"
+            btnText={BTN_TEXT.close}
             btnSize="md"
             btnColor="grayOutline"
             handleClick={closeModal}
           />
           <Button
-            btnText="삭제"
+            btnText={BTN_TEXT.delete}
             btnSize="md"
             btnColor="redFilled"
             disabled={deleteMutation.isPending}
@@ -128,7 +129,7 @@ const WorkspaceModal = () => {
         <div className="flex justify-end">
           {status === "stopped" ? (
             <Button
-              btnText="재실행"
+              btnText={BTN_TEXT.restart}
               btnSize="sm"
               btnColor="grayOutline"
               className="w-fit"
@@ -139,7 +140,7 @@ const WorkspaceModal = () => {
             />
           ) : (
             <Button
-              btnText="중지"
+              btnText={BTN_TEXT.stop}
               btnSize="sm"
               btnColor="grayOutline"
               className="w-fit"
@@ -174,7 +175,7 @@ const WorkspaceModal = () => {
 
         <div className="flex justify-end">
           <TextButton
-            btnText="삭제"
+            btnText={BTN_TEXT.delete}
             tone="red"
             disabled={busy}
             handleClick={openDeleteConfirm}

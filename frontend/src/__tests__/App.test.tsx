@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as authAPIs from "@/api/authAPIs";
 import * as teamAPIs from "@/api/teamAPIs";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import App from "@/App";
 
 const jsonRes = (body: unknown) =>
@@ -64,7 +65,7 @@ describe("App", () => {
     );
     renderApp("/teams");
     expect(
-      await screen.findByRole("button", { name: "로그인하기" }),
+      await screen.findByRole("button", { name: BTN_TEXT.login }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("region", { name: "팀 관리" }),
@@ -78,7 +79,7 @@ describe("App", () => {
     renderApp("/no-such-route");
     expect(await screen.findByText("404 Not Found")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "로그인하기" }),
+      screen.queryByRole("button", { name: BTN_TEXT.login }),
     ).not.toBeInTheDocument();
   });
 });

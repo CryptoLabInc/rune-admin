@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import Button from "@/components/elements/Button";
 import ModalLayout from "@/components/layout/ModalLayout";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 interface SessionDeactivateModalProps {
   account: string;
@@ -40,13 +41,13 @@ const SessionDeactivateModal = ({
       </p>
       <div className="flex w-full items-center gap-4">
         <Button
-          btnText="취소"
+          btnText={BTN_TEXT.cancel}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="비활성화"
+          btnText={BTN_TEXT.deactivate}
           btnSize="md"
           btnColor="redFilled"
           disabled={submitting}

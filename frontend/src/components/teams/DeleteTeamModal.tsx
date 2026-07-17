@@ -8,6 +8,7 @@ import Radio from "@/components/elements/Radio";
 import ModalLayout from "@/components/layout/ModalLayout";
 import { buildTeamOptions } from "@/components/teams/teamOptions";
 import { cn } from "@/utils/cn";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TTeamTree } from "@/types/teamTypes";
 
 const styles = {
@@ -73,7 +74,7 @@ const DeleteTeamModal = ({
           하위 팀을 먼저 삭제한 후 다시 시도해주세요.
         </p>
         <Button
-          btnText="닫기"
+          btnText={BTN_TEXT.close}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
@@ -191,13 +192,13 @@ const DeleteTeamModal = ({
 
       <div className="flex w-full gap-2">
         <Button
-          btnText="취소"
+          btnText={BTN_TEXT.cancel}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="팀 삭제"
+          btnText={BTN_TEXT.deleteTeam}
           btnSize="md"
           btnColor="redFilled"
           disabled={!canSubmit}

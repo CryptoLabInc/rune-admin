@@ -35,6 +35,7 @@ import { useTeamMembersQuery } from "@/hooks/queries/useTeamMembersQuery";
 import { useTeamQuery } from "@/hooks/queries/useTeamQuery";
 import { parseErrorCode } from "@/api/parseError";
 import { formatDate } from "@/utils/formatDate";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TMemberStatus, TTeamNode } from "@/types/commonTypes";
 import type {
   TTeamMemberRole,
@@ -349,9 +350,8 @@ const TreeDetailView = ({
           closeModal();
           showNotice("팀 삭제", "팀이 삭제되었습니다.", "success", () => {
             onSelectTeam(
-              teams.find(
-                (t) => t.parentId === null && t.id !== selectedTeam.id,
-              )?.id ?? "",
+              teams.find((t) => t.parentId === null && t.id !== selectedTeam.id)
+                ?.id ?? "",
             );
           });
         },
@@ -461,7 +461,7 @@ const TreeDetailView = ({
           TeamsPage header */}
       <aside className={styles.side} aria-label="팀 트리">
         <Button
-          btnText="그룹 생성"
+          btnText={BTN_TEXT.createGroup}
           btnSize="sm"
           btnColor="mintFilled"
           handleClick={() => openTeamModal("create")}
@@ -488,14 +488,14 @@ const TreeDetailView = ({
               {detail?.name ?? selectedTeam.name}
             </h3>
             <Button
-              btnText="이름 변경"
+              btnText={BTN_TEXT.rename}
               btnSize="sm"
               btnColor="grayOutline"
               className="w-fit"
               handleClick={() => openTeamModal("rename")}
             />
             <Button
-              btnText="팀 삭제"
+              btnText={BTN_TEXT.deleteTeam}
               btnSize="sm"
               btnColor="redFilled"
               className="w-fit"
@@ -511,7 +511,7 @@ const TreeDetailView = ({
         <div className={styles.membersRow}>
           <h3 className={styles.membersTitle}>멤버 ({total})</h3>
           <Button
-            btnText="+ 멤버 추가"
+            btnText={BTN_TEXT.addMember}
             btnSize="sm"
             btnColor="grayOutline"
             className="w-fit"
@@ -540,7 +540,7 @@ const TreeDetailView = ({
                 />
                 <div className={styles.pendingActions}>
                   <Button
-                    btnText="변경사항 업데이트"
+                    btnText={BTN_TEXT.updateChanges}
                     btnSize="sm"
                     btnColor="mintFilled"
                     className="w-fit"
@@ -548,7 +548,7 @@ const TreeDetailView = ({
                     handleClick={() => setActiveModal("roleConfirm")}
                   />
                   <Button
-                    btnText="제거"
+                    btnText={BTN_TEXT.remove}
                     btnSize="sm"
                     btnColor="redFilled"
                     className="w-fit"

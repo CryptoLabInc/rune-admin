@@ -6,7 +6,11 @@ import PublicNavbar from "@/components/navigation/PublicNavbar";
 import { useSessionQuery } from "@/hooks/queries/useSessionQuery";
 import { postAuthStart } from "@/api/authAPIs";
 import { redirectTo } from "@/utils/redirect";
-import { PATH_LIST } from "@/constants/commonConstants";
+import {
+  BRAND_WORDMARK,
+  BTN_TEXT,
+  PATH_LIST,
+} from "@/constants/commonConstants";
 
 /**
  * LoginPage is the console sign-in screen (SC-01). Login is delegated to
@@ -44,7 +48,7 @@ const LoginPage = () => {
       <PublicNavbar />
       <main className="grid flex-1 place-items-center px-4">
         <div className="border-border bg-panel-solid w-[320px] rounded-lg border p-7 text-center">
-          <h1 className="mb-4 text-lg font-semibold">Rune Console</h1>
+          <h1 className="mb-4 text-lg font-semibold">{BRAND_WORDMARK}</h1>
           {failed && (
             <p role="alert" className="text-negative mb-4 text-sm">
               로그인 실패
@@ -55,7 +59,7 @@ const LoginPage = () => {
             </p>
           )}
           <Button
-            btnText="로그인하기"
+            btnText={BTN_TEXT.login}
             btnSize="lg"
             btnColor="mintFilled"
             handleClick={handleLogin}

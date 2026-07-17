@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import WorkspaceModal from "@/components/workspace/WorkspaceModal";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TStorageStatus, TWorkspace } from "@/types/commonTypes";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 
@@ -52,9 +53,9 @@ beforeEach(() => {
 describe("WorkspaceModal", () => {
   it("detail (running) shows [중지], the delete trigger, and workspace info", () => {
     render(<WorkspaceModal />);
-    expect(screen.getByRole("button", { name: "중지" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "삭제" })).toBeEnabled();
-    expect(screen.queryByRole("button", { name: "재실행" })).toBeNull();
+    expect(screen.getByRole("button", { name: BTN_TEXT.stop })).toBeEnabled();
+    expect(screen.getByRole("button", { name: BTN_TEXT.delete })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: BTN_TEXT.restart })).toBeNull();
     expect(screen.getByText(RUNNING.endpoint as string)).toBeInTheDocument();
     expect(screen.getByText("running")).toBeInTheDocument();
     expect(screen.getByText("12,431")).toBeInTheDocument();
@@ -63,15 +64,19 @@ describe("WorkspaceModal", () => {
   it("detail (stopped) replaces [중지] with [재실행]", () => {
     setStatus("stopped");
     render(<WorkspaceModal />);
-    expect(screen.getByRole("button", { name: "재실행" })).toBeEnabled();
-    expect(screen.queryByRole("button", { name: "중지" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: BTN_TEXT.restart }),
+    ).toBeEnabled();
+    expect(screen.queryByRole("button", { name: BTN_TEXT.stop })).toBeNull();
   });
 
   it("transitional status disables the lifecycle actions (spec no.6/8)", () => {
     setStatus("stopping");
     render(<WorkspaceModal />);
-    expect(screen.getByRole("button", { name: "중지" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "삭제" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: BTN_TEXT.stop })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: BTN_TEXT.delete }),
+    ).toBeDisabled();
   });
 
   it("detail surfaces the stop-failure message (state D-3)", () => {
@@ -88,8 +93,12 @@ describe("WorkspaceModal", () => {
     expect(
       screen.getByText(/워크스페이스를 삭제하시겠습니까/),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "닫기" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "삭제" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: BTN_TEXT.close }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: BTN_TEXT.delete }),
+    ).toBeInTheDocument();
   });
 
   it("delete failure (D-1 실패) swaps to the fail copy with only [닫기]", () => {
@@ -99,8 +108,10 @@ describe("WorkspaceModal", () => {
     expect(
       screen.getByText("워크스페이스 삭제에 실패했습니다. 다시 시도해주세요."),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "삭제" })).toBeNull();
-    expect(screen.getByRole("button", { name: "닫기" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: BTN_TEXT.delete })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: BTN_TEXT.close }),
+    ).toBeInTheDocument();
   });
 
   it("load error (D-2) shows the load-failure copy and [닫기] only", () => {
@@ -109,7 +120,9 @@ describe("WorkspaceModal", () => {
     expect(
       screen.getByText(/워크스페이스 정보를 불러올 수 없습니다/),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "닫기" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "삭제" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: BTN_TEXT.close }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: BTN_TEXT.delete })).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ import ModalLayout from "@/components/layout/ModalLayout";
 import { buildTeamOptions, ROLE_OPTIONS } from "@/components/teams/teamOptions";
 import { buildInvitePreview } from "@/components/users/invitePreview";
 import ModalTable from "@/components/users/ModalTable";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TTeamTree } from "@/types/teamTypes";
 import type { TInvitePayload, TInviteResult } from "@/types/userTypes";
 
@@ -176,7 +177,7 @@ const InviteMemberModal = ({
               {sets.length > 1 &&
                 (index > 0 ? (
                   <Button
-                    btnText="✕"
+                    btnText={BTN_TEXT.removeRow}
                     btnSize="md"
                     btnColor="grayOutline"
                     className={styles.removeSlot}
@@ -188,7 +189,7 @@ const InviteMemberModal = ({
             </div>
           ))}
           <Button
-            btnText="+ 팀/role 추가"
+            btnText={BTN_TEXT.addTeamRole}
             btnSize="sm"
             btnColor="grayOutline"
             className="w-fit"
@@ -228,13 +229,13 @@ const InviteMemberModal = ({
 
       <div className="flex w-full items-center gap-4">
         <Button
-          btnText="닫기"
+          btnText={BTN_TEXT.close}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="초대 전송"
+          btnText={BTN_TEXT.sendInvitation}
           btnSize="md"
           btnColor="mintFilled"
           disabled={!canSubmit}

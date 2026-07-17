@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import MemberDetailDrawer from "@/components/users/MemberDetailDrawer";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TBatchResult, TTeamTree } from "@/types/teamTypes";
 import type { TUserListItem } from "@/types/userTypes";
 import { useNoticeStore } from "@/stores/noticeStore";
@@ -76,8 +77,10 @@ describe("MemberDetailDrawer", () => {
     await user.click(screen.getByRole("button", { name: "백엔드 role" }));
     await user.click(screen.getByRole("option", { name: "write" }));
 
-    await user.click(screen.getByRole("button", { name: "변경사항 업데이트" }));
-    await user.click(screen.getByRole("button", { name: "변경하기" }));
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.updateChanges }),
+    );
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.change }));
 
     expect(props.onUpdateRoles).toHaveBeenCalledWith([
       { teamId: "t_b", role: "write" },
@@ -90,8 +93,10 @@ describe("MemberDetailDrawer", () => {
 
     await user.click(screen.getByRole("button", { name: "백엔드 role" }));
     await user.click(screen.getByRole("option", { name: "write" }));
-    await user.click(screen.getByRole("button", { name: "변경사항 업데이트" }));
-    await user.click(screen.getByRole("button", { name: "변경하기" }));
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.updateChanges }),
+    );
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.change }));
 
     /* Regression: a successful apply makes the drawer recompute its
        `changes` prop to empty (baseRole catches up), which used to blank
@@ -115,8 +120,10 @@ describe("MemberDetailDrawer", () => {
 
     await user.click(screen.getByRole("button", { name: "백엔드 role" }));
     await user.click(screen.getByRole("option", { name: "write" }));
-    await user.click(screen.getByRole("button", { name: "변경사항 업데이트" }));
-    await user.click(screen.getByRole("button", { name: "변경하기" }));
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.updateChanges }),
+    );
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.change }));
 
     expect(
       await screen.findByText("일부 항목을 처리하지 못했습니다"),
@@ -134,9 +141,9 @@ describe("MemberDetailDrawer", () => {
     render(<MemberDetailDrawer {...props} />);
 
     await user.click(screen.getByRole("checkbox", { name: "백엔드 선택" }));
-    await user.click(screen.getByRole("button", { name: "제거" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.remove }));
     await user.click(
-      screen.getAllByRole("button", { name: "제거" }).slice(-1)[0],
+      screen.getAllByRole("button", { name: BTN_TEXT.remove }).slice(-1)[0],
     );
 
     expect(props.onRemoveMemberships).toHaveBeenCalledWith(["t_b"]);
@@ -155,10 +162,10 @@ describe("MemberDetailDrawer", () => {
     const props = baseProps();
     render(<MemberDetailDrawer {...props} />);
 
-    await user.click(screen.getByRole("button", { name: "+ 팀 추가" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.addTeam }));
     await user.click(screen.getByRole("button", { name: "추가할 팀" }));
     await user.click(screen.getByRole("option", { name: "디자인" }));
-    await user.click(screen.getByRole("button", { name: "추가" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.add }));
 
     await waitFor(() =>
       expect(props.onAddMembership).toHaveBeenCalledWith("t_d", "read"),
@@ -170,11 +177,13 @@ describe("MemberDetailDrawer", () => {
     const props = baseProps();
     render(<MemberDetailDrawer {...props} />);
 
-    await user.click(screen.getByRole("button", { name: "세션 비활성화" }));
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.deactivateSession }),
+    );
     expect(
       screen.getByRole("heading", { name: "세션 비활성화" }),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "비활성화" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.deactivate }));
 
     await waitFor(() => expect(props.onDeactivateSession).toHaveBeenCalled());
   });
@@ -185,13 +194,17 @@ describe("MemberDetailDrawer", () => {
     const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     render(<MemberDetailDrawer {...props} />);
 
-    await user.click(screen.getByRole("button", { name: "초대 취소" }));
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.cancelInvitation }),
+    );
     expect(
       screen.getByText(
         "k@corp.com의 미사용 초대 코드가 모두 만료됩니다. 유저는 삭제되지 않습니다.",
       ),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "취소하기" }));
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.cancelAction }),
+    );
 
     await waitFor(() => expect(props.onCancelInvitation).toHaveBeenCalled());
     await waitFor(() =>
@@ -217,8 +230,12 @@ describe("MemberDetailDrawer", () => {
     const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     render(<MemberDetailDrawer {...props} />);
 
-    await user.click(screen.getByRole("button", { name: "초대 취소" }));
-    await user.click(screen.getByRole("button", { name: "취소하기" }));
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.cancelInvitation }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.cancelAction }),
+    );
 
     await waitFor(() =>
       expect(showNoticeSpy).toHaveBeenCalledWith(

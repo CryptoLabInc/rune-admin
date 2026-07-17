@@ -36,6 +36,7 @@ import { useUserQuery } from "@/hooks/queries/useUserQuery";
 import { useUsersQuery } from "@/hooks/queries/useUsersQuery";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { parseErrorCode } from "@/api/parseError";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TDropdownOption } from "@/types/commonTypes";
 import type { TTeamMemberRole, TTeamTree } from "@/types/teamTypes";
 import type {
@@ -289,7 +290,7 @@ const UsersPage = () => {
           description="새로고침 후 다시 시도해 주세요."
           action={
             <Button
-              btnText="새로고침"
+              btnText={BTN_TEXT.refresh}
               btnSize="sm"
               btnColor="grayOutline"
               className="w-fit"
@@ -312,7 +313,7 @@ const UsersPage = () => {
           description="멤버를 초대하면 초대 코드가 이메일로 발송됩니다"
           action={
             <Button
-              btnText="+ 멤버 초대"
+              btnText={BTN_TEXT.inviteMember}
               btnSize="sm"
               btnColor="mintFilled"
               className="w-fit"
@@ -374,14 +375,14 @@ const UsersPage = () => {
               {/* Actions — second row, left-aligned (SC-11 no.4–6) */}
               <div className="flex items-center gap-2">
                 <Button
-                  btnText="+ 멤버 초대"
+                  btnText={BTN_TEXT.inviteMember}
                   btnSize="sm"
                   btnColor="mintFilled"
                   className="w-fit"
                   handleClick={() => setInviteOpen(true)}
                 />
                 <Button
-                  btnText="초대 코드 재전송"
+                  btnText={BTN_TEXT.resendInvitationCode}
                   btnSize="sm"
                   btnColor="grayOutline"
                   className="w-fit"
@@ -389,7 +390,7 @@ const UsersPage = () => {
                   handleClick={() => resendCodes(selectedUsers)}
                 />
                 <Button
-                  btnText="삭제"
+                  btnText={BTN_TEXT.delete}
                   btnSize="sm"
                   btnColor="redFilled"
                   className="w-fit"

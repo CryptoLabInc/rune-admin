@@ -20,6 +20,7 @@ import RoleChangeConfirmModal from "@/components/users/RoleChangeConfirmModal";
 import SessionDeactivateModal from "@/components/users/SessionDeactivateModal";
 import { parseErrorCode } from "@/api/parseError";
 import { formatDate, formatDateTime } from "@/utils/formatDate";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TBatchResult, TTeamTree } from "@/types/teamTypes";
 import type { TUserListItem } from "@/types/userTypes";
 import { useNoticeStore } from "@/stores/noticeStore";
@@ -248,7 +249,7 @@ const MemberDetailDrawer = ({
         onClose={onClose}
         footer={
           <Button
-            btnText="닫기"
+            btnText={BTN_TEXT.close}
             btnSize="md"
             btnColor="grayOutline"
             handleClick={onClose}
@@ -271,7 +272,7 @@ const MemberDetailDrawer = ({
               )}
             </div>
             <Button
-              btnText="+ 팀 추가"
+              btnText={BTN_TEXT.addTeam}
               btnSize="sm"
               btnColor="grayOutline"
               className="w-fit"
@@ -300,7 +301,7 @@ const MemberDetailDrawer = ({
                 className="w-[90px]"
               />
               <Button
-                btnText="추가"
+                btnText={BTN_TEXT.add}
                 btnSize="sm"
                 btnColor="mintFilled"
                 className="w-fit"
@@ -345,7 +346,7 @@ const MemberDetailDrawer = ({
           </Table>
           <div className={styles.bulkRow}>
             <Button
-              btnText="변경사항 업데이트"
+              btnText={BTN_TEXT.updateChanges}
               btnSize="sm"
               btnColor="mintFilled"
               className="w-fit"
@@ -353,7 +354,7 @@ const MemberDetailDrawer = ({
               handleClick={() => setOpenModal("role-confirm")}
             />
             <Button
-              btnText="제거"
+              btnText={BTN_TEXT.remove}
               btnSize="sm"
               btnColor="redFilled"
               className="w-fit"
@@ -365,7 +366,7 @@ const MemberDetailDrawer = ({
 
         <div className={styles.actionRow}>
           <Button
-            btnText="초대 코드 재전송"
+            btnText={BTN_TEXT.resendInvitationCode}
             btnSize="sm"
             btnColor="grayOutline"
             disabled={resending}
@@ -374,7 +375,7 @@ const MemberDetailDrawer = ({
           {/* Only meaningful while an unused, unexpired code exists —
               cancel forces it to expire (D15). */}
           <Button
-            btnText="초대 취소"
+            btnText={BTN_TEXT.cancelInvitation}
             btnSize="sm"
             btnColor="grayFilled"
             disabled={user.status !== "invite_pending"}
@@ -383,14 +384,14 @@ const MemberDetailDrawer = ({
           {/* Destroys the session token → 세션 만료 (D12; confirm
               dialog follows). Disabled once already expired (D13). */}
           <Button
-            btnText="세션 비활성화"
+            btnText={BTN_TEXT.deactivateSession}
             btnSize="sm"
             btnColor="grayOutline"
             disabled={user.status === "session_expired"}
             handleClick={() => setOpenModal("deactivate")}
           />
           <Button
-            btnText="멤버 삭제"
+            btnText={BTN_TEXT.deleteMember}
             btnSize="sm"
             btnColor="redFilled"
             className="col-start-3"

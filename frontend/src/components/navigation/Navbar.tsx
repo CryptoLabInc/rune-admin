@@ -1,13 +1,18 @@
 import { Link, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 
+import RuneMark from "@/components/elements/RuneMark";
 import StorageStatus from "@/components/elements/StorageStatus";
 import ProfileMenu from "@/components/navigation/ProfileMenu";
 import WorkspaceModal from "@/components/workspace/WorkspaceModal";
 import { useSessionQuery } from "@/hooks/queries/useSessionQuery";
 import { useWorkspaceQuery } from "@/hooks/queries/useWorkspaceQuery";
 import { postLogout } from "@/api/authAPIs";
-import { PATH_LIST, QUERY_KEYS } from "@/constants/commonConstants";
+import {
+  BRAND_WORDMARK,
+  PATH_LIST,
+  QUERY_KEYS,
+} from "@/constants/commonConstants";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 /**
@@ -42,8 +47,12 @@ const Navbar = () => {
   return (
     <header className="bg-background border-b">
       <div className="max-w-content mx-auto flex h-14 w-full items-center justify-between px-6">
-        <Link to={PATH_LIST.home} className="text-lg font-semibold">
-          Rune Console
+        <Link
+          to={PATH_LIST.home}
+          className="flex items-center gap-2 text-lg font-semibold"
+        >
+          <RuneMark />
+          {BRAND_WORDMARK}
         </Link>
         <div className="flex items-center gap-3">
           {/* rune status badge / [워크스페이스 없음] (SC-03 callout 2). While

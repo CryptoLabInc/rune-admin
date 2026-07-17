@@ -8,6 +8,7 @@ import DeleteTeamModal from "@/components/teams/DeleteTeamModal";
 import RemoveMembershipModal from "@/components/teams/RemoveMembershipModal";
 import RenameTeamModal from "@/components/teams/RenameTeamModal";
 import RoleChangeConfirmModal from "@/components/teams/RoleChangeConfirmModal";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TTeamTree } from "@/types/teamTypes";
 
 /** Minimal team fixture — a root team (플랫폼), a sibling of it (디자인),
@@ -47,7 +48,7 @@ describe("CreateTeamModal", () => {
       <CreateTeamModal teams={TEAMS} onClose={() => {}} onCreate={onCreate} />,
     );
 
-    const submit = screen.getByRole("button", { name: "생성" });
+    const submit = screen.getByRole("button", { name: BTN_TEXT.create });
     expect(submit).toBeDisabled();
 
     // Duplicate of an existing root team.
@@ -72,7 +73,7 @@ describe("CreateTeamModal", () => {
     );
 
     const input = screen.getByLabelText("팀 이름");
-    const submit = screen.getByRole("button", { name: "생성" });
+    const submit = screen.getByRole("button", { name: BTN_TEXT.create });
 
     await user.type(input, "pay!ments");
     expect(
@@ -124,7 +125,7 @@ describe("RenameTeamModal", () => {
 
     await user.clear(screen.getByLabelText("팀 이름"));
     await user.type(screen.getByLabelText("팀 이름"), "새이름");
-    await user.click(screen.getByRole("button", { name: "저장" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.save }));
     expect(onRename).toHaveBeenCalledWith("새이름");
   });
 
@@ -159,7 +160,7 @@ describe("DeleteTeamModal", () => {
     );
     expect(screen.getByText("팀을 삭제할 수 없습니다")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "팀 삭제" }),
+      screen.queryByRole("button", { name: BTN_TEXT.deleteTeam }),
     ).not.toBeInTheDocument();
   });
 
@@ -176,7 +177,7 @@ describe("DeleteTeamModal", () => {
         onDelete={onDelete}
       />,
     );
-    const submit = screen.getByRole("button", { name: "팀 삭제" });
+    const submit = screen.getByRole("button", { name: BTN_TEXT.deleteTeam });
     expect(submit).toBeDisabled();
 
     // pick 프로덕트 as the receiving team
@@ -211,7 +212,7 @@ describe("DeleteTeamModal", () => {
         onDelete={onDelete}
       />,
     );
-    const submit = screen.getByRole("button", { name: "팀 삭제" });
+    const submit = screen.getByRole("button", { name: BTN_TEXT.deleteTeam });
 
     await user.click(screen.getByRole("radio", { name: /팀 내 기억 삭제/ }));
     expect(submit).toBeDisabled(); // confirmation required now
@@ -254,7 +255,7 @@ describe("AddMemberModal", () => {
         onInvite={() => {}}
       />,
     );
-    const submit = screen.getByRole("button", { name: "초대하기" });
+    const submit = screen.getByRole("button", { name: BTN_TEXT.invite });
 
     await user.type(screen.getByLabelText("계정명 (email)"), "not-an-email");
     expect(
@@ -292,7 +293,7 @@ describe("RemoveMembershipModal", () => {
     expect(screen.getByText("k@corp.com")).toBeInTheDocument();
     expect(screen.getByText(/하위 팀 소속은 유지됩니다/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "제거" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.remove }));
     expect(onConfirm).toHaveBeenCalled();
   });
 });
@@ -311,7 +312,7 @@ describe("RoleChangeConfirmModal", () => {
     expect(screen.getByText("k@corp.com")).toBeInTheDocument();
     expect(screen.getByText("write")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "변경하기" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.change }));
     expect(onConfirm).toHaveBeenCalled();
   });
 });

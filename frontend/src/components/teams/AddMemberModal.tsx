@@ -7,6 +7,7 @@ import MemberStatus from "@/components/elements/MemberStatus";
 import Notice from "@/components/elements/Notice";
 import ModalLayout from "@/components/layout/ModalLayout";
 import { ROLE_OPTIONS } from "@/components/teams/teamOptions";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -70,13 +71,13 @@ const AddMemberModal = ({
       </div>
       <div className="flex w-full gap-2">
         <Button
-          btnText="취소"
+          btnText={BTN_TEXT.cancel}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="초대하기"
+          btnText={BTN_TEXT.invite}
           btnSize="md"
           btnColor="mintFilled"
           disabled={!canSubmit}

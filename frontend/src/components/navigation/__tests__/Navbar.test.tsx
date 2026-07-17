@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import Navbar from "@/components/navigation/Navbar";
 import * as authAPIs from "@/api/authAPIs";
 import * as workspaceAPIs from "@/api/workspaceAPIs";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 const jsonRes = (body: unknown) =>
   ({ ok: true, status: 200, json: async () => body }) as unknown as Response;
@@ -55,7 +56,7 @@ describe("Navbar", () => {
     await user.click(
       await screen.findByRole("button", { name: "프로필 메뉴" }),
     );
-    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.signOut }));
     expect(logout).toHaveBeenCalledOnce();
     await waitFor(() =>
       expect(screen.getByText("LOGIN SCREEN")).toBeInTheDocument(),

@@ -1,6 +1,7 @@
 import Button from "@/components/elements/Button";
 import Notice from "@/components/elements/Notice";
 import ModalLayout from "@/components/layout/ModalLayout";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TTeamMemberRole } from "@/types/teamTypes";
 
 export interface TMembershipRemoval {
@@ -61,13 +62,13 @@ const RemoveMembershipModal = ({
       </div>
       <div className="flex w-full gap-2">
         <Button
-          btnText="취소"
+          btnText={BTN_TEXT.cancel}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="제거"
+          btnText={BTN_TEXT.remove}
           btnSize="md"
           btnColor="redFilled"
           handleClick={onConfirm}

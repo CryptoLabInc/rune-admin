@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import LoginPage from "@/pages/LoginPage";
 import * as authAPIs from "@/api/authAPIs";
 import { redirectTo } from "@/utils/redirect";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 vi.mock("@/utils/redirect", () => ({ redirectTo: vi.fn() }));
 
@@ -41,10 +42,10 @@ describe("LoginPage", () => {
     );
     renderLogin();
     expect(
-      await screen.findByRole("button", { name: "로그인하기" }),
+      await screen.findByRole("button", { name: BTN_TEXT.login }),
     ).toBeInTheDocument();
-    // Two "Rune Console" marks: the public navbar logo and the card heading.
-    expect(screen.getAllByText("Rune Console")).toHaveLength(2);
+    // Two "RUNE CONSOLE" marks: the public navbar logo and the card heading.
+    expect(screen.getAllByText("RUNE CONSOLE")).toHaveLength(2);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -55,11 +56,11 @@ describe("LoginPage", () => {
     renderLogin();
     // The login-screen sign-in button confirms we are on /login…
     expect(
-      await screen.findByRole("button", { name: "로그인하기" }),
+      await screen.findByRole("button", { name: BTN_TEXT.login }),
     ).toBeInTheDocument();
     // …where the navbar CTA is hidden (it would route to nowhere).
     expect(
-      screen.queryByRole("button", { name: "시작하기" }),
+      screen.queryByRole("button", { name: BTN_TEXT.getStarted }),
     ).not.toBeInTheDocument();
   });
 
@@ -82,7 +83,9 @@ describe("LoginPage", () => {
       }),
     );
     renderLogin();
-    await user.click(await screen.findByRole("button", { name: "로그인하기" }));
+    await user.click(
+      await screen.findByRole("button", { name: BTN_TEXT.login }),
+    );
     await waitFor(() =>
       expect(redirectTo).toHaveBeenCalledWith(
         "http://localhost:4000/mock-authorize?state=x",
@@ -99,7 +102,9 @@ describe("LoginPage", () => {
       ok: false,
     } as Response);
     renderLogin();
-    await user.click(await screen.findByRole("button", { name: "로그인하기" }));
+    await user.click(
+      await screen.findByRole("button", { name: BTN_TEXT.login }),
+    );
     expect(await screen.findByRole("alert")).toHaveTextContent("로그인 실패");
   });
 
@@ -121,7 +126,7 @@ describe("LoginPage", () => {
     );
     renderLogin();
     expect(
-      screen.queryByRole("button", { name: "로그인하기" }),
+      screen.queryByRole("button", { name: BTN_TEXT.login }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("TEAMS CONTENT")).not.toBeInTheDocument();
   });

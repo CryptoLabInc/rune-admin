@@ -4,6 +4,7 @@ import Button from "@/components/elements/Button";
 import Notice from "@/components/elements/Notice";
 import ModalLayout from "@/components/layout/ModalLayout";
 import ModalTable from "@/components/users/ModalTable";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TRoleChange } from "@/types/userTypes";
 
 const UPDATE_FAILED_MESSAGE = "역할 변경에 실패했습니다. 다시 시도해주세요.";
@@ -79,14 +80,14 @@ const RoleChangeConfirmModal = ({
       </div>
       <div className="flex w-full items-center gap-4">
         <Button
-          btnText="닫기"
+          btnText={BTN_TEXT.close}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         {phase === "confirm" && (
           <Button
-            btnText="변경하기"
+            btnText={BTN_TEXT.change}
             btnSize="md"
             btnColor="mintFilled"
             disabled={submitting}

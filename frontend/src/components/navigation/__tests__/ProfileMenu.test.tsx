@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import ProfileMenu from "@/components/navigation/ProfileMenu";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 const ME = { email: "admin@corp.com", avatar: "https://x/a.png" };
 
@@ -31,7 +32,7 @@ describe("ProfileMenu", () => {
     expect(screen.getByText("admin@corp.com")).toBeInTheDocument();
     expect(screen.getByText(/Free/)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Sign out" }),
+      screen.getByRole("button", { name: BTN_TEXT.signOut }),
     ).toBeInTheDocument();
   });
 
@@ -63,7 +64,7 @@ describe("ProfileMenu", () => {
     const onSignOut = vi.fn();
     render(<ProfileMenu me={ME} onSignOut={onSignOut} />);
     await user.click(screen.getByRole("button", { name: "프로필 메뉴" }));
-    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.signOut }));
     expect(onSignOut).toHaveBeenCalledOnce();
   });
 

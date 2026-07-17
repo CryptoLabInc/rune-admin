@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import Button from "@/components/elements/Button";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 interface ProfileMenuProps {
   // avatar is optional: the backend omits it when the principal has no picture,
@@ -84,7 +85,7 @@ const ProfileMenu = ({ me, onSignOut }: ProfileMenuProps) => {
           <div className="text-muted-foreground mt-0.5 text-xs">플랜: Free</div>
           <hr className="border-border my-2.5" />
           <Button
-            btnText="Sign out"
+            btnText={BTN_TEXT.signOut}
             btnSize="sm"
             btnColor="grayOutline"
             handleClick={onSignOut}

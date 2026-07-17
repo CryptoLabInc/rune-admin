@@ -13,6 +13,7 @@ import TableRow from "@/components/table/TableRow";
 import { useInvitationHistoryQuery } from "@/hooks/queries/useInvitationHistoryQuery";
 import { cn } from "@/utils/cn";
 import { formatDateTime } from "@/utils/formatDate";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TDropdownOption } from "@/types/commonTypes";
 
 const styles = {
@@ -84,7 +85,7 @@ const SessionsPage = () => {
           description="새로고침 후 다시 시도해 주세요."
           action={
             <Button
-              btnText="새로고침"
+              btnText={BTN_TEXT.refresh}
               btnSize="sm"
               btnColor="grayOutline"
               className="w-fit"

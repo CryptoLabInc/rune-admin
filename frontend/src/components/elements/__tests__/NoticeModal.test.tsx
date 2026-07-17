@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import NoticeModal from "@/components/elements/NoticeModal";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import { useNoticeStore } from "@/stores/noticeStore";
 
 afterEach(() => {
@@ -12,7 +13,7 @@ describe("NoticeModal", () => {
   it("renders nothing when there is no notice", () => {
     const { container } = render(<NoticeModal />);
     expect(container).toBeEmptyDOMElement();
-    expect(screen.queryByRole("button", { name: "확인" })).toBeNull();
+    expect(screen.queryByRole("button", { name: BTN_TEXT.confirm })).toBeNull();
   });
 
   it("renders the title and message of the current notice", async () => {
@@ -28,7 +29,11 @@ describe("NoticeModal", () => {
     render(<NoticeModal />);
     useNoticeStore
       .getState()
-      .showNotice("세션 비활성화", "세션 비활성화에 실패했습니다. 다시 시도해주세요.", "error");
+      .showNotice(
+        "세션 비활성화",
+        "세션 비활성화에 실패했습니다. 다시 시도해주세요.",
+        "error",
+      );
     await waitFor(() => {
       expect(
         screen.getByText("세션 비활성화에 실패했습니다. 다시 시도해주세요."),
@@ -43,9 +48,11 @@ describe("NoticeModal", () => {
       .getState()
       .showNotice("팀 삭제", "팀이 삭제되었습니다.", "success", onConfirm);
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "확인" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: BTN_TEXT.confirm }),
+      ).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole("button", { name: "확인" }));
+    fireEvent.click(screen.getByRole("button", { name: BTN_TEXT.confirm }));
     expect(onConfirm).toHaveBeenCalledOnce();
     expect(useNoticeStore.getState().notice).toBeNull();
   });

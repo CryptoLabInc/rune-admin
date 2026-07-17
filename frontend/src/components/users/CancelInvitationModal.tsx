@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import Button from "@/components/elements/Button";
 import ModalLayout from "@/components/layout/ModalLayout";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 interface CancelInvitationModalProps {
   account: string;
@@ -42,13 +43,13 @@ const CancelInvitationModal = ({
       </p>
       <div className="flex w-full items-center gap-4">
         <Button
-          btnText="닫기"
+          btnText={BTN_TEXT.close}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="취소하기"
+          btnText={BTN_TEXT.cancelAction}
           btnSize="md"
           btnColor="redFilled"
           disabled={submitting}

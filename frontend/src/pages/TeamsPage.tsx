@@ -10,8 +10,9 @@ import TreeDetailView from "@/components/teams/TreeDetailView";
 import { useCreateTeamMutation } from "@/hooks/mutations/useTeamMutations";
 import { useTeamsTreeQuery } from "@/hooks/queries/useTeamsTreeQuery";
 import { parseErrorCode } from "@/api/parseError";
-import { useNoticeStore } from "@/stores/noticeStore";
 import { cn } from "@/utils/cn";
+import { BTN_TEXT } from "@/constants/commonConstants";
+import { useNoticeStore } from "@/stores/noticeStore";
 
 /** Create-team error codes → SC-07 copy (shared with TreeDetailView). */
 const CREATE_TEAM_REASON: Record<string, string> = {
@@ -134,7 +135,7 @@ const TeamsPage = () => {
           className={feedbackPanel}
           action={
             <Button
-              btnText="새로고침"
+              btnText={BTN_TEXT.refresh}
               btnSize="sm"
               btnColor="grayOutline"
               className="w-fit"
@@ -191,7 +192,7 @@ const TeamsPage = () => {
           className={feedbackPanel}
           action={
             <Button
-              btnText="새 팀 만들기"
+              btnText={BTN_TEXT.createTeam}
               btnSize="md"
               btnColor="mintFilled"
               className="w-fit"

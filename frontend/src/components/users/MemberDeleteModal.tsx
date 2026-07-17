@@ -3,6 +3,7 @@ import { useState } from "react";
 import Button from "@/components/elements/Button";
 import ModalLayout from "@/components/layout/ModalLayout";
 import ModalTable from "@/components/users/ModalTable";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TMemberDeleteTarget } from "@/types/userTypes";
 
 const DELETE_FAILED_MESSAGE = "멤버 삭제에 실패했습니다. 다시 시도해주세요.";
@@ -55,7 +56,7 @@ const MemberDeleteModal = ({
       <ModalLayout title={title} isOpen>
         <p className="text-center text-base">{DELETE_FAILED_MESSAGE}</p>
         <Button
-          btnText="닫기"
+          btnText={BTN_TEXT.close}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
@@ -100,13 +101,13 @@ const MemberDeleteModal = ({
       </div>
       <div className="flex w-full items-center gap-4">
         <Button
-          btnText="닫기"
+          btnText={BTN_TEXT.close}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="삭제"
+          btnText={BTN_TEXT.delete}
           btnSize="md"
           btnColor="redFilled"
           disabled={submitting}

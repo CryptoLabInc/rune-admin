@@ -1,7 +1,12 @@
 import { Link, useLocation, useNavigate } from "react-router";
 
 import Button from "@/components/elements/Button";
-import { PATH_LIST } from "@/constants/commonConstants";
+import RuneMark from "@/components/elements/RuneMark";
+import {
+  BRAND_WORDMARK,
+  BTN_TEXT,
+  PATH_LIST,
+} from "@/constants/commonConstants";
 
 /**
  * PublicNavbar is the signed-out top bar (SC-01 / SC-04, wireframe v0.16). It
@@ -19,12 +24,16 @@ const PublicNavbar = () => {
   return (
     <header className="bg-background border-b">
       <div className="max-w-content mx-auto flex h-14 w-full items-center justify-between px-6">
-        <Link to={PATH_LIST.home} className="text-lg font-semibold">
-          Rune Console
+        <Link
+          to={PATH_LIST.home}
+          className="flex items-center gap-2 text-lg font-semibold"
+        >
+          <RuneMark />
+          {BRAND_WORDMARK}
         </Link>
         {!onLoginPage && (
           <Button
-            btnText="시작하기"
+            btnText={BTN_TEXT.getStarted}
             btnSize="sm"
             btnColor="mintFilled"
             handleClick={() => navigate(PATH_LIST.login)}

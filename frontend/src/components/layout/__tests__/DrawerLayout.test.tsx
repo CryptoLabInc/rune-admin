@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import DrawerLayout from "@/components/layout/DrawerLayout";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 describe("DrawerLayout", () => {
   it("renders a labelled dialog with title, subtitle, and footer", () => {
@@ -22,7 +23,7 @@ describe("DrawerLayout", () => {
     expect(dialog).toHaveAccessibleName("nia@cryptolab.dev");
     expect(screen.getByText("최근 접속 2026-07-10 13:08")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "변경사항 업데이트" }),
+      screen.getByRole("button", { name: BTN_TEXT.updateChanges }),
     ).toBeInTheDocument();
   });
 
@@ -36,7 +37,7 @@ describe("DrawerLayout", () => {
     );
 
     expect(
-      screen.queryByRole("button", { name: "닫기" }),
+      screen.queryByRole("button", { name: BTN_TEXT.close }),
     ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("dialog"));

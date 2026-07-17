@@ -1,5 +1,6 @@
 import Button from "@/components/elements/Button";
 import ModalLayout from "@/components/layout/ModalLayout";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 interface MemberBatchFailureModalProps {
   failures: { account: string; reason: string }[];
@@ -26,7 +27,7 @@ const MemberBatchFailureModal = ({
         ))}
       </ul>
       <Button
-        btnText="확인"
+        btnText={BTN_TEXT.confirm}
         btnSize="md"
         btnColor="grayOutline"
         handleClick={onClose}

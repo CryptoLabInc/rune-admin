@@ -4,6 +4,7 @@ import Button from "@/components/elements/Button";
 import Notice from "@/components/elements/Notice";
 import ModalLayout from "@/components/layout/ModalLayout";
 import ModalTable from "@/components/users/ModalTable";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TMembershipRemoveTarget } from "@/types/userTypes";
 
 const REMOVE_FAILED_MESSAGE = "멤버십 제거에 실패했습니다. 다시 시도해주세요.";
@@ -54,7 +55,7 @@ const MembershipRemoveModal = ({
       <ModalLayout title="멤버십 제거" isOpen>
         <p className="text-center text-base">{REMOVE_FAILED_MESSAGE}</p>
         <Button
-          btnText="닫기"
+          btnText={BTN_TEXT.close}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
@@ -83,13 +84,13 @@ const MembershipRemoveModal = ({
       </div>
       <div className="flex w-full items-center gap-4">
         <Button
-          btnText="닫기"
+          btnText={BTN_TEXT.close}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="제거"
+          btnText={BTN_TEXT.remove}
           btnSize="md"
           btnColor="redFilled"
           disabled={submitting}

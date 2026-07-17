@@ -10,6 +10,7 @@ import {
   TEAM_NAME_PATTERN,
   TEAM_NAME_RULE_TEXT,
 } from "@/components/teams/teamOptions";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TTeamTree } from "@/types/teamTypes";
 
 interface CreateTeamModalProps {
@@ -83,13 +84,13 @@ const CreateTeamModal = ({
       </div>
       <div className="flex w-full gap-2">
         <Button
-          btnText="취소"
+          btnText={BTN_TEXT.cancel}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="생성"
+          btnText={BTN_TEXT.create}
           btnSize="md"
           btnColor="mintFilled"
           disabled={!canSubmit}
