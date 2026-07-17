@@ -132,8 +132,9 @@ describe("SessionsPage", () => {
     expect(await screen.findByText("t@corp.com")).toBeInTheDocument();
     expect(screen.getAllByText("—")).toHaveLength(5);
 
-    /* Short pages pad with filler rows — the frame height stays put. */
-    expect(container.querySelectorAll("tbody tr")).toHaveLength(10);
+    /* Short pages render only real rows — the frame height is pinned by
+       the Table scroll area's min-h, not by filler rows. */
+    expect(container.querySelectorAll("tbody tr")).toHaveLength(5);
   });
 
   it("resets to page 1 when the sort changes", async () => {
@@ -149,7 +150,7 @@ describe("SessionsPage", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "정렬" }));
-    await user.click(screen.getByRole("option", { name: "이름(account)" }));
+    await user.click(screen.getByRole("option", { name: "이메일 (account)" }));
 
     await waitFor(() => expect(spy).toHaveBeenLastCalledWith("account", 1, 10));
     expect(screen.getByRole("button", { name: "1" })).toHaveAttribute(

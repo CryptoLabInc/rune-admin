@@ -26,9 +26,9 @@ const styles = {
    sort query params (console API design §6). No status filter or
    issuance button: issuance lives in user/team management. */
 const SORT_OPTIONS: TDropdownOption[] = [
-  { value: "account", label: "이름(account)" },
-  { value: "issued_at", label: "발급시간 최신순" },
-  { value: "last_access", label: "최근 접속시간 최신순" },
+  { value: "account", label: "이메일 (account)" },
+  { value: "issued_at", label: "최근 발급 시간" },
+  { value: "last_access", label: "최근 접속 시간" },
 ];
 
 /* 10 rows per page, fixed (SC-16 no.4) — the ?size=10 query param. */
@@ -80,7 +80,7 @@ const SessionsPage = () => {
           /* Taller, fully centered variant — the SC-16 state B canvas
              centers icon/text/button in a 180px-min panel, unlike the
              default left-aligned 92px row. */
-          className="flex min-h-[180px] flex-col items-center justify-center text-center"
+          className="flex min-h-45 flex-col items-center justify-center text-center"
           title="이력 정보를 불러올 수 없습니다."
           description="새로고침 후 다시 시도해 주세요."
           action={
@@ -102,15 +102,20 @@ const SessionsPage = () => {
     <section className={styles.page} aria-label="세션 관리">
       <Table
         fluid
+        /* Fixed page height: thead 34px + 10 rows × 36px (h-9). Short
+           pages, empty, and loading all keep this height so pagination
+           never shifts the layout. */
+        scrollClassName="min-h-[394px]"
         toolbar={
-          <div className="px-4 py-4">
+          <div className="flex items-center gap-2 px-4 py-4">
+            <span className="text-md text-faint">정렬 기준</span>
             <Dropdown
               options={SORT_OPTIONS}
               value={sort}
               onChange={changeSort}
               size="sm"
               ariaLabel="정렬"
-              className="w-[200px]"
+              className="w-40"
             />
           </div>
         }
@@ -158,7 +163,11 @@ const SessionsPage = () => {
           {rows.map((row) => (
             /* Reissues are separate rows (D11) — account alone is not
                unique, account+issuedAt is. */
-            <TableRow key={`${row.account}-${row.issuedAt}`} hoverable={false}>
+            <TableRow
+              key={`${row.account}-${row.issuedAt}`}
+              hoverable={false}
+              className="h-9"
+            >
               <TableCell className={styles.accountCell}>
                 <span title={row.account}>{row.account}</span>
               </TableCell>
@@ -177,17 +186,6 @@ const SessionsPage = () => {
               </TableCell>
             </TableRow>
           ))}
-          {/* Short pages pad up to the fixed page size so the frame
-              keeps one height and pagination never shifts layout. */}
-          {!historyQuery.isPending &&
-            total > 0 &&
-            Array.from({ length: PAGE_SIZE - rows.length }, (_, i) => (
-              <tr key={`filler-${i}`} aria-hidden="true">
-                <TableCell>{" "}</TableCell>
-                <TableCell />
-                <TableCell />
-              </tr>
-            ))}
         </tbody>
       </Table>
     </section>
