@@ -212,8 +212,17 @@ dev_build_local_binary() {
 }
 
 dev_build_linux_binary() {
-  info "Building runeconsole for ${TARGET_OS}/${TARGET_ARCH} via Docker (${BUILDER_IMAGE})..."
   local build_user="${SUDO_USER:-$(id -un)}"
+
+  # Build the SPA on the host first, mirroring the local `mise run go:build`
+  # (which depends on fe:build). The builder image has no node/pnpm, and the
+  # Docker go build below embeds the host's internal/console/webdist via the
+  # bind mount — so without this the CSP binary embeds an empty webdist and
+  # serves the placeholder page instead of the console UI.
+  info "Building frontend SPA on host (mise run fe:build)..."
+  (cd "$REPO_ROOT" && sudo -u "$build_user" -H bash -lc 'mise run fe:build')
+
+  info "Building runeconsole for ${TARGET_OS}/${TARGET_ARCH} via Docker (${BUILDER_IMAGE})..."
   local user_home commit version date pkg
   user_home="${SUDO_USER:+$(eval echo ~"${SUDO_USER}")}"
   user_home="${user_home:-$HOME}"
