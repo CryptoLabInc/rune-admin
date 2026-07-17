@@ -61,5 +61,6 @@ export type Principal = {
 export type Session = {
   loggedIn: boolean;
   expiresAt: string | null;
+  plan: string;
   me: Principal | null;
 };

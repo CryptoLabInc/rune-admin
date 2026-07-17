@@ -151,8 +151,13 @@ const seedInvitations = (): InvitationRow[] => [
 
 const freshSession = (): Session =>
   config.startLoggedIn
-    ? { loggedIn: true, expiresAt: isoIn(config.sessionTtlMs), me: ADMIN }
-    : { loggedIn: false, expiresAt: null, me: null };
+    ? {
+        loggedIn: true,
+        expiresAt: isoIn(config.sessionTtlMs),
+        plan: "free",
+        me: ADMIN,
+      }
+    : { loggedIn: false, expiresAt: null, plan: "free", me: null };
 
 const buildState = (): State => {
   const { users, memberships } = seedUsersAndMemberships();

@@ -7,8 +7,15 @@ interface ProfileMenuProps {
   // avatar is optional: the backend omits it when the principal has no picture,
   // and the button falls back to AvatarFallback on a missing/failed image.
   me: { email: string; avatar?: string };
+  // plan is the lowercase wire string from the session (e.g. "free"); shown
+  // capitalized. Empty/missing falls back to "Free".
+  plan?: string;
   onSignOut: () => void;
 }
+
+/** planLabel capitalizes the wire plan for display, defaulting to "Free". */
+const planLabel = (plan?: string): string =>
+  plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : "Free";
 
 /** AvatarFallback is the neutral user glyph shown when the OAuth avatar
     image fails to load (SC-03 element 3 — image load failure → default icon). */
@@ -27,11 +34,11 @@ const AvatarFallback = () => (
 
 /**
  * ProfileMenu is the SC-03 navbar profile control: an avatar button that
- * toggles a popover showing the account, plan (Free — display-only), and a
+ * toggles a popover showing the account, plan (from the session), and a
  * Sign out action. The popover overlays (position:absolute, no layout shift)
  * and closes on outside click or Escape. Rendered only when logged in.
  */
-const ProfileMenu = ({ me, onSignOut }: ProfileMenuProps) => {
+const ProfileMenu = ({ me, plan, onSignOut }: ProfileMenuProps) => {
   const [open, setOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -77,13 +84,15 @@ const ProfileMenu = ({ me, onSignOut }: ProfileMenuProps) => {
       {open && (
         <div
           role="menu"
-          className="border-border bg-background absolute top-full right-0 z-20 mt-2 w-52 rounded-md border p-3 shadow-md"
+          className="border-border bg-background absolute top-full right-0 z-20 mt-2 flex w-52 flex-col gap-3 rounded-md border p-3 shadow-md"
         >
-          <div className="text-foreground truncate text-sm font-medium">
+          <div className="text-foreground text-md truncate font-medium">
             {me.email}
           </div>
-          <div className="text-muted-foreground mt-0.5 text-xs">플랜: Free</div>
-          <hr className="border-border my-2.5" />
+          <div className="text-muted-foreground text-xs">
+            플랜: {planLabel(plan)}
+          </div>
+          <hr className="border-border my-2" />
           <Button
             btnText={BTN_TEXT.signOut}
             btnSize="sm"

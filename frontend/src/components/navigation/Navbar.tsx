@@ -31,6 +31,7 @@ const Navbar = () => {
 
   const { data: session } = useSessionQuery();
   const me = session?.logged_in ? session.me : null;
+  const plan = session?.logged_in ? session.plan : undefined;
   const { data: workspace } = useWorkspaceQuery();
   const modalOpen = useWorkspaceStore((s) => s.modalOpen);
   const openModal = useWorkspaceStore((s) => s.openModal);
@@ -77,7 +78,7 @@ const Navbar = () => {
               </button>
             ) : null}
           </div>
-          {me && <ProfileMenu me={me} onSignOut={handleSignOut} />}
+          {me && <ProfileMenu me={me} plan={plan} onSignOut={handleSignOut} />}
         </div>
       </div>
       {modalOpen && <WorkspaceModal />}

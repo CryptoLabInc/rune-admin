@@ -36,6 +36,20 @@ describe("ProfileMenu", () => {
     ).toBeInTheDocument();
   });
 
+  it("capitalizes the plan from props", async () => {
+    const user = userEvent.setup();
+    render(<ProfileMenu me={ME} plan="pro" onSignOut={() => {}} />);
+    await user.click(screen.getByRole("button", { name: "프로필 메뉴" }));
+    expect(screen.getByText("플랜: Pro")).toBeInTheDocument();
+  });
+
+  it("falls back to Free when plan is missing or empty", async () => {
+    const user = userEvent.setup();
+    render(<ProfileMenu me={ME} plan="" onSignOut={() => {}} />);
+    await user.click(screen.getByRole("button", { name: "프로필 메뉴" }));
+    expect(screen.getByText("플랜: Free")).toBeInTheDocument();
+  });
+
   it("closes the popover on Escape", async () => {
     const user = userEvent.setup();
     render(<ProfileMenu me={ME} onSignOut={() => {}} />);
