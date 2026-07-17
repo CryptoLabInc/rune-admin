@@ -8,6 +8,7 @@ import {
 import { QUERY_KEYS } from "@/constants/commonConstants";
 import {
   type TBatchResult,
+  type TPage,
   type TTeamMember,
   type TTeamMemberRole,
 } from "@/types/teamTypes";
@@ -61,6 +62,7 @@ export const useBulkRoleChangeMutation = (teamId: string) => {
 
 /** useRemoveTeamMembersMutation bulk-removes memberships (DELETE batch). */
 export const useRemoveTeamMembersMutation = (teamId: string) => {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateMembership(teamId);
   return useMutation<TBatchResult, Response, string[]>({
     mutationFn: async (userIds) => {
@@ -68,6 +70,23 @@ export const useRemoveTeamMembersMutation = (teamId: string) => {
       if (!res.ok) throw res;
       return (await res.json()) as TBatchResult;
     },
-    onSuccess: invalidate,
+    onSuccess: (result) => {
+      /* Patch the cached member pages from succeeded[] right away (the
+         batch response exists for client-side state patching — API design
+         §batch), so the table drops the rows the moment the mutation
+         lands. The invalidate below still refetches for server truth
+         (paging fill-up, memberCount badges). */
+      const removed = new Set(result.succeeded);
+      queryClient.setQueriesData<TPage<TTeamMember>>(
+        { queryKey: [QUERY_KEYS.teamMembers, teamId] },
+        (old) =>
+          old && {
+            ...old,
+            total: Math.max(0, old.total - removed.size),
+            items: old.items.filter((m) => !removed.has(m.userId)),
+          },
+      );
+      invalidate();
+    },
   });
 };
