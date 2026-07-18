@@ -125,67 +125,28 @@ type RunespaceConfig struct {
 type TokensConfig struct {
 	TeamSecret     string `yaml:"team_secret"`
 	TeamSecretFile string `yaml:"team_secret_file"`
-	RolesFile      string `yaml:"roles_file"`
 	TokensFile     string `yaml:"tokens_file"`
 }
 
-// GroupsConfig configures the group RBAC store. File paths default to
-// groups.yml / memberships.yml next to tokens_file (same directory
-// convention as the token store); top_k caps default to plan §5 values
-// (read=10, write and above=50). The org admin is NOT configured here:
-// it is derived from the first-login console owner (a config-declared
+// GroupsConfig configures the group RBAC store: top_k caps default to plan
+// §5 values (read=10, write and above=50). The org admin is NOT configured
+// here: it is derived from the first-login console owner (a config-declared
 // org_admins entry was removed — LoadConfig turns a leftover line into
 // migration guidance).
 type GroupsConfig struct {
-	GroupsFile      string `yaml:"groups_file"`
-	MembershipsFile string `yaml:"memberships_file"`
-	TopKRead        int    `yaml:"topk_read"`
-	TopKWrite       int    `yaml:"topk_write"`
+	TopKRead  int `yaml:"topk_read"`
+	TopKWrite int `yaml:"topk_write"`
 }
 
-// GroupsFiles resolves the group store paths, applying the
-// same-directory-as-tokens default.
-func (c *Config) GroupsFiles() (groupsPath, membershipsPath string) {
-	dir := filepath.Dir(c.Tokens.TokensFile)
-	groupsPath = c.Groups.GroupsFile
-	if groupsPath == "" {
-		groupsPath = filepath.Join(dir, "groups.yml")
-	}
-	membershipsPath = c.Groups.MembershipsFile
-	if membershipsPath == "" {
-		membershipsPath = filepath.Join(dir, "memberships.yml")
-	}
-	return groupsPath, membershipsPath
-}
-
-// MembersConfig configures the member registry + invite flow. All fields are
-// optional: the file paths default next to tokens_file (same convention as
-// the group store), the TTL defaults to 24 hours, and the mail log defaults
-// beside the data files — so configs written before this feature keep working
-// unchanged.
+// MembersConfig configures the member registry + invite flow. Every field is
+// optional: the TTL defaults to 24 hours and the mail log defaults beside the
+// other store artifacts.
 type MembersConfig struct {
-	MembersFile      string `yaml:"members_file"`       // default: members.yml beside tokens_file
-	InvitesFile      string `yaml:"invites_file"`       // default: invites.yml beside tokens_file
 	InviteTTLMinutes int    `yaml:"invite_ttl_minutes"` // default: 1440 = 24h (§8.3 wrap TTL as revised 2026-07-13: console UX policy adopted, residual risk offset by revoke/rotate)
 	ConsoleEndpoint  string `yaml:"console_endpoint"`   // ridden in the invite mail (conn info)
 	CAPemURL         string `yaml:"ca_pem_url"`
 	CAPemSHA256      string `yaml:"ca_pem_sha256"`
 	MailLogFile      string `yaml:"mail_log_file"` // LogMailer output; default: invite-mail.log
-}
-
-// MembersFiles resolves the member/invite store paths, applying the
-// same-directory-as-tokens default (clone of GroupsFiles).
-func (c *Config) MembersFiles() (membersPath, invitesPath string) {
-	dir := filepath.Dir(c.Tokens.TokensFile)
-	membersPath = c.Members.MembersFile
-	if membersPath == "" {
-		membersPath = filepath.Join(dir, "members.yml")
-	}
-	invitesPath = c.Members.InvitesFile
-	if invitesPath == "" {
-		invitesPath = filepath.Join(dir, "invites.yml")
-	}
-	return membersPath, invitesPath
 }
 
 // InviteTTL returns the wrap TTL, defaulting to 24 hours when unset — the
@@ -390,9 +351,6 @@ func (c *Config) Validate() error {
 	}
 	if c.Keys.EmbeddingDim == 0 {
 		errs = append(errs, "keys.embedding_dim is required")
-	}
-	if c.Tokens.RolesFile == "" {
-		errs = append(errs, "tokens.roles_file is required")
 	}
 	if c.Tokens.TokensFile == "" {
 		errs = append(errs, "tokens.tokens_file is required")

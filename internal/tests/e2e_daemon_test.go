@@ -54,13 +54,13 @@ func TestDaemonBootsAndShutsDownCleanly(t *testing.T) {
 cloud: { api_base_url: https://cloud.invalid, web_base_url: https://cloud.invalid }
 keys: { path: %s, embedding_dim: 1024 }
 runespace: { endpoint: "" }
-tokens: { team_secret: e2e-team-secret, roles_file: %s, tokens_file: %s }
+tokens: { team_secret: e2e-team-secret, tokens_file: %s }
 members: { console_endpoint: "127.0.0.1:%d" }
 audit: { mode: stdout }
 `,
 		grpcPort, consolePort,
 		filepath.Join(dir, "keys"),
-		filepath.Join(dir, "roles.yml"), filepath.Join(dir, "tokens.yml"),
+		filepath.Join(dir, "tokens.yml"),
 		grpcPort)
 	confPath := filepath.Join(dir, "runeconsole.conf")
 	if err := os.WriteFile(confPath, []byte(conf), 0o600); err != nil {

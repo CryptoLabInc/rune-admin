@@ -39,7 +39,6 @@ runespace:
 tokens:
   team_secret: REPLACE_WITH_RANDOM_HEX_32
   # Alternative: team_secret_file: /run/secrets/team_secret
-  roles_file: /opt/rune-console/configs/roles.yml
   tokens_file: /opt/rune-console/configs/tokens.yml
 
 audit:

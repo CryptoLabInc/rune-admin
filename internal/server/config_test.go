@@ -25,7 +25,6 @@ runespace:
   insecure: true
 tokens:
   team_secret: inline-team-secret-deadbeef
-  roles_file: /tmp/roles.yml
   tokens_file: /tmp/tokens.yml
 audit:
   mode: stdout
@@ -252,7 +251,6 @@ func TestValidateRejectsMissingFields(t *testing.T) {
 		"missing port":        func(c *Config) { c.Server.GRPC.Port = 0 },
 		"missing keys.path":   func(c *Config) { c.Keys.Path = "" },
 		"missing dim":         func(c *Config) { c.Keys.EmbeddingDim = 0 },
-		"missing roles_file":  func(c *Config) { c.Tokens.RolesFile = "" },
 		"missing tokens_file": func(c *Config) { c.Tokens.TokensFile = "" },
 	}
 	base := func() *Config {
