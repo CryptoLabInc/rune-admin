@@ -42,27 +42,32 @@ func NewSelfInviteIssuer(v *Console, m *members.Store, i *invites.Store, conn In
 // matches what GetCACert will serve; when TLS is disabled the pin is left as
 // configured (typically empty).
 func (s *SelfInviteIssuer) IssueSelfInvite(email, displayName string) (invites.ClearBundle, InviteConnInfo, error) {
-	// Clean slate: drop any prior member + token for this email so a re-issue is
-	// unconditional. RevokeToken/Remove are no-ops when nothing exists.
-	if m, err := s.members.GetByEmail(email); err == nil {
+	// Reuse the operator's existing member row (and its immutable UUID) when one
+	// is present: group memberships are keyed by that UUID, so deleting and
+	// re-adding the row would mint a new UUID and orphan every (self-granted)
+	// membership — and for the org admin it would also break the no-delete-admin
+	// rule. On re-issue we revoke only the prior token and keep the row; only a
+	// row THIS call created is rolled back on failure (dropIfNew).
+	var m *members.Member
+	newMember := false
+	if existing, err := s.members.GetByEmail(email); err == nil {
 		if _, rerr := s.console.Tokens().RevokeToken(email); rerr != nil {
-			// The clean slate did not commit: re-issuing now would mint a
-			// second credential while the old one stays live. Refuse.
+			// The prior credential did not clear: re-issuing now would mint a
+			// second live token. Refuse.
 			return invites.ClearBundle{}, InviteConnInfo{}, fmt.Errorf("revoke prior token: %w", rerr)
 		}
-		_ = s.members.Remove(m.ID)
-		s.members.Flush()
-	}
-
-	m, err := s.members.Add(email, displayName)
-	if err != nil {
-		return invites.ClearBundle{}, InviteConnInfo{}, fmt.Errorf("add member: %w", err)
+		m = existing
+	} else {
+		added, aerr := s.members.Add(email, displayName)
+		if aerr != nil {
+			return invites.ClearBundle{}, InviteConnInfo{}, fmt.Errorf("add member: %w", aerr)
+		}
+		m, newMember = added, true
 	}
 
 	tok, err := s.console.Tokens().AddToken(email, s.role, nil)
 	if err != nil {
-		_ = s.members.Remove(m.ID)
-		s.members.Flush()
+		s.dropIfNew(m.ID, newMember)
 		return invites.ClearBundle{}, InviteConnInfo{}, fmt.Errorf("mint token (role %q): %w", s.role, err)
 	}
 
@@ -78,8 +83,7 @@ func (s *SelfInviteIssuer) IssueSelfInvite(email, displayName string) (invites.C
 		// Best-effort compensation: a revoke refusal here leaves an orphaned
 		// credential, which the next re-issue's clean slate retries.
 		_, _ = s.console.Tokens().RevokeToken(email)
-		_ = s.members.Remove(m.ID)
-		s.members.Flush()
+		s.dropIfNew(m.ID, newMember)
 		return invites.ClearBundle{}, InviteConnInfo{}, fmt.Errorf("issue invite: %w", err)
 	}
 	// Flush the token before the envelope's "invited" state escapes: a crash on
@@ -87,12 +91,14 @@ func (s *SelfInviteIssuer) IssueSelfInvite(email, displayName string) (invites.C
 	// exists (mirrors the admin invite path).
 	s.console.Tokens().Flush()
 
-	if err := s.members.MarkInvited(m.ID); err != nil {
+	// Reinvite (not MarkInvited): a reused row may already be active, and
+	// MarkInvited only advances from registered — Reinvite moves any non-disabled
+	// state to invited, which is exactly what a re-issue means.
+	if err := s.members.Reinvite(m.ID); err != nil {
 		_ = s.invites.RevokePending(bundle.Handle)
 		// Best-effort compensation, as above.
 		_, _ = s.console.Tokens().RevokeToken(email)
-		_ = s.members.Remove(m.ID)
-		s.members.Flush()
+		s.dropIfNew(m.ID, newMember)
 		return invites.ClearBundle{}, InviteConnInfo{}, fmt.Errorf("mark invited: %w", err)
 	}
 	s.members.Flush()
@@ -102,4 +108,14 @@ func (s *SelfInviteIssuer) IssueSelfInvite(email, displayName string) (invites.C
 		conn.CAPemSHA256 = pin
 	}
 	return *bundle, conn, nil
+}
+
+// dropIfNew removes a member row that THIS issue attempt created (newMember),
+// leaving a reused pre-existing row (e.g. the org admin's) intact on failure.
+func (s *SelfInviteIssuer) dropIfNew(id string, newMember bool) {
+	if !newMember {
+		return
+	}
+	_ = s.members.Remove(id)
+	s.members.Flush()
 }

@@ -393,10 +393,9 @@ func (h *consoleAPI) addTeamMember(w http.ResponseWriter, r *http.Request) {
 		writeGroupAPIErr(w, err)
 		return
 	}
-	if h.v.Groups().IsOrgAdmin(body.Account) {
-		apiErr(w, http.StatusConflict, "CANNOT_INVITE_ADMIN", "the console Admin account cannot be added as a team member")
-		return
-	}
+	// The org admin (Owner) may hold a normal team membership like anyone else:
+	// admin-ness is an independent axis (IsOrgAdmin governs grant authority), not
+	// a bar to membership. Memory access is still governed by the granted role.
 	m, err := h.ms.members.GetByEmail(body.Account)
 	if err != nil {
 		apiErr(w, http.StatusNotFound, "USER_NOT_FOUND", "no registered user for account "+body.Account)

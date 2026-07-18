@@ -238,15 +238,26 @@ func runDaemonStart(ctx context.Context) error {
 		defer func() { _ = sessDB.Close() }()
 		var dp *console.Dataplane
 		consoleHandler, dp, err = console.NewHandler(console.Deps{
-			Port:              cfg.ConsolePort(),
-			APIBaseURL:        cfg.Cloud.APIBaseURL,
-			WebBaseURL:        cfg.Cloud.WebBaseURL,
-			FrontendDir:       cfg.Server.Console.FrontendDir,
-			DB:                sessDB,
-			AdminHandler:      adminHandler,
-			DomainHandler:     domainHandler,
-			Connector:         v, // *server.Console: dials the runespace + attaches the engine
-			Inviter:           selfInviter,
+			Port:          cfg.ConsolePort(),
+			APIBaseURL:    cfg.Cloud.APIBaseURL,
+			WebBaseURL:    cfg.Cloud.WebBaseURL,
+			FrontendDir:   cfg.Server.Console.FrontendDir,
+			DB:            sessDB,
+			AdminHandler:  adminHandler,
+			DomainHandler: domainHandler,
+			Connector:     v, // *server.Console: dials the runespace + attaches the engine
+			Inviter:       selfInviter,
+			OwnerRegistrar: func(email, displayName string) error {
+				// The console owner is the single org admin; ensure they have a
+				// member registry row on first login (option A) so they appear in
+				// listings and can be granted memberships by UUID. Idempotent — a
+				// no-op on every later login. Zero group memberships are created.
+				if _, gerr := memberStore.GetByEmail(email); gerr == nil {
+					return nil
+				}
+				_, aerr := memberStore.Add(email, displayName)
+				return aerr
+			},
 			RunespaceInsecure: cfg.Runespace.Insecure,
 			Logger:            slog.Default(),
 		})

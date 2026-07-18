@@ -684,10 +684,8 @@ func (h *consoleAPI) createInvitation(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, http.StatusBadRequest, "VALIDATION_ERROR", "account and at least one membership are required")
 		return
 	}
-	if h.v.Groups().IsOrgAdmin(body.Account) {
-		apiErr(w, http.StatusConflict, "CANNOT_INVITE_ADMIN", "the console Admin account cannot be invited")
-		return
-	}
+	// The org admin (Owner) may be invited to teams like any account: admin-ness
+	// is a separate axis, not a bar to membership (see addTeamMember).
 	// Validate roles + teams before mutating anything.
 	type grant struct {
 		teamID string

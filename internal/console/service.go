@@ -47,6 +47,12 @@ type Deps struct {
 	// Inviter issues a self-invite (registration string) for the connection
 	// test; nil omits the POST /api/v1/invite route.
 	Inviter InviteIssuer
+	// OwnerRegistrar, when set, runs after the console owner is bound on a
+	// successful login to ensure that owner (the single org admin) has a member
+	// registry row. It must be idempotent — it runs on every login — and create
+	// zero group memberships (option A: admin reach is granted, not implied). A
+	// returned error is logged and does not block login. nil skips registration.
+	OwnerRegistrar func(email, displayName string) error
 	// RunespaceInsecure dials the engine plaintext (local dev).
 	RunespaceInsecure bool
 	Logger            *slog.Logger
@@ -54,17 +60,18 @@ type Deps struct {
 
 // Service holds the wired collaborators shared by the auth handlers.
 type Service struct {
-	apiBase     string
-	webBase     string
-	selfBase    string // http://127.0.0.1:<port>
-	cloud       *cloud.Client
-	sessions    *sessionStore
-	owner       *ownerStore
-	logins      *loginStore
-	dp          *Dataplane   // nil when no connector is wired
-	engineReady func() bool  // reports data-plane engine connection status
-	inviter     InviteIssuer // nil when self-invite issuance is not wired
-	log         *slog.Logger
+	apiBase       string
+	webBase       string
+	selfBase      string // http://127.0.0.1:<port>
+	cloud         *cloud.Client
+	sessions      *sessionStore
+	owner         *ownerStore
+	logins        *loginStore
+	dp            *Dataplane                            // nil when no connector is wired
+	engineReady   func() bool                           // reports data-plane engine connection status
+	inviter       InviteIssuer                          // nil when self-invite issuance is not wired
+	registerOwner func(email, displayName string) error // ensure the owner has a member row (idempotent); nil when unwired
+	log           *slog.Logger
 }
 
 // NewHandler builds the console HTTP handler and, when a data-plane connector
@@ -91,16 +98,17 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 		return nil, nil, err
 	}
 	s := &Service{
-		apiBase:     d.APIBaseURL,
-		webBase:     d.WebBaseURL,
-		selfBase:    "http://127.0.0.1:" + strconv.Itoa(d.Port),
-		cloud:       cloud.New(d.APIBaseURL),
-		sessions:    sessions,
-		owner:       owner,
-		logins:      newLoginStore(),
-		engineReady: func() bool { return false },
-		inviter:     d.Inviter,
-		log:         log,
+		apiBase:       d.APIBaseURL,
+		webBase:       d.WebBaseURL,
+		selfBase:      "http://127.0.0.1:" + strconv.Itoa(d.Port),
+		cloud:         cloud.New(d.APIBaseURL),
+		sessions:      sessions,
+		owner:         owner,
+		logins:        newLoginStore(),
+		engineReady:   func() bool { return false },
+		inviter:       d.Inviter,
+		registerOwner: d.OwnerRegistrar,
+		log:           log,
 	}
 
 	var dp *Dataplane
@@ -267,6 +275,19 @@ func emailFromMe(me json.RawMessage) string {
 		return ""
 	}
 	return p.Email
+}
+
+// nameFromMe extracts the display name from the cached cloud principal (GET
+// /me: {id, email, name, picture, ...}), falling back to `fallback` when the
+// name is absent or unparseable.
+func nameFromMe(me json.RawMessage, fallback string) string {
+	var p struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(me, &p); err == nil && strings.TrimSpace(p.Name) != "" {
+		return p.Name
+	}
+	return fallback
 }
 
 // requireSession rejects requests without a live console session cookie.
