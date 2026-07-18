@@ -11,7 +11,7 @@ import (
 // exactly what OwnerRegistrar creates on first login.
 func (f *consoleAPIFixture) registerAdmin(t *testing.T) string {
 	t.Helper()
-	f.v.Groups().SetOrgAdmins("admin@corp.com")
+	f.v.Groups().SetOrgAdmin("admin@corp.com")
 	m, err := f.members.Add("admin@corp.com", "Admin")
 	if err != nil {
 		t.Fatalf("register admin member row: %v", err)

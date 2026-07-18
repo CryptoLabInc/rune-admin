@@ -113,17 +113,9 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 		log:           log,
 	}
 
-	// A claimed console re-establishes owner-derived state at boot: the claim
-	// is durable (SQLite) while the org-admin set it feeds is in-memory, so a
-	// restart must replay the registrar without waiting for the next login —
-	// which may never come (cookie sessions outlive the process, and seeded
-	// dev sessions skip the callback entirely).
-	if d.OwnerRegistrar != nil {
-		if o := owner.get(); o != nil {
-			if rerr := d.OwnerRegistrar(o.Email, nameFromMe(o.Me, o.Email)); rerr != nil {
-				log.Warn("console: owner registration at boot failed", "err", rerr.Error())
-			}
-		}
+	// Replay for an already-claimed console — see Deps.OwnerRegistrar.
+	if o := owner.get(); o != nil {
+		s.registerOwnerBestEffort(o.Email, o.Me, "boot")
 	}
 
 	var dp *Dataplane
@@ -205,6 +197,21 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 	return mux, dp, nil
 }
 
+// registerOwnerBestEffort runs the owner registrar (member row + org-admin
+// derivation) for an established owner, taking the display name from the cloud
+// principal. It is the single place that owns the "never block on a registrar
+// failure" policy: the owner is bound and the session is valid either way, and
+// the registration self-heals on the next login or boot. A nil registrar (not
+// wired) is a no-op. `at` names the call site for the log line.
+func (s *Service) registerOwnerBestEffort(email string, me json.RawMessage, at string) {
+	if s.registerOwner == nil {
+		return
+	}
+	if err := s.registerOwner(email, nameFromMe(me, email)); err != nil {
+		s.log.Warn("console: owner registration failed", "at", at, "err", err.Error())
+	}
+}
+
 // handleSession (GET /console/session) is the route guard's single source of
 // truth, so it always returns 200 — never 401.
 func (s *Service) handleSession(w http.ResponseWriter, r *http.Request) {
@@ -279,6 +286,16 @@ func meWithAvatar(me json.RawMessage) any {
 
 // emailFromMe extracts the email from the cached cloud principal (GET /me:
 // {id, email, name, picture, ...}). Returns "" when absent or unparseable.
+//
+// This is the console's single ingress for the cloud identity, so it is also
+// where that identity is canonicalized: the email is lower-cased and trimmed
+// before it reaches any downstream keyspace. Everything the email keys —
+// the org-admin set, the member registry, token usernames, the audit/grant
+// actor — compares case-SENSITIVELY, while the owner lock compares with
+// EqualFold; without one canonical form here, two spellings of one human could
+// key two member rows or leave a minted admin token failing IsOrgAdmin.
+// Google returns a canonical lower-case address today, but nothing in this
+// system enforces that, so it is pinned here rather than assumed.
 func emailFromMe(me json.RawMessage) string {
 	if len(me) == 0 {
 		return ""
@@ -289,7 +306,7 @@ func emailFromMe(me json.RawMessage) string {
 	if err := json.Unmarshal(me, &p); err != nil {
 		return ""
 	}
-	return p.Email
+	return strings.ToLower(strings.TrimSpace(p.Email))
 }
 
 // nameFromMe extracts the display name from the cached cloud principal (GET

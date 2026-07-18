@@ -251,7 +251,7 @@ func TestAdminDeleteTokenCascadesToMemberUUIDMemberships(t *testing.T) {
 // (a key with no member row is shown as-is).
 func TestGetPermissionsMemberKeyed(t *testing.T) {
 	v, reg := newMemberKeyedConsole(t)
-	v.Groups().SetOrgAdmins("admin@corp.com")
+	v.Groups().SetOrgAdmin("admin@corp.com")
 	srv := NewConsoleGRPC(v)
 	ctx := context.Background()
 

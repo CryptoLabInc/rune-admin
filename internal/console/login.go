@@ -145,14 +145,8 @@ func (s *Service) handleCallback(w http.ResponseWriter, r *http.Request) {
 	// org admin) has a member registry row so they appear in member listings and
 	// can be granted memberships by UUID like anyone. Idempotent — a no-op on
 	// every later login — and creates zero group memberships (admin reach is
-	// granted, never implied). A failure must not block login: the owner is bound
-	// and the session is valid, so log and proceed (the row can be created on a
-	// later login or via invite).
-	if s.registerOwner != nil {
-		if rerr := s.registerOwner(email, nameFromMe(me, email)); rerr != nil {
-			s.log.Warn("console: owner member-row registration failed (login proceeds)", "err", rerr.Error())
-		}
-	}
+	// granted, never implied). Never blocks login (see the helper).
+	s.registerOwnerBestEffort(email, me, "login")
 
 	sess, err := s.sessions.create(tok.SessionToken, tok.CookieName, me)
 	if err != nil {

@@ -466,7 +466,7 @@ func TestCaptureTagSet(t *testing.T) {
 func TestCanGrantOrgAdminOnly(t *testing.T) {
 	s, hq, _, search := testTree(t)
 	mustGrant(t, s, "jisoo@corp.com", hq.ID, RoleEdit) // high group role, still not admin
-	s.SetOrgAdmins("owner@corp.com")
+	s.SetOrgAdmin("owner@corp.com")
 
 	if err := s.CanGrant("owner@corp.com", "x@corp.com", search.ID, RoleWrite); err != nil {
 		t.Errorf("CanGrant(owner) = %v, want allowed", err)

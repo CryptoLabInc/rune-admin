@@ -117,23 +117,22 @@ func (s *Store) validatePersonKey(key string) error {
 	return validateUserEmail(key)
 }
 
-// SetOrgAdmins declares the organization admin(s) — the Owner identity
-// that alone may grant/revoke (plan §5 grant rule, §6-D8). The plan
-// mandates exactly one org admin: the console owner bound at first login,
-// replayed here by the daemon's OwnerRegistrar hook at boot and on the
-// claiming login (config-declared admins were removed). Each call
-// replaces the whole set, so the replay is idempotent; the variadic form
-// remains for tests. Emails are the person key (plan §0, D2). In this M1
-// scope org admins are used for judgment only (CanGrant); they are not
-// group memberships.
-func (s *Store) SetOrgAdmins(emails ...string) {
+// SetOrgAdmin declares THE organization admin — the single Owner identity
+// that alone may grant/revoke (plan §5 grant rule, §6-D8). The plan mandates
+// exactly one org admin: the console owner bound at first login, replayed here
+// by the daemon's OwnerRegistrar hook at boot and on the claiming login
+// (config-declared admins were removed). The signature is singular on purpose —
+// the invariant is "exactly one", so a variadic whose zero-arg form could
+// silently wipe all authority would be a footgun. Each call replaces the set,
+// so the replay is idempotent. The email is the person key (plan §0, D2). In
+// this M1 scope the org admin is used for judgment only (CanGrant); it is not a
+// group membership.
+func (s *Store) SetOrgAdmin(email string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.orgAdmins = make(map[string]bool, len(emails))
-	for _, e := range emails {
-		if e != "" {
-			s.orgAdmins[e] = true
-		}
+	s.orgAdmins = make(map[string]bool, 1)
+	if email != "" {
+		s.orgAdmins[email] = true
 	}
 }
 

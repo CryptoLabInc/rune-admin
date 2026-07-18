@@ -1,7 +1,6 @@
 package console
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/CryptoLabInc/rune-console/internal/invites"
@@ -35,21 +34,18 @@ func (s *Service) handleInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// The invite is addressed to the operator themselves; identity comes from
-	// the cloud principal cached on the session (no extra round-trip).
-	var me struct {
-		Email string `json:"email"`
-		Name  string `json:"name"`
-	}
-	if err := json.Unmarshal(sess.Me, &me); err != nil || me.Email == "" {
+	// the cloud principal cached on the session (no extra round-trip). Read it
+	// through the shared helpers, not a local unmarshal: the token this mints
+	// is keyed by the email, so it must carry the same canonical form as every
+	// other identity keyspace (emailFromMe lower-cases and trims).
+	email := emailFromMe(sess.Me)
+	if email == "" {
 		writeError(w, http.StatusBadGateway, "IDENTITY_UNAVAILABLE", "could not read the operator email from the session")
 		return
 	}
-	name := me.Name
-	if name == "" {
-		name = me.Email
-	}
+	name := nameFromMe(sess.Me, email)
 
-	bundle, conn, err := s.inviter.IssueSelfInvite(me.Email, name)
+	bundle, conn, err := s.inviter.IssueSelfInvite(email, name)
 	if err != nil {
 		s.log.Warn("console: issue self-invite failed", "err", err.Error())
 		writeError(w, http.StatusInternalServerError, "INVITE_ISSUE_FAILED", err.Error())
@@ -67,11 +63,11 @@ func (s *Service) handleInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// inviter == recipient (self-invite); expiry is the wrap TTL deadline.
-	if err := s.cloud.SendInvite(r.Context(), sess.CloudCookie(), me.Email, name, reg, name, bundle.ExpiresAt); err != nil {
+	if err := s.cloud.SendInvite(r.Context(), sess.CloudCookie(), email, name, reg, name, bundle.ExpiresAt); err != nil {
 		s.writeCloudError(w, sess, err)
 		return
 	}
 
 	// Never echo the registration string — delivery is mail-only by design.
-	writeJSON(w, http.StatusOK, map[string]any{"sent": true, "email": me.Email})
+	writeJSON(w, http.StatusOK, map[string]any{"sent": true, "email": email})
 }

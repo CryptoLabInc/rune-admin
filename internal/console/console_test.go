@@ -274,3 +274,68 @@ func TestCallbackErrorRedirects(t *testing.T) {
 		}
 	}
 }
+
+// --- cloud-identity ingress normalization ----------------------------------
+
+func TestEmailFromMeCanonicalizes(t *testing.T) {
+	// emailFromMe is the console's single ingress for the cloud identity, so it
+	// is where the email is canonicalized: every downstream keyspace (org
+	// admin, member registry, token username, audit actor) compares
+	// case-sensitively, and two spellings of one human would split them.
+	cases := map[string]string{
+		`{"email":"Alice@Example.IO"}`: "alice@example.io",
+		`{"email":"  bob@x.io  "}`:     "bob@x.io",
+		`{"email":"carol@x.io"}`:       "carol@x.io",
+		`{"email":""}`:                 "",
+		`{"name":"no email"}`:          "",
+		`not json`:                     "",
+	}
+	for raw, want := range cases {
+		if got := emailFromMe(json.RawMessage(raw)); got != want {
+			t.Errorf("emailFromMe(%s) = %q, want %q", raw, got, want)
+		}
+	}
+	if got := emailFromMe(nil); got != "" {
+		t.Errorf("emailFromMe(nil) = %q, want empty", got)
+	}
+}
+
+func TestOwnerLockSurvivesCasingDrift(t *testing.T) {
+	// The cloud may return a different casing for the same account. The owner
+	// lock must still recognize the incumbent (no admin_locked bounce), and the
+	// registrar must receive the canonical form both times so it never keys two
+	// identities for one human.
+	ts := mockLoginCloud(t, map[string]string{
+		"tok1": "alice@x.io",
+		"tok2": "Alice@X.IO",
+	})
+	var seen []string
+	h, _, err := NewHandler(Deps{
+		Port:       8787,
+		APIBaseURL: ts.URL,
+		WebBaseURL: ts.URL,
+		DB:         openTestDB(t),
+		OwnerRegistrar: func(email, _ string) error {
+			seen = append(seen, email)
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if rr := doLogin(t, h, "tok1"); rr.Code != http.StatusFound || !hasSessionCookie(rr) {
+		t.Fatalf("first login status=%d cookie=%v, want 302 + cookie", rr.Code, hasSessionCookie(rr))
+	}
+	rr := doLogin(t, h, "tok2")
+	if loc := rr.Header().Get("Location"); strings.Contains(loc, "admin_locked") {
+		t.Errorf("re-login with different casing was refused: %q", loc)
+	}
+	if !hasSessionCookie(rr) {
+		t.Error("re-login with different casing set no session cookie")
+	}
+	want := []string{"alice@x.io", "alice@x.io"}
+	if len(seen) != 2 || seen[0] != want[0] || seen[1] != want[1] {
+		t.Errorf("registrar saw %v, want %v (canonical both times)", seen, want)
+	}
+}

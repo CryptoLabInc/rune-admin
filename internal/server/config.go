@@ -65,7 +65,14 @@ type TLSConfig struct {
 // BFF auth endpoints, the embedded SPA, and the cookie-gated admin/API
 // surface. It binds 127.0.0.1 only (loopback OAuth redirect + security
 // invariant); the bind host is not configurable. TLS is never used (plain
-// loopback HTTP). Disabled by default so a headless daemon stays gRPC-only.
+// loopback HTTP). Disabled by default so a headless daemon stays gRPC-only —
+// but note that ALL identity/RBAC bootstrap (the org admin, groups, grants,
+// member invites) is reachable ONLY through this console surface: there is no
+// gRPC admin RPC, no admin unix socket, and no CLI mutation. A console-disabled
+// node therefore cannot establish an org admin (the admin is the first console
+// login) and can only serve a data plane provisioned by a console elsewhere, so
+// this mode is for tests and pre-provisioned replicas — every real config sets
+// enabled: true.
 type ConsoleConfig struct {
 	Enabled bool `yaml:"enabled"`
 	Port    int  `yaml:"port"` // default 8787
@@ -258,12 +265,14 @@ func LoadConfig(override string) (*Config, error) {
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
-		// groups.org_admins was removed when admin identity moved to the
-		// first-login console owner; KnownFields turns a leftover line into a
-		// hard parse error, so translate it into migration guidance instead
-		// of a bare "field not found".
+		// org_admins was removed when admin identity moved to the first-login
+		// console owner; KnownFields turns a leftover line into a hard parse
+		// error, so translate it into migration guidance. The match is
+		// intentionally broad (org_admins under any section, not just groups)
+		// since the field is unsupported everywhere now, and it keeps the same
+		// "(searched: …)" context the generic branch below carries.
 		if strings.Contains(err.Error(), "field org_admins not found") {
-			return nil, fmt.Errorf("parse config %s: groups.org_admins is no longer supported — the org admin is the account that first logs in to the console; remove the org_admins entry from this file and restart: %w", path, err)
+			return nil, fmt.Errorf("parse config %s: org_admins is no longer supported — the org admin is the account that first logs in to the console; remove the org_admins entry from this config and restart: %w (searched: %s)", path, err, strings.Join(searched, ", "))
 		}
 		return nil, fmt.Errorf("parse config %s: %w (searched: %s)", path, err, strings.Join(searched, ", "))
 	}

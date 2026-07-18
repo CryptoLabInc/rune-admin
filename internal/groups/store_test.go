@@ -856,7 +856,7 @@ func TestPersonKeyValidatorDefault(t *testing.T) {
 	if _, err := s.Grant(memberUUID, g.ID, RoleRead, "x"); err == nil {
 		t.Error("default validator accepted a member UUID (key must be an email)")
 	}
-	s.SetOrgAdmins("owner@corp.com")
+	s.SetOrgAdmin("owner@corp.com")
 	if err := s.CanGrant("owner@corp.com", "bob@corp.com", g.ID, RoleRead); err != nil {
 		t.Errorf("CanGrant on an email target = %v, want nil", err)
 	}
@@ -878,7 +878,7 @@ func TestPersonKeyValidatorInjected(t *testing.T) {
 	if _, err := s.Grant("alice@corp.com", g.ID, RoleRead, "x"); err == nil {
 		t.Error("injected validator should refuse an email key")
 	}
-	s.SetOrgAdmins("owner@corp.com")
+	s.SetOrgAdmin("owner@corp.com")
 	if err := s.CanGrant("owner@corp.com", "member-42", g.ID, RoleRead); err != nil {
 		t.Errorf("CanGrant with injected validator = %v, want nil", err)
 	}

@@ -251,11 +251,11 @@ func runDaemonStart(ctx context.Context) error {
 			OwnerRegistrar: func(email, displayName string) error {
 				// The console owner IS the single org admin (identity
 				// unification, dual-role §11): authority derives from the
-				// durable first-login claim, never from config. SetOrgAdmins
-				// replaces the whole set, and it must run before the member-row
+				// durable first-login claim, never from config. SetOrgAdmin
+				// replaces the admin, and it must run before the member-row
 				// early return below so a boot replay restores admin authority
 				// even when the member row already exists.
-				groupStore.SetOrgAdmins(email)
+				groupStore.SetOrgAdmin(email)
 				// Ensure the owner has a member registry row (option A) so they
 				// appear in listings and can be granted memberships by UUID.
 				// Idempotent — a no-op on every later login. Zero group
@@ -278,6 +278,15 @@ func runDaemonStart(ctx context.Context) error {
 			// now so a restart resumes the data plane without a login.
 			dp.Start(ctx)
 		}
+	} else {
+		// Identity/RBAC bootstrap lives entirely on the console surface: the
+		// org admin is the first console login (the OwnerRegistrar above), and
+		// groups/grants/invites are console HTTP handlers. With the console
+		// off there is no other path to any of it — no admin RPC, no admin
+		// socket, no CLI mutation — so say it plainly at boot rather than let
+		// an operator debug a silent PermissionDenied later.
+		slog.Warn("console: disabled — no org admin can be established and no groups/grants/invites can be created; " +
+			"this daemon can only serve a data plane provisioned elsewhere (set server.console.enabled=true to administer it)")
 	}
 	return server.Serve(ctx, v, consoleHandler)
 }

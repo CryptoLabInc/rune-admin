@@ -8,7 +8,7 @@ import "fmt"
 //
 // admin is deliberately NOT a group role: the organization admin (Owner)
 // is a single org-wide identity, not a per-group grade (plan §5, §6-D8).
-// It is modeled separately on the Store (SetOrgAdmins / IsOrgAdmin) and,
+// It is modeled separately on the Store (SetOrgAdmin / IsOrgAdmin) and,
 // in this M1 scope, is only used for judgment (CanGrant).
 //
 // This is also a separate type from tokens.Role: token roles gate
