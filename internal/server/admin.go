@@ -370,14 +370,12 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 				fmt.Sprintf("no member registered for email '%s': grants require a registered member", body.User))
 			return
 		}
-		// Revoking a membership must cut the user's access to the group, not just
-		// drop the direct row: if they also inherit read from an ancestor, that
-		// inherited read is cut in the same transaction — otherwise the group comes
-		// straight back as inherited read with its memory still readable (the same
-		// fix carried on the console team/drawer removal axes; plain Revoke here
-		// left this operator path open).
+		// Revoking a membership must cut the user's ACCESS to the group, not just
+		// drop the direct row: Groups().Revoke also cuts any read they would still
+		// inherit from an ancestor, in one transaction (the plain RevokeDirectGrant
+		// would leave that inherited read intact).
 		actor := adminActor(r, body.Actor)
-		revoked, excluded, err := v.Groups().RevokeWithReadExclusion(key, r.PathValue("ref"), localAdminActor(actor))
+		revoked, excluded, err := v.Groups().Revoke(key, r.PathValue("ref"), localAdminActor(actor))
 		if err != nil {
 			writeGroupError(w, err)
 			return

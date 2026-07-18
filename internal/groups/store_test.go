@@ -266,11 +266,11 @@ func TestGrantRevokeAndAuditFields(t *testing.T) {
 		t.Error("grant on unknown group should be ErrGroupNotFound")
 	}
 
-	ok, err := s.Revoke("alice@corp.com", g.ID)
+	ok, err := s.RevokeDirectGrant("alice@corp.com", g.ID)
 	if err != nil || !ok {
 		t.Fatalf("Revoke = (%v, %v)", ok, err)
 	}
-	ok, err = s.Revoke("alice@corp.com", g.ID)
+	ok, err = s.RevokeDirectGrant("alice@corp.com", g.ID)
 	if err != nil || ok {
 		t.Errorf("second Revoke = (%v, %v), want (false, nil)", ok, err)
 	}
@@ -788,7 +788,7 @@ func TestMutatorSQLFailureLeavesMapsUnchanged(t *testing.T) {
 	if len(ms) != 1 || ms[0].User != "alice@corp.com" || ms[0].Role != RoleRead {
 		t.Errorf("failed Grants mutated the cache: %+v", ms)
 	}
-	if _, err := s.Revoke("alice@corp.com", hq.ID); err == nil {
+	if _, err := s.RevokeDirectGrant("alice@corp.com", hq.ID); err == nil {
 		t.Fatal("Revoke with a dead sink succeeded")
 	}
 	if _, err := s.RemoveUser("alice@corp.com"); err == nil {
@@ -986,11 +986,11 @@ func TestReadExclusionPersistsAcrossReload(t *testing.T) {
 	}
 }
 
-// TestRevokeWithReadExclusionIsOneTransaction pins the drawer remove-team
+// TestRevokeIsOneTransaction pins the drawer remove-team
 // semantics: dropping the direct grant and cutting the still-inherited read
 // are ONE transaction — done as two, a crash between them hands the team
 // back as inherited read with its memory recallable.
-func TestRevokeWithReadExclusionIsOneTransaction(t *testing.T) {
+func TestRevokeIsOneTransaction(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "runeconsole.db")
 	database := openTestDB(t, path)
 	s := newDBStore(t, database)
@@ -1004,9 +1004,9 @@ func TestRevokeWithReadExclusionIsOneTransaction(t *testing.T) {
 	}
 
 	// Direct grant on dev + inheritance from hq: one call must revoke AND exclude.
-	revoked, excluded, err := s.RevokeWithReadExclusion("ceo@corp.com", dev.ID, "local-admin:hy")
+	revoked, excluded, err := s.Revoke("ceo@corp.com", dev.ID, "local-admin:hy")
 	if err != nil || !revoked || !excluded {
-		t.Fatalf("RevokeWithReadExclusion = (%v, %v, %v), want (true, true, nil)", revoked, excluded, err)
+		t.Fatalf("Revoke = (%v, %v, %v), want (true, true, nil)", revoked, excluded, err)
 	}
 	scope := s.RecallScope("ceo@corp.com")
 	if len(scope) != 1 || scope[0] != hq.ID {
@@ -1036,9 +1036,9 @@ func TestRevokeWithReadExclusionIsOneTransaction(t *testing.T) {
 	}
 }
 
-// TestRevokeWithReadExclusionVariants pins the no-op and partial cases: the
+// TestRevokeVariants pins the no-op and partial cases: the
 // combined call must match the sequential pair's decision table.
-func TestRevokeWithReadExclusionVariants(t *testing.T) {
+func TestRevokeVariants(t *testing.T) {
 	s := newDBStore(t, newTestDB(t))
 	hq, _ := s.CreateGroup("hq", "")
 	dev, _ := s.CreateGroup("dev-team", hq.ID)
@@ -1048,12 +1048,12 @@ func TestRevokeWithReadExclusionVariants(t *testing.T) {
 	if _, err := s.Grant("a@corp.com", hq.ID, RoleWrite, "x"); err != nil {
 		t.Fatal(err)
 	}
-	revoked, excluded, err := s.RevokeWithReadExclusion("a@corp.com", dev.ID, "x")
+	revoked, excluded, err := s.Revoke("a@corp.com", dev.ID, "x")
 	if err != nil || revoked || !excluded {
 		t.Fatalf("inherited-only = (%v, %v, %v), want (false, true, nil)", revoked, excluded, err)
 	}
 	// Already excluded: nothing left to remove.
-	revoked, excluded, err = s.RevokeWithReadExclusion("a@corp.com", dev.ID, "x")
+	revoked, excluded, err = s.Revoke("a@corp.com", dev.ID, "x")
 	if err != nil || revoked || excluded {
 		t.Fatalf("already-excluded = (%v, %v, %v), want (false, false, nil)", revoked, excluded, err)
 	}
@@ -1061,17 +1061,17 @@ func TestRevokeWithReadExclusionVariants(t *testing.T) {
 	if _, err := s.Grant("b@corp.com", solo.ID, RoleRead, "x"); err != nil {
 		t.Fatal(err)
 	}
-	revoked, excluded, err = s.RevokeWithReadExclusion("b@corp.com", solo.ID, "x")
+	revoked, excluded, err = s.Revoke("b@corp.com", solo.ID, "x")
 	if err != nil || !revoked || excluded {
 		t.Fatalf("direct-only = (%v, %v, %v), want (true, false, nil)", revoked, excluded, err)
 	}
 	// No access at all.
-	revoked, excluded, err = s.RevokeWithReadExclusion("b@corp.com", solo.ID, "x")
+	revoked, excluded, err = s.Revoke("b@corp.com", solo.ID, "x")
 	if err != nil || revoked || excluded {
 		t.Fatalf("no-access = (%v, %v, %v), want (false, false, nil)", revoked, excluded, err)
 	}
 	// Unknown team resolves to ErrGroupNotFound.
-	if _, _, err := s.RevokeWithReadExclusion("b@corp.com", "no-such-team", "x"); err == nil {
+	if _, _, err := s.Revoke("b@corp.com", "no-such-team", "x"); err == nil {
 		t.Fatal("unknown team did not error")
 	}
 }

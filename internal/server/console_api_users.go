@@ -641,7 +641,7 @@ func (h *consoleAPI) userMembershipsRemoveBatch(w http.ResponseWriter, r *http.R
 		// between them would leave the team popping straight back into the
 		// list as inherited read with its memory still readable — exactly
 		// what "remove this team" is supposed to prevent.
-		revoked, excluded, rerr := h.v.Groups().RevokeWithReadExclusion(m.ID, tid, actor)
+		revoked, excluded, rerr := h.v.Groups().Revoke(m.ID, tid, actor)
 		if rerr != nil {
 			var notFound groups.ErrGroupNotFound
 			if errors.As(rerr, &notFound) {
@@ -775,7 +775,7 @@ func (h *consoleAPI) createInvitation(w http.ResponseWriter, r *http.Request) {
 // no half-provisioned identity (the doc mandates full rollback on failure).
 func (h *consoleAPI) rollbackInvitation(m *members.Member, grantedTeams []string, newMember bool) {
 	for _, tid := range grantedTeams {
-		_, _ = h.v.Groups().Revoke(m.ID, tid)
+		_, _ = h.v.Groups().RevokeDirectGrant(m.ID, tid)
 	}
 	if newMember {
 		_ = h.ms.members.Remove(m.ID)

@@ -417,7 +417,7 @@ func (h *consoleAPI) addTeamMember(w http.ResponseWriter, r *http.Request) {
 	// mail failure rolls the just-granted membership back and reports 502.
 	if h.needsCode(m) {
 		if ierr := h.issueCode(r, m); ierr != nil {
-			_, _ = h.v.Groups().Revoke(m.ID, ref)
+			_, _ = h.v.Groups().RevokeDirectGrant(m.ID, ref)
 			slog.Error("console: invite code send failed on add-member (membership rolled back)",
 				"account", body.Account, "team", ref, "err", ierr)
 			apiErr(w, http.StatusBadGateway, "MAIL_UPSTREAM_ERROR", "failed to send the invitation code email")
@@ -490,22 +490,18 @@ func (h *consoleAPI) teamMembersRemoveBatch(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	res := newBatchResult()
-	// Removing a member from a team must actually cut their access to it — not
-	// merely delete the stored direct row. If the member also reaches this team
-	// by inheritance from an ancestor they belong to, that inherited read has to
-	// be cut too, or the team comes straight back as inherited read with its
-	// memory still readable — the same failure d0f451a fixed on the user-drawer
-	// axis (RevokeWithReadExclusion), which this team-screen axis had kept using
-	// the plain Revoke and so left open. RevokeWithReadExclusion drops the direct
-	// grant AND records the read exclusion in one transaction; the actor tags who
-	// cut it (mirrors userMembershipsRemoveBatch).
+	// Removing a member from a team must cut their ACCESS to it: Groups().Revoke
+	// drops the direct grant AND cuts any read they would still inherit from an
+	// ancestor, in one transaction. (The plain RevokeDirectGrant would leave that
+	// inherited read intact, so the team would come straight back as inherited
+	// read with its memory still readable.) The actor tags who cut it.
 	actor := localAdminActor(actorFromContext(r.Context()))
 	for _, uid := range userIDs {
 		if _, err := h.ms.members.Get(uid); err != nil {
 			res.fail(uid, "USER_NOT_FOUND", "no such user")
 			continue
 		}
-		revoked, excluded, err := h.v.Groups().RevokeWithReadExclusion(uid, ref, actor)
+		revoked, excluded, err := h.v.Groups().Revoke(uid, ref, actor)
 		if err != nil {
 			var notFound groups.ErrGroupNotFound
 			if errors.As(err, &notFound) {

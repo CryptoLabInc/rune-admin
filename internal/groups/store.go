@@ -787,10 +787,15 @@ func (s *Store) Grant(user, groupRef string, role Role, grantedBy string) (Membe
 	return *m, nil
 }
 
-// Revoke removes the (user, group) membership. Returns false when no
-// such membership exists. Effect is immediate: scope is recomputed per
-// request (plan §5), so the next request no longer sees the group.
-func (s *Store) Revoke(user, groupRef string) (bool, error) {
+// RevokeDirectGrant removes ONLY the (user, group) direct membership row and
+// deliberately LEAVES any inherited read intact: a user who also belongs to an
+// ancestor still reads the group afterwards. This is the rollback/undo
+// primitive — it restores the exact state before a Grant, which is why the
+// compensating paths (a failed add/invite) use it. To cut a user's ACCESS to a
+// group (drop the direct grant AND any surviving inherited read), use Revoke
+// instead. Returns false when no such direct membership exists. Effect is
+// immediate: scope is recomputed per request (plan §5).
+func (s *Store) RevokeDirectGrant(user, groupRef string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	g, err := s.resolveLocked(groupRef)
@@ -896,7 +901,7 @@ func (s *Store) inheritsReadLocked(user, groupID string) bool {
 
 // reachesByInheritanceLocked reports whether one of user's direct groups
 // other than ignoreDirect has groupID in its subtree. ignoreDirect lets
-// RevokeWithReadExclusion evaluate inheritance as it will stand AFTER the
+// Revoke evaluate inheritance as it will stand AFTER the
 // direct grant on groupID is deleted, while the map still holds the row
 // (the answer must be computed before the transaction that deletes it).
 // Caller must hold s.mu.
@@ -917,23 +922,22 @@ func (s *Store) reachesByInheritanceLocked(user, groupID, ignoreDirect string) b
 	return false
 }
 
-// RevokeWithReadExclusion removes user's ACCESS to the group, not merely a
-// stored row: it drops the direct grant (if any) and, when the user would
-// still reach the group by downward inheritance afterwards, records the read
-// exclusion — BOTH IN ONE TRANSACTION. The console drawer's remove-team
-// action needs the pair to be one fact: done as two mutations (Revoke, then
-// ExcludeRead), a crash or refusal between them leaves the direct grant gone
-// but the exclusion missing, so the team silently returns as inherited read
-// with its memory still recallable — the exact hole the exclusion mechanism
-// exists to close. (Under the legacy debounced-YAML persistence the pair
-// coalesced into one snapshot write; write-through persistence must restore
-// that atomicity explicitly.)
+// Revoke removes user's ACCESS to the group — the primary revoke used by every
+// operator-facing removal. It drops the direct grant (if any) and, when the
+// user would still reach the group by downward inheritance afterwards, records
+// the read exclusion — BOTH IN ONE TRANSACTION. The console removal actions
+// need the pair to be one fact: done as two mutations (RevokeDirectGrant, then
+// ExcludeRead), a crash or refusal between them leaves the direct grant gone but
+// the exclusion missing, so the group silently returns as inherited read with
+// its memory still recallable — the exact hole the exclusion mechanism exists to
+// close. To drop ONLY the direct grant and preserve inherited read (rollback /
+// undo of a Grant), use RevokeDirectGrant instead.
 //
 // Returns (revoked, excluded): revoked = a direct grant was deleted,
 // excluded = an inherited read was cut. (false, false) means the user had no
-// access to the group to begin with (nothing was written, matching the
-// sequential pair's semantics — including the already-excluded case).
-func (s *Store) RevokeWithReadExclusion(user, groupRef, removedBy string) (revoked, excluded bool, err error) {
+// access to the group to begin with (nothing was written — including the
+// already-excluded case).
+func (s *Store) Revoke(user, groupRef, removedBy string) (revoked, excluded bool, err error) {
 	if err := s.validatePersonKey(user); err != nil {
 		return false, false, err
 	}

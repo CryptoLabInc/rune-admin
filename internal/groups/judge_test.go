@@ -312,7 +312,7 @@ func TestGroupAccessNoTornRead(t *testing.T) {
 			default:
 			}
 			_, _ = s.Grant(user, dev.ID, RoleWrite, "local-admin:test")
-			_, _ = s.Revoke(user, dev.ID)
+			_, _ = s.RevokeDirectGrant(user, dev.ID)
 		}
 	}()
 
@@ -420,7 +420,7 @@ func TestRevokeIsImmediate(t *testing.T) {
 	if len(s.RecallScope("u@corp.com")) != 3 {
 		t.Fatalf("scope before revoke = %v", s.RecallScope("u@corp.com"))
 	}
-	ok, err := s.Revoke("u@corp.com", hq.ID)
+	ok, err := s.RevokeDirectGrant("u@corp.com", hq.ID)
 	if err != nil || !ok {
 		t.Fatalf("Revoke = (%v, %v)", ok, err)
 	}
@@ -705,7 +705,7 @@ func TestGrantClearsReadExclusion(t *testing.T) {
 		t.Errorf("RecallScope = %v, want dev back after grant", scope)
 	}
 	// Revoking the grant must fall back to plain inherited read, not to removed.
-	if _, err := s.Revoke(ceo, dev.ID); err != nil {
+	if _, err := s.RevokeDirectGrant(ceo, dev.ID); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Contains(s.RecallScope(ceo), dev.ID) {
