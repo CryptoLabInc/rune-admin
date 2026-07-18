@@ -431,6 +431,24 @@ func (h *consoleAPI) usersDeleteBatch(w http.ResponseWriter, r *http.Request) {
 			res.fail(id, "USER_NOT_FOUND", "no such user")
 			continue
 		}
+		// The org admin's registry row is their identity, not a grant: it is
+		// what group memberships are keyed by, and only they can hand out
+		// grants. Deleting it drops those memberships and mints a new UUID on
+		// the next login, so the grants cannot be restored by anyone else —
+		// and the row carries no admin marker, so in a young org it looks like
+		// a stray account with no teams. Revoking the admin's access is the
+		// supported operation (their memory reach is pure membership like
+		// anyone's); erasing the identity behind it is not. Refuse per-item so
+		// the rest of the batch still applies.
+		//
+		// The CODE is the contract the console renders from (it maps codes to
+		// its own copy); this message is for logs and direct API callers, so it
+		// states the refusal and nothing more — telling the operator what to do
+		// instead is the console's wording to choose, not ours.
+		if h.v.Groups().IsOrgAdmin(m.Email) {
+			res.fail(id, "CANNOT_DELETE_ADMIN", "the organization admin cannot be deleted")
+			continue
+		}
 		// Cascade: destroy the session token, drop all group memberships, void
 		// any unused invite codes, then remove the member — in that order so the
 		// gRPC judge never sees a half-deleted identity (mirrors the admin
