@@ -73,8 +73,8 @@ type ConsoleConfig struct {
 	// the binary's embedded build.
 	FrontendDir string `yaml:"frontend_dir"`
 	// DBPath is the SQLite file backing the console session store; it holds
-	// the runespace-cloud session token at rest (kept 0600). Defaults beside
-	// tokens_file.
+	// the runespace-cloud session token at rest (kept 0600). Defaults into
+	// storage.data_dir.
 	DBPath string `yaml:"db_path"`
 }
 
@@ -94,12 +94,13 @@ func (c *Config) ConsolePort() int {
 	return c.Server.Console.Port
 }
 
-// ConsoleDBPath returns the session-store path, defaulting beside tokens_file.
+// ConsoleDBPath returns the session-store path, defaulting into the data
+// directory.
 func (c *Config) ConsoleDBPath() string {
 	if c.Server.Console.DBPath != "" {
 		return c.Server.Console.DBPath
 	}
-	return filepath.Join(filepath.Dir(c.Tokens.TokensFile), "console-session.db")
+	return filepath.Join(c.Storage.DataDir, "console-session.db")
 }
 
 type KeysConfig struct {
@@ -122,10 +123,12 @@ type RunespaceConfig struct {
 	Insecure   bool   `yaml:"insecure"` // true = plaintext dial (local dev)
 }
 
+// TokensConfig carries the team secret console tokens are minted from,
+// either inline or through a 0640-or-tighter file that Resolve()
+// materialises into TeamSecret.
 type TokensConfig struct {
 	TeamSecret     string `yaml:"team_secret"`
 	TeamSecretFile string `yaml:"team_secret_file"`
-	TokensFile     string `yaml:"tokens_file"`
 }
 
 // GroupsConfig configures the group RBAC store: top_k caps default to plan
@@ -161,12 +164,13 @@ func (c *Config) InviteTTL() time.Duration {
 	return time.Duration(m) * time.Minute
 }
 
-// MailLogFile returns the LogMailer output path, defaulting beside tokens_file.
+// MailLogFile returns the LogMailer output path, defaulting into the data
+// directory.
 func (c *Config) MailLogFile() string {
 	if c.Members.MailLogFile != "" {
 		return c.Members.MailLogFile
 	}
-	return filepath.Join(filepath.Dir(c.Tokens.TokensFile), "invite-mail.log")
+	return filepath.Join(c.Storage.DataDir, "invite-mail.log")
 }
 
 // AuditConfig.Mode is one of: "", "file", "stdout", "file+stdout".
@@ -176,25 +180,23 @@ type AuditConfig struct {
 	Path string `yaml:"path"`
 }
 
-// StorageConfig configures the unified store database (runeconsole.db) that
-// replaces the per-store YAML files. The whole section is optional: when
-// db_path is unset the file defaults beside tokens_file, like every other
-// store artifact. Deliberately never written into generated or example
-// configs' active lines — LoadConfig decodes strictly (KnownFields), so a
-// config carrying storage: would make a pre-migration binary refuse to
-// start and break the documented rollback path.
+// StorageConfig says where the console keeps its state on disk. data_dir is
+// required: it is the directory every runtime artifact defaults into — the
+// unified store database (runeconsole.db), the console session database
+// (console-session.db) and the invite mail log. db_path optionally moves the
+// store database elsewhere; the other artifacts have their own overrides.
 type StorageConfig struct {
-	DBPath string `yaml:"db_path"`
+	DataDir string `yaml:"data_dir"`
+	DBPath  string `yaml:"db_path"`
 }
 
 // StoreDBPath returns the unified store database path, defaulting to
-// runeconsole.db beside tokens_file (the de-facto data directory every other
-// store path derives from).
+// runeconsole.db inside the data directory.
 func (c *Config) StoreDBPath() string {
 	if c.Storage.DBPath != "" {
 		return c.Storage.DBPath
 	}
-	return filepath.Join(filepath.Dir(c.Tokens.TokensFile), "runeconsole.db")
+	return filepath.Join(c.Storage.DataDir, "runeconsole.db")
 }
 
 // LoadConfig resolves the config path (caller override → ConfigLookupPaths)
@@ -352,8 +354,8 @@ func (c *Config) Validate() error {
 	if c.Keys.EmbeddingDim == 0 {
 		errs = append(errs, "keys.embedding_dim is required")
 	}
-	if c.Tokens.TokensFile == "" {
-		errs = append(errs, "tokens.tokens_file is required")
+	if c.Storage.DataDir == "" {
+		errs = append(errs, "storage.data_dir is required")
 	}
 	if len(errs) > 0 {
 		return errors.New("config invalid:\n  - " + strings.Join(errs, "\n  - "))

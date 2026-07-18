@@ -25,9 +25,10 @@ runespace:
   insecure: true
 tokens:
   team_secret: inline-team-secret-deadbeef
-  tokens_file: /tmp/tokens.yml
 audit:
   mode: stdout
+storage:
+  data_dir: /tmp
 `
 }
 
@@ -248,10 +249,10 @@ func TestRedactMasksSecrets(t *testing.T) {
 
 func TestValidateRejectsMissingFields(t *testing.T) {
 	cases := map[string]func(*Config){
-		"missing port":        func(c *Config) { c.Server.GRPC.Port = 0 },
-		"missing keys.path":   func(c *Config) { c.Keys.Path = "" },
-		"missing dim":         func(c *Config) { c.Keys.EmbeddingDim = 0 },
-		"missing tokens_file": func(c *Config) { c.Tokens.TokensFile = "" },
+		"missing port":      func(c *Config) { c.Server.GRPC.Port = 0 },
+		"missing keys.path": func(c *Config) { c.Keys.Path = "" },
+		"missing dim":       func(c *Config) { c.Keys.EmbeddingDim = 0 },
+		"missing data_dir":  func(c *Config) { c.Storage.DataDir = "" },
 	}
 	base := func() *Config {
 		path := writeConfig(t, minimalValidConfig(t))
@@ -309,10 +310,10 @@ func TestExampleConfigParsesCleanly(t *testing.T) {
 	}
 }
 
-func TestStoreDBPathDefaultsBesideTokensFile(t *testing.T) {
-	// A config predating the storage key must parse unchanged and derive the
-	// unified store DB path from tokens_file (the rollback contract: real
-	// configs never carry storage:).
+func TestStoreDBPathDefaultsIntoDataDir(t *testing.T) {
+	// With no explicit db_path the store database lands inside
+	// storage.data_dir, the directory every other runtime artifact
+	// also defaults into.
 	path := writeConfig(t, minimalValidConfig(t))
 	cfg, err := LoadConfig(path)
 	if err != nil {
@@ -324,9 +325,9 @@ func TestStoreDBPathDefaultsBesideTokensFile(t *testing.T) {
 }
 
 func TestStoreDBPathExplicitOverride(t *testing.T) {
-	body := minimalValidConfig(t) + `storage:
-  db_path: /var/lib/runeconsole/store.db
-`
+	// minimalValidConfig ends with the storage block, so an extra indented key
+	// continues that mapping instead of opening a duplicate storage:.
+	body := minimalValidConfig(t) + "  db_path: /var/lib/runeconsole/store.db\n"
 	path := writeConfig(t, body)
 	cfg, err := LoadConfig(path)
 	if err != nil {

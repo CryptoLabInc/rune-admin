@@ -54,13 +54,14 @@ func TestDaemonBootsAndShutsDownCleanly(t *testing.T) {
 cloud: { api_base_url: https://cloud.invalid, web_base_url: https://cloud.invalid }
 keys: { path: %s, embedding_dim: 1024 }
 runespace: { endpoint: "" }
-tokens: { team_secret: e2e-team-secret, tokens_file: %s }
+tokens: { team_secret: e2e-team-secret }
+storage: { data_dir: %s }
 members: { console_endpoint: "127.0.0.1:%d" }
 audit: { mode: stdout }
 `,
 		grpcPort, consolePort,
 		filepath.Join(dir, "keys"),
-		filepath.Join(dir, "tokens.yml"),
+		dir,
 		grpcPort)
 	confPath := filepath.Join(dir, "runeconsole.conf")
 	if err := os.WriteFile(confPath, []byte(conf), 0o600); err != nil {
@@ -115,7 +116,7 @@ audit: { mode: stdout }
 	}
 
 	// The daemon opens the unified store database unconditionally at boot: it
-	// must exist beside tokens_file with owner-only permissions.
+	// must exist in the data directory with owner-only permissions.
 	dbInfo, serr := os.Stat(filepath.Join(dir, "runeconsole.db"))
 	if serr != nil {
 		dumpLog()
