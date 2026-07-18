@@ -256,6 +256,14 @@ func runDaemonStart(ctx context.Context) error {
 				// early return below so a boot replay restores admin authority
 				// even when the member row already exists.
 				groupStore.SetOrgAdmin(email)
+				// Name the admin. With config org_admins gone this line is the
+				// only statement of who holds grant authority, and the account
+				// is whoever happened to claim the console first — which need
+				// not be who the operator expected, and cannot be changed once
+				// bound. An operator following the migration error deletes the
+				// admin they had declared, so leaving the replacement unnamed
+				// would leave them nothing to check.
+				slog.Info("console: org admin derived from the console owner", "admin", email)
 				// Ensure the owner has a member registry row (option A) so they
 				// appear in listings and can be granted memberships by UUID.
 				// Idempotent — a no-op on every later login. Zero group

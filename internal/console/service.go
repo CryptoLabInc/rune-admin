@@ -123,6 +123,11 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 			"restart once the session database is readable", "err", oerr.Error())
 	case o != nil:
 		s.registerOwnerBestEffort(o.Email, o.Me, "boot")
+	default:
+		// Say so rather than start silently: until someone logs in there is no
+		// org admin, so admin-gated calls are refused, and the account that
+		// claims the console decides who holds that authority for good.
+		log.Info("console: not yet claimed — the first account to log in becomes the console owner and org admin")
 	}
 
 	var dp *Dataplane
