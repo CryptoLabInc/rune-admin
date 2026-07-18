@@ -785,6 +785,63 @@ func (s *Store) reachesByInheritanceLocked(user, groupID, ignoreDirect string) b
 	return false
 }
 
+// InheritsRead reports whether user reaches groupID PURELY by downward
+// inheritance — a descendant of one of their direct groups, with no direct
+// membership on groupID and no read exclusion. This is the "promotable but not
+// yet a direct member" case the console's team/user role endpoints accept: a
+// role change on such a group is a first-time Grant, not an update. groupID is
+// the resolved immutable group id.
+func (s *Store) InheritsRead(user, groupID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.inheritsReadLocked(user, groupID)
+}
+
+// Inheritors returns the sorted person keys that hold READ on groupID purely by
+// downward inheritance: every user with a direct membership on a PROPER ancestor
+// of groupID, minus those already direct on groupID (they are direct members,
+// not inheritors) and those with a read exclusion on it. It is the set
+// counterpart to InheritsRead — same predicate, evaluated for every user — but
+// computed by walking groupID's ancestor chain ONCE, so the cost is proportional
+// to the tree depth and the membership count, not to a per-user subtree collect.
+// Returns nil for an unknown group.
+func (s *Store) Inheritors(groupID string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	g, ok := s.groups[groupID]
+	if !ok {
+		return nil
+	}
+	// Proper ancestors of groupID (walk up the parent chain, depth-capped and
+	// cycle-guarded like every other ancestor walk here).
+	ancestors := make(map[string]bool, MaxTreeDepth)
+	for cur := g.ParentID; cur != "" && !ancestors[cur] && len(ancestors) < MaxTreeDepth; {
+		ancestors[cur] = true
+		p, ok := s.groups[cur]
+		if !ok {
+			break
+		}
+		cur = p.ParentID
+	}
+	out := make([]string, 0)
+	for user, byGroup := range s.memberships {
+		if _, direct := byGroup[groupID]; direct {
+			continue // a direct member of groupID, not an inheritor
+		}
+		if s.isExcludedLocked(user, groupID) {
+			continue
+		}
+		for gid := range byGroup {
+			if ancestors[gid] {
+				out = append(out, user)
+				break
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // Revoke removes user's ACCESS to the group — the primary revoke used by every
 // operator-facing removal. It drops the direct grant (if any) and, when the
 // user would still reach the group by downward inheritance afterwards, records

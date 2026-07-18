@@ -1029,8 +1029,106 @@ func TestUserDTOTimestampsRenderSecondPrecision(t *testing.T) {
 		User: m.ID, GroupID: "g1", Role: groups.RoleRead,
 		GrantedAt: "2026-07-07T08:12:00.900Z",
 	})
-	if dto.JoinedAt != "2026-07-07T08:12:00Z" {
-		t.Errorf("joinedAt = %q, want 2026-07-07T08:12:00Z", dto.JoinedAt)
+	if dto.JoinedAt == nil || *dto.JoinedAt != "2026-07-07T08:12:00Z" {
+		t.Errorf("joinedAt = %v, want 2026-07-07T08:12:00Z", dto.JoinedAt)
+	}
+	// An inherited-read member has no grant row, so joinedAt is null.
+	if inh := idx.inheritedMemberDTO(m.ID); inh.JoinedAt != nil {
+		t.Errorf("inherited joinedAt = %v, want nil", *inh.JoinedAt)
+	}
+}
+
+// TestConsoleTeamMembersIncludeInherited proves the team-member listing surfaces
+// inherited-read users (parent-group members) alongside direct members, rendered
+// as read with a null joinedAt, and that the team role batch PROMOTES such an
+// inherited user by creating a first-time direct grant — the whole point of the
+// inherited-inclusion change, driven end-to-end over HTTP.
+func TestConsoleTeamMembersIncludeInherited(t *testing.T) {
+	f := newConsoleAPIFixture(t)
+	gs := f.v.Groups()
+	// Tree: HQ > TeamA.
+	hq, err := gs.CreateGroup("HQ", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	teamA, err := gs.CreateGroup("TeamA", hq.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A direct write member of TeamA, plus an HQ member who only INHERITS read on it.
+	direct, err := f.members.Add("direct@x.com", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gs.Grant(direct.ID, teamA.ID, groups.RoleWrite, "actor"); err != nil {
+		t.Fatal(err)
+	}
+	boss, err := f.members.Add("boss@x.com", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gs.Grant(boss.ID, hq.ID, groups.RoleEdit, "actor"); err != nil {
+		t.Fatal(err)
+	}
+
+	type row struct {
+		UserID   string  `json:"userId"`
+		Account  string  `json:"account"`
+		Role     string  `json:"role"`
+		JoinedAt *string `json:"joinedAt"`
+	}
+	rowsByUser := func() (int, map[string]row) {
+		_, body := f.do(t, http.MethodGet, "/teams/"+teamA.ID+"/members", "")
+		var p struct {
+			Total int   `json:"total"`
+			Items []row `json:"items"`
+		}
+		if err := json.Unmarshal(body, &p); err != nil {
+			t.Fatalf("unmarshal members: %v (body=%s)", err, body)
+		}
+		byUser := make(map[string]row, len(p.Items))
+		for _, r := range p.Items {
+			byUser[r.UserID] = r
+		}
+		return p.Total, byUser
+	}
+
+	// TeamA lists BOTH the direct member and the inherited boss.
+	total, byUser := rowsByUser()
+	if total != 2 {
+		t.Fatalf("member total=%d, want 2 (%+v)", total, byUser)
+	}
+	if d := byUser[direct.ID]; d.Role != "write" || d.JoinedAt == nil {
+		t.Errorf("direct member = %+v, want role=write with a non-null joinedAt", d)
+	}
+	if b := byUser[boss.ID]; b.Account != "boss@x.com" || b.Role != "read" || b.JoinedAt != nil {
+		t.Errorf("inherited member = %+v, want account=boss@x.com role=read joinedAt=null", b)
+	}
+
+	// Promote the inherited boss to write on TeamA via the team role batch — a
+	// user with no direct row on TeamA must be accepted, not rejected as
+	// NOT_TEAM_MEMBER.
+	status, body := f.do(t, http.MethodPut, "/teams/"+teamA.ID+"/members/roles",
+		`{"updates":[{"userId":"`+boss.ID+`","role":"write"}]}`)
+	if status != http.StatusOK {
+		t.Fatalf("promote status=%d body=%s", status, body)
+	}
+	var res struct {
+		Succeeded []string `json:"succeeded"`
+		Failed    []any    `json:"failed"`
+	}
+	_ = json.Unmarshal(body, &res)
+	if len(res.Succeeded) != 1 || len(res.Failed) != 0 {
+		t.Fatalf("promote result = %s, want succeeded=[boss] failed=[]", body)
+	}
+
+	// boss is now a DIRECT member: role=write with a real joinedAt, still 2 rows.
+	total, byUser = rowsByUser()
+	if total != 2 {
+		t.Fatalf("post-promotion total=%d, want 2 (%+v)", total, byUser)
+	}
+	if b := byUser[boss.ID]; b.Role != "write" || b.JoinedAt == nil {
+		t.Errorf("after promotion boss = %+v, want role=write with a non-null joinedAt", b)
 	}
 }
 

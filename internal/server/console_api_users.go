@@ -293,8 +293,27 @@ func (idx *userIndex) memberDTO(m groups.Membership) memberDTO {
 		Role:    string(m.Role),
 		Status:  status,
 		// joinedAt == the membership's granted_at, truncated to the wire's
-		// second precision (storage is canonical millisecond RFC3339).
-		JoinedAt: wireTime(m.GrantedAt),
+		// second precision (storage is canonical millisecond RFC3339). A direct
+		// grant always carries a granted_at, so this is never null here.
+		JoinedAt: wireTimePtr(m.GrantedAt),
+	}
+}
+
+// inheritedMemberDTO builds a team-member row for a user who reaches the team
+// only by downward inheritance (no stored membership row): the role is always
+// read and joinedAt is null, since there is no grant to timestamp. Shown in the
+// team member table alongside direct members without distinction.
+func (idx *userIndex) inheritedMemberDTO(userID string) memberDTO {
+	account, status := "", "invite_pending"
+	if mem, ok := idx.memberByID[userID]; ok {
+		account, status = mem.Email, idx.status(mem)
+	}
+	return memberDTO{
+		UserID:   userID,
+		Account:  account,
+		Role:     string(groups.RoleRead),
+		Status:   status,
+		JoinedAt: nil,
 	}
 }
 

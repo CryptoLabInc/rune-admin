@@ -341,11 +341,15 @@ func (h *consoleAPI) renameTeam(w http.ResponseWriter, r *http.Request) {
 // ── team members (team-screen axis) ─────────────────────────────────────
 
 type memberDTO struct {
-	UserID   string `json:"userId"`
-	Account  string `json:"account"`
-	Role     string `json:"role"`
-	Status   string `json:"status"`
-	JoinedAt string `json:"joinedAt"`
+	UserID  string `json:"userId"`
+	Account string `json:"account"`
+	Role    string `json:"role"`
+	Status  string `json:"status"`
+	// JoinedAt is the membership's granted_at. It is a pointer because an
+	// inherited-read member has no stored row and thus no join timestamp, so
+	// that row serializes joinedAt as null; a direct member always carries a
+	// real value. (Same nullable-timestamp convention as userDTO's stamps.)
+	JoinedAt *string `json:"joinedAt"`
 }
 
 func (h *consoleAPI) teamMembers(w http.ResponseWriter, r *http.Request) {
@@ -363,11 +367,21 @@ func (h *consoleAPI) teamMembers(w http.ResponseWriter, r *http.Request) {
 	}
 	idx := h.newIndex()
 	items := make([]memberDTO, 0)
+	// Direct members: the stored (user, group, role) rows on this team.
 	for _, m := range h.v.Groups().ListMemberships() {
 		if m.GroupID != gid {
 			continue
 		}
 		items = append(items, idx.memberDTO(m))
+	}
+	// Inherited-read members: users who reach this team only by downward
+	// inheritance from an ancestor membership (no stored row on this team).
+	// Groups().Inheritors computes this in the store (one ancestor-chain walk)
+	// and already excludes anyone direct on this team, so the two sets never
+	// overlap. Listed alongside direct members without distinction (API design
+	// decision), rendered as read with a null joinedAt.
+	for _, uid := range h.v.Groups().Inheritors(gid) {
+		items = append(items, idx.inheritedMemberDTO(uid))
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Account < items[j].Account })
 	pageItems, total := pageSlice(items, page, size)
@@ -439,7 +453,8 @@ func (h *consoleAPI) teamRolesBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ref := r.PathValue("id")
-	if _, err := h.groupID(ref); err != nil {
+	gid, err := h.groupID(ref)
+	if err != nil {
 		writeGroupAPIErr(w, err)
 		return
 	}
@@ -460,7 +475,13 @@ func (h *consoleAPI) teamRolesBatch(w http.ResponseWriter, r *http.Request) {
 			res.fail(u.UserID, "USER_NOT_FOUND", "no such user")
 			continue
 		}
-		if _, exists, _ := h.v.Groups().DirectRole(u.UserID, ref); !exists {
+		// Editable when the user holds the team directly (role change) or inherits
+		// read on it (first-time grant that creates the direct row) — the same rule
+		// the user drawer's userRolesBatch applies, so a row the team member list
+		// now surfaces as inherited can actually be promoted here. Checked per
+		// user (cheap for a small batch, and always current) rather than
+		// snapshotting every user's access.
+		if _, exists, _ := h.v.Groups().DirectRole(u.UserID, ref); !exists && !h.v.Groups().InheritsRead(u.UserID, gid) {
 			res.fail(u.UserID, "NOT_TEAM_MEMBER", "user is not a member of this team")
 			continue
 		}
