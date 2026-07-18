@@ -102,6 +102,27 @@ func TestLoadConfigUnknownFieldsRejected(t *testing.T) {
 	}
 }
 
+func TestLoadConfigOrgAdminsRemovedGuidance(t *testing.T) {
+	// groups.org_admins shipped in v1.0.0-alpha and was then removed: the org
+	// admin is derived from the first-login console owner. A config still
+	// carrying the field must fail parsing (KnownFields) WITH migration
+	// guidance, not a bare "field not found".
+	body := minimalValidConfig(t) + `groups:
+  org_admins:
+    - admin@corp.com
+`
+	path := writeConfig(t, body)
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatal("config with org_admins accepted, want migration error")
+	}
+	for _, want := range []string{"org_admins is no longer supported", "first logs in"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %v, want it to contain %q", err, want)
+		}
+	}
+}
+
 func TestLoadConfigAPIKeyFileIndirection(t *testing.T) {
 	dir := t.TempDir()
 	keyFile := filepath.Join(dir, "runespace.key")

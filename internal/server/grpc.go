@@ -815,10 +815,11 @@ func (s *ConsoleGRPC) GetPermissions(ctx context.Context, req *pb.GetPermissions
 
 	// member_roles is the org-wide listing — organization admin only (plan
 	// §6-D8, D11): a non-admin request is denied with a reason, never a silent
-	// empty list. Admin power is judged at request time as (token email is a
-	// configured org admin) AND (that email has a registered member row): an
-	// unregistered admin email gets no listing. The member-row conjunct only
-	// applies when a registry is wired (always, on this branch).
+	// empty list. Admin power is judged at request time as (token email is the
+	// org admin — derived from the first-login console owner) AND (that email
+	// has a registered member row): an unregistered admin email gets no
+	// listing. The member-row conjunct only applies when a registry is wired
+	// (always, on this branch).
 	if req.GetIncludeMemberRoles() {
 		if !s.v.groups.IsOrgAdmin(user) {
 			statusStr = "denied"

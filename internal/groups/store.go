@@ -119,10 +119,13 @@ func (s *Store) validatePersonKey(key string) error {
 
 // SetOrgAdmins declares the organization admin(s) — the Owner identity
 // that alone may grant/revoke (plan §5 grant rule, §6-D8). The plan
-// mandates exactly one org admin; a set is accepted so the caller can
-// wire it from config, but semantically it is one. Emails are the person
-// key (plan §0, D2). In this M1 scope org admins are used for judgment
-// only (CanGrant); they are not group memberships.
+// mandates exactly one org admin: the console owner bound at first login,
+// replayed here by the daemon's OwnerRegistrar hook at boot and on the
+// claiming login (config-declared admins were removed). Each call
+// replaces the whole set, so the replay is idempotent; the variadic form
+// remains for tests. Emails are the person key (plan §0, D2). In this M1
+// scope org admins are used for judgment only (CanGrant); they are not
+// group memberships.
 func (s *Store) SetOrgAdmins(emails ...string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -216,3 +216,96 @@ func TestCallbackBindsFirstAdminAndBlocksOthers(t *testing.T) {
 		t.Errorf("owner re-login → %q, want no error", loc)
 	}
 }
+
+// --- owner → registrar (org-admin derivation) -------------------------------
+
+func TestOwnerRegistrarReplayedAtBootWhenClaimed(t *testing.T) {
+	// The owner claim is durable but feeds in-memory state (the org-admin
+	// set), so a restarted handler must replay the registrar immediately —
+	// a persisted cookie session or a seeded dev session may never run the
+	// login callback again.
+	dbc := openTestDB(t)
+	st, err := newOwnerStore(dbc, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.bindIfAbsent("alice@x.io", json.RawMessage(`{"email":"alice@x.io","name":"Alice"}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	var gotEmail, gotName string
+	calls := 0
+	_, _, err = NewHandler(Deps{
+		Port:       8787,
+		APIBaseURL: "http://127.0.0.1:0",
+		DB:         dbc,
+		OwnerRegistrar: func(email, displayName string) error {
+			calls++
+			gotEmail, gotName = email, displayName
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("registrar calls at boot = %d, want 1", calls)
+	}
+	if gotEmail != "alice@x.io" || gotName != "Alice" {
+		t.Errorf("registrar got (%q, %q), want (alice@x.io, Alice)", gotEmail, gotName)
+	}
+}
+
+func TestOwnerRegistrarNotReplayedWhenUnclaimed(t *testing.T) {
+	calls := 0
+	_, _, err := NewHandler(Deps{
+		Port:           8787,
+		APIBaseURL:     "http://127.0.0.1:0",
+		DB:             openTestDB(t),
+		OwnerRegistrar: func(string, string) error { calls++; return nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 0 {
+		t.Errorf("registrar calls on unclaimed console = %d, want 0", calls)
+	}
+}
+
+func TestOwnerRegistrarRunsOnClaimingLoginOnly(t *testing.T) {
+	ts := mockLoginCloud(t, map[string]string{
+		"tokA": "alice@x.io",
+		"tokB": "bob@x.io",
+	})
+	var emails []string
+	h, _, err := NewHandler(Deps{
+		Port:       8787,
+		APIBaseURL: ts.URL,
+		WebBaseURL: ts.URL,
+		DB:         openTestDB(t),
+		OwnerRegistrar: func(email, _ string) error {
+			emails = append(emails, email)
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The claiming login registers the owner (org-admin derivation included).
+	if rr := doLogin(t, h, "tokA"); rr.Code != http.StatusFound {
+		t.Fatalf("first login status = %d, want 302", rr.Code)
+	}
+	if len(emails) != 1 || emails[0] != "alice@x.io" {
+		t.Fatalf("registrar after first login = %v, want [alice@x.io]", emails)
+	}
+
+	// A refused login (different account) must NOT reach the registrar: the
+	// incumbent keeps admin authority.
+	if rr := doLogin(t, h, "tokB"); !strings.Contains(rr.Header().Get("Location"), "admin_locked") {
+		t.Fatalf("bob's login was not refused")
+	}
+	if len(emails) != 1 {
+		t.Errorf("registrar ran for a refused login: %v", emails)
+	}
+}

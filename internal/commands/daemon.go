@@ -102,9 +102,10 @@ func runDaemonStart(ctx context.Context) error {
 		TopKRead:  cfg.Groups.TopKRead,
 		TopKWrite: cfg.Groups.TopKWrite,
 	})
-	// Organization admin(s) — the Owner identity that gates grant/revoke and
-	// the org-wide member-roles listing (plan §5, §6-D8).
-	groupStore.SetOrgAdmins(cfg.Groups.OrgAdmins...)
+	// The organization admin (the Owner identity that gates the org-wide
+	// member-roles listing, plan §5, §6-D8) is NOT set here: it is derived
+	// from the first-login console owner via the OwnerRegistrar hook below —
+	// at boot when a claim already exists, and on the claiming login.
 	// Member deployments key group memberships by the immutable member UUID,
 	// not the email: inject the member-id contract before the store loads or
 	// serves, so an email-keyed membership row refuses to boot (greenfield-
@@ -248,10 +249,17 @@ func runDaemonStart(ctx context.Context) error {
 			Connector:     v, // *server.Console: dials the runespace + attaches the engine
 			Inviter:       selfInviter,
 			OwnerRegistrar: func(email, displayName string) error {
-				// The console owner is the single org admin; ensure they have a
-				// member registry row on first login (option A) so they appear in
-				// listings and can be granted memberships by UUID. Idempotent — a
-				// no-op on every later login. Zero group memberships are created.
+				// The console owner IS the single org admin (identity
+				// unification, dual-role §11): authority derives from the
+				// durable first-login claim, never from config. SetOrgAdmins
+				// replaces the whole set, and it must run before the member-row
+				// early return below so a boot replay restores admin authority
+				// even when the member row already exists.
+				groupStore.SetOrgAdmins(email)
+				// Ensure the owner has a member registry row (option A) so they
+				// appear in listings and can be granted memberships by UUID.
+				// Idempotent — a no-op on every later login. Zero group
+				// memberships are created.
 				if _, gerr := memberStore.GetByEmail(email); gerr == nil {
 					return nil
 				}

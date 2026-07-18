@@ -47,11 +47,13 @@ type Deps struct {
 	// Inviter issues a self-invite (registration string) for the connection
 	// test; nil omits the POST /api/v1/invite route.
 	Inviter InviteIssuer
-	// OwnerRegistrar, when set, runs after the console owner is bound on a
-	// successful login to ensure that owner (the single org admin) has a member
-	// registry row. It must be idempotent — it runs on every login — and create
-	// zero group memberships (option A: admin reach is granted, not implied). A
-	// returned error is logged and does not block login. nil skips registration.
+	// OwnerRegistrar, when set, runs whenever the console owner is established:
+	// once at handler construction when the console is already claimed (a
+	// restarted daemon must re-derive the owner's org-admin authority without
+	// waiting for a login), and after the owner is bound on a successful login.
+	// It must be idempotent — it runs on every login — and create zero group
+	// memberships (option A: admin reach is granted, not implied). A returned
+	// error is logged and does not block login. nil skips registration.
 	OwnerRegistrar func(email, displayName string) error
 	// RunespaceInsecure dials the engine plaintext (local dev).
 	RunespaceInsecure bool
@@ -109,6 +111,19 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 		inviter:       d.Inviter,
 		registerOwner: d.OwnerRegistrar,
 		log:           log,
+	}
+
+	// A claimed console re-establishes owner-derived state at boot: the claim
+	// is durable (SQLite) while the org-admin set it feeds is in-memory, so a
+	// restart must replay the registrar without waiting for the next login —
+	// which may never come (cookie sessions outlive the process, and seeded
+	// dev sessions skip the callback entirely).
+	if d.OwnerRegistrar != nil {
+		if o := owner.get(); o != nil {
+			if rerr := d.OwnerRegistrar(o.Email, nameFromMe(o.Me, o.Email)); rerr != nil {
+				log.Warn("console: owner registration at boot failed", "err", rerr.Error())
+			}
+		}
 	}
 
 	var dp *Dataplane

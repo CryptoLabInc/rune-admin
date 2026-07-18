@@ -132,17 +132,15 @@ type TokensConfig struct {
 // GroupsConfig configures the group RBAC store. File paths default to
 // groups.yml / memberships.yml next to tokens_file (same directory
 // convention as the token store); top_k caps default to plan §5 values
-// (read=10, write and above=50).
+// (read=10, write and above=50). The org admin is NOT configured here:
+// it is derived from the first-login console owner (a config-declared
+// org_admins entry was removed — LoadConfig turns a leftover line into
+// migration guidance).
 type GroupsConfig struct {
 	GroupsFile      string `yaml:"groups_file"`
 	MembershipsFile string `yaml:"memberships_file"`
 	TopKRead        int    `yaml:"topk_read"`
 	TopKWrite       int    `yaml:"topk_write"`
-	// OrgAdmins lists the organization admin (Owner) emails — the single
-	// org-wide identity that alone may grant/revoke and read the org-wide
-	// member-roles listing (plan §5, §6-D8). Semantically one; a list is
-	// accepted so the operator can rotate without editing code.
-	OrgAdmins []string `yaml:"org_admins"`
 }
 
 // GroupsFiles resolves the group store paths, applying the
@@ -260,6 +258,13 @@ func LoadConfig(override string) (*Config, error) {
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
+		// groups.org_admins was removed when admin identity moved to the
+		// first-login console owner; KnownFields turns a leftover line into a
+		// hard parse error, so translate it into migration guidance instead
+		// of a bare "field not found".
+		if strings.Contains(err.Error(), "field org_admins not found") {
+			return nil, fmt.Errorf("parse config %s: groups.org_admins is no longer supported — the org admin is the account that first logs in to the console; remove the org_admins entry from this file and restart: %w", path, err)
+		}
 		return nil, fmt.Errorf("parse config %s: %w (searched: %s)", path, err, strings.Join(searched, ", "))
 	}
 	cfg.Source = path
