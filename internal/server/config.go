@@ -197,6 +197,41 @@ func (c *Config) StoreDBPath() string {
 	return filepath.Join(c.Storage.DataDir, "runeconsole.db")
 }
 
+// removedKeys lists config keys the v1.0.0-alpha layout wrote that this
+// release no longer accepts, each paired with what took over its job. Strict
+// decoding rejects them with a bare "field X not found in type ...", which
+// tells an operator upgrading an alpha install nothing about the fix — and
+// removing the keys alone still leaves them one wall short, because
+// storage.data_dir is now required. LoadConfig therefore names both halves
+// at once, so an upgrade takes one edit rather than two blind restarts.
+var removedKeys = []struct{ field, replacedBy string }{
+	{"roles_file", "the built-in roles are seeded into the store database at boot"},
+	{"tokens_file", "tokens live in the store database"},
+	{"groups_file", "groups live in the store database"},
+	{"memberships_file", "memberships live in the store database"},
+	{"members_file", "the member registry lives in the store database"},
+	{"invites_file", "invites live in the store database"},
+	{"org_admins", "the org admin is the account that first logs in to the console"},
+}
+
+// removedKeyGuidance returns upgrade guidance when a strict-decode failure
+// names one or more removed keys, or "" when the failure is anything else.
+func removedKeyGuidance(decodeErr error) string {
+	msg := decodeErr.Error()
+	var found []string
+	for _, k := range removedKeys {
+		if strings.Contains(msg, "field "+k.field+" not found") {
+			found = append(found, k.field+" ("+k.replacedBy+")")
+		}
+	}
+	if len(found) == 0 {
+		return ""
+	}
+	return "this config predates the single-database layout. Remove " +
+		strings.Join(found, ", ") +
+		", then set storage.data_dir to the directory that should hold runeconsole.db"
+}
+
 // LoadConfig resolves the config path (caller override → ConfigLookupPaths)
 // and decodes the YAML at that location. The returned Config has
 // *_file indirection materialised into the corresponding inline fields
@@ -219,6 +254,9 @@ func LoadConfig(override string) (*Config, error) {
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
+		if guidance := removedKeyGuidance(err); guidance != "" {
+			return nil, fmt.Errorf("parse config %s: %s: %w", path, guidance, err)
+		}
 		return nil, fmt.Errorf("parse config %s: %w (searched: %s)", path, err, strings.Join(searched, ", "))
 	}
 	cfg.Source = path

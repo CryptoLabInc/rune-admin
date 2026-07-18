@@ -46,8 +46,7 @@ func DefaultLimits() Limits { return Limits{TopKRead: 10, TopKWrite: 50} }
 // judge hot paths — are pure map lookups with zero SQL; every mutator
 // commits its rows to the database before the maps change, so the cache can
 // never get ahead of durable state. A store with no sink attached (NewStore
-// alone) is a pure in-memory store — how unit tests and the one-time YAML
-// importer use it.
+// alone) is a pure in-memory store — how unit tests use it.
 type Store struct {
 	mu          sync.RWMutex
 	groups      map[string]*Group                 // keyed by group ID

@@ -49,5 +49,7 @@ storage:
   # the console session database (console-session.db) and the invite mail log
   # all default into it, and the daemon must be able to write here.
   data_dir: /opt/runeconsole/configs
-  # Optional — move only the store database elsewhere:
-  # db_path: /var/lib/runeconsole/runeconsole.db
+  # Optional — move only the store database elsewhere. Whatever you pick must
+  # already exist and be writable by the service user; the systemd unit only
+  # grants write access under /opt/runeconsole (ReadWritePaths).
+  # db_path: /opt/runeconsole/configs/runeconsole.db

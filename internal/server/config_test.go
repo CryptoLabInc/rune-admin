@@ -102,6 +102,44 @@ func TestLoadConfigUnknownFieldsRejected(t *testing.T) {
 	}
 }
 
+func TestLoadConfigRemovedKeysGuidance(t *testing.T) {
+	// The v1.0.0-alpha installer wrote roles_file and tokens_file into every
+	// config it generated, and that binary accepted groups.org_admins. Strict
+	// decoding refuses all three, but a bare "field not found" tells an
+	// upgrading operator nothing — and deleting the keys alone still leaves
+	// storage.data_dir missing, costing a second blind restart. The guidance
+	// must name both halves at once.
+	cases := map[string]struct {
+		body string
+		want []string
+	}{
+		"alpha store paths": {
+			body: strings.Replace(minimalValidConfig(t),
+				"  team_secret: inline-team-secret-deadbeef",
+				"  team_secret: inline-team-secret-deadbeef\n  roles_file: /o/roles.yml\n  tokens_file: /o/tokens.yml",
+				1),
+			want: []string{"roles_file", "tokens_file", "storage.data_dir"},
+		},
+		"org_admins": {
+			body: minimalValidConfig(t) + "groups:\n  org_admins:\n    - admin@corp.com\n",
+			want: []string{"org_admins", "first logs in"},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := LoadConfig(writeConfig(t, tc.body))
+			if err == nil {
+				t.Fatal("config with removed keys accepted, want guidance")
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("err = %v, want it to mention %q", err, want)
+				}
+			}
+		})
+	}
+}
+
 func TestLoadConfigAPIKeyFileIndirection(t *testing.T) {
 	dir := t.TempDir()
 	keyFile := filepath.Join(dir, "runespace.key")

@@ -51,8 +51,8 @@ func Open(path string) (*sql.DB, error) {
 const strictJournalSizeLimit = 4 << 20 // 4 MiB
 
 // OpenStrict opens the unified store database (runeconsole.db) with the
-// hardened posture the YAML-store migration requires on top of Open's
-// pragmas (busy_timeout, WAL, foreign_keys):
+// hardened posture that file — the sole home of every store's rows —
+// requires on top of Open's pragmas (busy_timeout, WAL, foreign_keys):
 //
 //   - _txlock=immediate (DSN parameter, not a pragma): database/sql has no
 //     per-transaction BEGIN IMMEDIATE API, so this is the only lever that
@@ -71,8 +71,8 @@ const strictJournalSizeLimit = 4 << 20 // 4 MiB
 // Unlike Open, an existing database file — or a -wal/-shm sidecar — whose
 // permissions grant any group/other access is refused outright instead of
 // silently chmod'ed: this file holds invite and token plaintext, so looser
-// perms mean a secret may already be exposed (fail closed, mirroring the
-// invites.yml load check). The 0600 pre-create for brand-new files is kept.
+// perms mean a secret may already be exposed, and fixing the mode would not
+// un-expose it. The 0600 pre-create for brand-new files is kept.
 //
 // Tests should pass a file under t.TempDir(); ":memory:"-style paths skip
 // all file handling but are unsafe with more than one pool connection.
