@@ -79,7 +79,7 @@ func registerMemberRoutes(mux *http.ServeMux, v *Console, ms *memberSubsystem) {
 		if body.Group != "" {
 			// Memberships are keyed by the immutable member UUID (m.ID), not
 			// the email — the id was just minted by Add above.
-			if _, gerr := v.Groups().Grant(m.ID, body.Group, grantRole, localAdminActor(body.Actor)); gerr != nil {
+			if _, gerr := v.Groups().Grant(m.ID, body.Group, grantRole, localAdminActor(adminActor(r, body.Actor))); gerr != nil {
 				// The transaction did not commit: undo the member.
 				_ = ms.members.Remove(m.ID)
 				ms.members.Flush()
@@ -93,9 +93,9 @@ func registerMemberRoutes(mux *http.ServeMux, v *Console, ms *memberSubsystem) {
 			// token/group stores already live with (see DELETE /tokens).
 			ms.members.Flush()
 			v.Groups().Flush()
-			auditAdmin(v, "admin.group.grant", body.Actor, fmt.Sprintf("%s @ %s (%s)", body.Email, body.Group, body.GroupRole))
+			auditAdmin(v, "admin.group.grant", adminActor(r, body.Actor), fmt.Sprintf("%s @ %s (%s)", body.Email, body.Group, body.GroupRole))
 		}
-		auditAdmin(v, "admin.member.create", body.Actor, body.Email)
+		auditAdmin(v, "admin.member.create", adminActor(r, body.Actor), body.Email)
 		writeJSON(w, http.StatusCreated, m)
 	})
 
@@ -168,7 +168,7 @@ func registerMemberRoutes(mux *http.ServeMux, v *Console, ms *memberSubsystem) {
 			// token above already kills the sealed value — an Unwrap after this
 			// point releases a token that no longer authenticates.
 		}
-		auditAdmin(v, "admin.member.update", actor, m.Email)
+		auditAdmin(v, "admin.member.update", adminActor(r, actor), m.Email)
 		writeJSON(w, http.StatusOK, m)
 	})
 
@@ -268,7 +268,7 @@ func registerMemberRoutes(mux *http.ServeMux, v *Console, ms *memberSubsystem) {
 			slog.Warn("invite mail delivery failed; invite stands, operator can resend",
 				"member_id", m.ID, "email", m.Email, "err", err)
 		}
-		auditAdmin(v, "admin.invite.issue", body.Actor, m.Email)
+		auditAdmin(v, "admin.invite.issue", adminActor(r, body.Actor), m.Email)
 		writeJSON(w, http.StatusCreated, bundle)
 	})
 }

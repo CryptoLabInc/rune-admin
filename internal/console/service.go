@@ -170,9 +170,13 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 		mux.Handle("/api/v1/", s.origin(s.requireSession(http.HandlerFunc(apiNotImplemented))))
 	}
 
-	// Admin operations (origin + cookie gated), mounted under /admin/.
+	// Admin operations (origin + cookie gated), mounted under /admin/. withActor
+	// tags the request with the authenticated session principal so admin
+	// mutations audit (and grant as) the real operator instead of a
+	// client-supplied actor field — this surface is the highest-power one, so its
+	// audit trail must not be forgeable. Matches the /api/v1 domain mount above.
 	if d.AdminHandler != nil {
-		mux.Handle("/admin/", s.origin(s.requireSession(http.StripPrefix("/admin", d.AdminHandler))))
+		mux.Handle("/admin/", s.origin(s.requireSession(s.withActor(http.StripPrefix("/admin", d.AdminHandler)))))
 	}
 
 	return mux, dp, nil

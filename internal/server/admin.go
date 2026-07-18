@@ -67,7 +67,7 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		auditAdmin(v, "admin.token.issue", body.Actor, body.User)
+		auditAdmin(v, "admin.token.issue", adminActor(r, body.Actor), body.User)
 		writeJSON(w, http.StatusCreated, tokenJSON(tok))
 	})
 
@@ -78,7 +78,7 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		auditAdmin(v, "admin.token.rotate", r.URL.Query().Get("actor"), user)
+		auditAdmin(v, "admin.token.rotate", adminActor(r, r.URL.Query().Get("actor")), user)
 		writeJSON(w, http.StatusOK, tokenJSON(tok))
 	})
 
@@ -94,7 +94,7 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 				"user": t.User, "token": t.Token, "role": t.Role,
 			})
 		}
-		auditAdmin(v, "admin.token.rotate_all", r.URL.Query().Get("actor"), fmt.Sprintf("%d tokens", len(toks)))
+		auditAdmin(v, "admin.token.rotate_all", adminActor(r, r.URL.Query().Get("actor")), fmt.Sprintf("%d tokens", len(toks)))
 		writeJSON(w, http.StatusOK, map[string]any{
 			"rotated": len(toks),
 			"tokens":  entries,
@@ -123,7 +123,7 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 				key = user
 			}
 			removed, rerr := v.Groups().RemoveUser(key)
-			auditAdmin(v, "admin.token.revoke", r.URL.Query().Get("actor"), user)
+			auditAdmin(v, "admin.token.revoke", adminActor(r, r.URL.Query().Get("actor")), user)
 			msg := fmt.Sprintf("Revoked token for '%s'", user)
 			if rerr != nil {
 				// The token is already gone; the membership cascade did not
@@ -163,7 +163,7 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		auditAdmin(v, "admin.role.create", body.Actor, role.Name)
+		auditAdmin(v, "admin.role.create", adminActor(r, body.Actor), role.Name)
 		writeJSON(w, http.StatusCreated, roleJSON(role))
 	})
 
@@ -212,7 +212,7 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 		if av, ok := raw["actor"]; ok {
 			_ = json.Unmarshal(av, &actor)
 		}
-		auditAdmin(v, "admin.role.update", actor, name)
+		auditAdmin(v, "admin.role.update", adminActor(r, actor), name)
 		writeJSON(w, http.StatusOK, roleJSON(role))
 	})
 
@@ -222,7 +222,7 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		auditAdmin(v, "admin.role.delete", r.URL.Query().Get("actor"), name)
+		auditAdmin(v, "admin.role.delete", adminActor(r, r.URL.Query().Get("actor")), name)
 		writeJSON(w, http.StatusOK, map[string]string{
 			"message": fmt.Sprintf("Deleted role '%s'", name),
 		})
@@ -262,7 +262,7 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 			writeGroupError(w, err)
 			return
 		}
-		auditAdmin(v, "admin.group.create", body.Actor, g.Name)
+		auditAdmin(v, "admin.group.create", adminActor(r, body.Actor), g.Name)
 		writeJSON(w, http.StatusCreated, g)
 	})
 
@@ -284,12 +284,12 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 			writeGroupError(w, err)
 			return
 		}
-		auditAdmin(v, "admin.group.rename", body.Actor, fmt.Sprintf("%s → %s", r.PathValue("ref"), g.Name))
+		auditAdmin(v, "admin.group.rename", adminActor(r, body.Actor), fmt.Sprintf("%s → %s", r.PathValue("ref"), g.Name))
 		writeJSON(w, http.StatusOK, g)
 	})
 
 	mux.HandleFunc("DELETE /groups/{ref}", func(w http.ResponseWriter, r *http.Request) {
-		actor := r.URL.Query().Get("actor")
+		actor := adminActor(r, r.URL.Query().Get("actor"))
 		g, err := v.Groups().DeleteGroup(r.PathValue("ref"), v.TagStats())
 		if err != nil {
 			writeGroupError(w, err)
@@ -337,13 +337,13 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 				fmt.Sprintf("no member registered for email '%s': grants require a registered member", body.User))
 			return
 		}
-		m, err := v.Groups().Grant(key, r.PathValue("ref"), role, localAdminActor(body.Actor))
+		m, err := v.Groups().Grant(key, r.PathValue("ref"), role, localAdminActor(adminActor(r, body.Actor)))
 		if err != nil {
 			writeGroupError(w, err)
 			return
 		}
 		// TODO(member-invite): auto-trigger invite after register+grant completes (spec §11.1 #13/#18)
-		auditAdmin(v, "admin.group.grant", body.Actor, fmt.Sprintf("%s @ %s (%s)", body.User, r.PathValue("ref"), body.Role))
+		auditAdmin(v, "admin.group.grant", adminActor(r, body.Actor), fmt.Sprintf("%s @ %s (%s)", body.User, r.PathValue("ref"), body.Role))
 		writeJSON(w, http.StatusCreated, m)
 	})
 
@@ -378,7 +378,7 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 				fmt.Sprintf("No membership for user '%s' on group '%s'", body.User, r.PathValue("ref")))
 			return
 		}
-		auditAdmin(v, "admin.group.revoke", body.Actor, fmt.Sprintf("%s @ %s", body.User, r.PathValue("ref")))
+		auditAdmin(v, "admin.group.revoke", adminActor(r, body.Actor), fmt.Sprintf("%s @ %s", body.User, r.PathValue("ref")))
 		writeJSON(w, http.StatusOK, map[string]string{
 			"message": fmt.Sprintf("Revoked membership of '%s' on group '%s'", body.User, r.PathValue("ref")),
 		})
@@ -414,9 +414,24 @@ func memberPersonKey(ms *memberSubsystem, email string) (string, bool) {
 	return m.ID, true
 }
 
-// localAdminActor builds the audit identity for admin-socket mutations
-// (plan §6-D8: socket access is not an identity, so mutations record the
-// operator-declared --actor value under the "local-admin:" prefix).
+// adminActor resolves the actor recorded for an /admin mutation. The console
+// tags every request on this surface with the authenticated session principal
+// (withActor middleware), which is authoritative: a client-supplied actor field
+// or ?actor= query can no longer forge the audited (or grant-recorded) identity
+// on the highest-power surface. The declared value is honored only as a fallback
+// for a transport that carries no session principal (there is none today; the
+// seam is kept so a future non-cookie admin transport still records something).
+func adminActor(r *http.Request, declared string) string {
+	if a := actorFromContext(r.Context()); a != "" {
+		return a
+	}
+	return declared
+}
+
+// localAdminActor builds the audit identity for admin mutations under the
+// "local-admin:" prefix. The actor is the session principal resolved by
+// adminActor (falling back to the operator-declared value only when no session
+// principal is present).
 func localAdminActor(actor string) string {
 	if actor == "" {
 		actor = "unknown"
