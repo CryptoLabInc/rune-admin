@@ -69,7 +69,6 @@ func runDaemonStart(ctx context.Context) error {
 	if err := store.LoadFromDB(storeDB); err != nil {
 		return fmt.Errorf("daemon: load tokens: %w", err)
 	}
-	defer store.Shutdown()
 
 	// Group RBAC store (plan §6-D2): loads from and writes through the
 	// unified store database; the judge stays pure in-memory reads. A cyclic
@@ -92,7 +91,6 @@ func runDaemonStart(ctx context.Context) error {
 	if err := groupStore.LoadFromDB(storeDB); err != nil {
 		return fmt.Errorf("daemon: load groups: %w", err)
 	}
-	defer groupStore.Shutdown()
 
 	// Member registry (design-decisions §6.6/§8.3): loads from and writes
 	// through the unified store database.
@@ -100,7 +98,6 @@ func runDaemonStart(ctx context.Context) error {
 	if err := memberStore.LoadFromDB(storeDB); err != nil {
 		return fmt.Errorf("daemon: load members: %w", err)
 	}
-	defer memberStore.Shutdown()
 	// One-time invite wrap store (design-decisions §8.3): loads from and
 	// writes through the unified store database, sweeping aged-out pending
 	// codes at boot.
@@ -108,7 +105,6 @@ func runDaemonStart(ctx context.Context) error {
 	if err := inviteStore.LoadFromDB(storeDB); err != nil {
 		return fmt.Errorf("daemon: load invites: %w", err)
 	}
-	defer inviteStore.Shutdown()
 	mailer := server.NewLogMailer(cfg.MailLogFile())
 	// The invite endpoint is what a remote rune-mcp dials, so it must be a
 	// reachable address, not a loopback/bind host. When unset (or "auto") the

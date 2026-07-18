@@ -702,10 +702,10 @@ type lastUsedEvent struct {
 // best-effort telemetry).
 //
 // Lifecycle: started by LoadFromDB and deliberately abandoned at process
-// exit rather than flushed — Shutdown stays a no-op so daemon shutdown never
-// blocks on telemetry, and a stamp lost in the final instant merely means a
-// restart shows the previous persisted value. An UPDATE racing the daemon's
-// deferred database Close at exit at worst logs one error.
+// exit rather than flushed — there is no shutdown hook, so daemon shutdown
+// never blocks on telemetry, and a stamp lost in the final instant merely
+// means a restart shows the previous persisted value. An UPDATE racing the
+// daemon's deferred database Close at exit at worst logs one error.
 func (s *Store) runLastUsedWriter(queue <-chan lastUsedEvent) {
 	lastPersisted := make(map[string]time.Time)
 	for ev := range queue {
@@ -804,21 +804,6 @@ func nullIfEmpty(v string) any {
 	}
 	return v
 }
-
-// Shutdown does nothing.
-//
-// Deprecated: persistence is write-through to SQLite (every mutation is
-// committed before it returns) and the async last_used writer is abandoned
-// at process exit by design; kept so call sites compile, removed in a
-// follow-up release.
-func (s *Store) Shutdown() {}
-
-// Flush does nothing.
-//
-// Deprecated: persistence is write-through to SQLite (every mutation is
-// committed before it returns); kept so call sites compile, removed in a
-// follow-up release.
-func (s *Store) Flush() {}
 
 func newTokenString() (string, error) {
 	b := make([]byte, 16)

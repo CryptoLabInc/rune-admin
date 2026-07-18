@@ -266,7 +266,7 @@ func TestConcurrentUnwrapAllConsumedSurviveReopen(t *testing.T) {
 	}
 
 	// Reload exactly as the database stands the instant every Unwrap
-	// returned — no Flush/Shutdown — and confirm no invite reverted to pending.
+	// returned, and confirm no invite reverted to pending.
 	s2 := newDBStore(t, openTestDB(t, path))
 	for i, h := range handles {
 		if _, _, err := s2.Unwrap(h); !errors.As(err, new(ErrInviteConsumed)) {

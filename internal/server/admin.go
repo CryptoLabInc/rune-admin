@@ -113,7 +113,8 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 		}
 		if revoked {
 			// Token gone = identity gone: drop group memberships in the
-			// same flow so the two YAML stores cannot drift (plan §6-D2).
+			// same flow so the token and group stores cannot drift
+			// (plan §6-D2).
 			// With a member registry wired, memberships are keyed by the
 			// member UUID — resolve the token email to it; a user with no
 			// member row keeps the raw key, which holds no memberships on

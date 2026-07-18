@@ -527,20 +527,6 @@ func expectOneRow(res sql.Result, ref string) error {
 	return expectRows(res, 1, ref)
 }
 
-// Shutdown does nothing.
-//
-// Deprecated: persistence is write-through to SQLite (every mutation is
-// committed before it returns); kept so call sites compile, removed in a
-// follow-up release.
-func (s *Store) Shutdown() {}
-
-// Flush does nothing.
-//
-// Deprecated: persistence is write-through to SQLite (every mutation is
-// committed before it returns); kept so call sites compile, removed in a
-// follow-up release.
-func (s *Store) Flush() {}
-
 // randHex returns 16 random bytes as a 32-char lowercase hex string.
 func randHex() (string, error) {
 	b := make([]byte, 16)

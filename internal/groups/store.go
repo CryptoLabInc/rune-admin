@@ -1033,20 +1033,6 @@ func expectOneRow(res sql.Result, ref string) error {
 	return expectRows(res, 1, ref)
 }
 
-// Shutdown does nothing.
-//
-// Deprecated: persistence is write-through to SQLite (every mutation is
-// committed before it returns); kept so call sites compile, removed in a
-// follow-up release.
-func (s *Store) Shutdown() {}
-
-// Flush does nothing.
-//
-// Deprecated: persistence is write-through to SQLite (every mutation is
-// committed before it returns); kept so call sites compile, removed in a
-// follow-up release.
-func (s *Store) Flush() {}
-
 // newGroupID returns a canonical UUIDv4 string from crypto/rand.
 // Hand-rolled to keep the console on stdlib-only direct dependencies.
 func newGroupID() (string, error) {

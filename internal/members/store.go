@@ -447,20 +447,6 @@ func nullIfEmpty(v string) any {
 	return v
 }
 
-// Shutdown does nothing.
-//
-// Deprecated: persistence is write-through to SQLite (every mutation is
-// committed before it returns); kept so call sites compile, removed in a
-// follow-up release.
-func (s *Store) Shutdown() {}
-
-// Flush does nothing.
-//
-// Deprecated: persistence is write-through to SQLite (every mutation is
-// committed before it returns); kept so call sites compile, removed in a
-// follow-up release.
-func (s *Store) Flush() {}
-
 // newMemberID returns a canonical UUIDv4 string from crypto/rand. Hand-rolled
 // to keep the console on stdlib-only direct dependencies (same as groups).
 func newMemberID() (string, error) {

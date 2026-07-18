@@ -974,7 +974,6 @@ func (h *consoleAPI) issueCode(r *http.Request, m *members.Member) error {
 		}
 		tokenValue = t.Token
 	}
-	h.v.Tokens().Flush()
 
 	bundle, err := h.ms.invites.Issue(invites.IssueParams{
 		MemberID:     m.ID,
@@ -1015,9 +1014,6 @@ func (h *consoleAPI) issueCode(r *http.Request, m *members.Member) error {
 			_, _ = h.v.Tokens().RevokeToken(m.Email)
 		}
 		return fmt.Errorf("advance member status: %w", terr)
-	}
-	if !wasOnline {
-		h.ms.members.Flush()
 	}
 	if err := h.ms.mailer.SendInvite(r.Context(), m.Email, *bundle, h.ms.conn); err != nil {
 		_ = h.ms.invites.RevokePending(bundle.Handle)

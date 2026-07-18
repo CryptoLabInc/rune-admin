@@ -662,7 +662,7 @@ func TestAdminInviteTokenDurableBeforeBundleReturns(t *testing.T) {
 	}
 
 	// Read the tokens persistence exactly as the database stands when the
-	// bundle escaped — no Flush/Shutdown here.
+	// bundle escaped.
 	found := false
 	for _, tk := range reloadTokensStore(t, dbPath).ListTokens() {
 		if tk.User == "durable@corp.com" {
