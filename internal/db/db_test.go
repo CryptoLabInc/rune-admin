@@ -63,6 +63,34 @@ func TestOpenStrictCreatesFileOwnerOnly(t *testing.T) {
 	}
 }
 
+// TestOpenNamesThePathWhenItCannotCreate pins the error text, not just the
+// failure. Both openers pre-create the file to fix its mode before the driver
+// sees it; when that fails they used to fall through and let the driver report
+// a bare "unable to open database file", which names neither the path nor the
+// reason. A missing parent directory stands in for the whole class (wrong
+// ownership, read-only mount, full disk) — the operator needs the path back.
+func TestOpenNamesThePathWhenItCannotCreate(t *testing.T) {
+	for name, open := range map[string]func(string) (*sql.DB, error){
+		"Open":       Open,
+		"OpenStrict": OpenStrict,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "absent-dir", "store.db")
+			database, err := open(path)
+			if err == nil {
+				_ = database.Close()
+				t.Fatal("open under a missing directory succeeded, want an error")
+			}
+			if !strings.Contains(err.Error(), path) {
+				t.Errorf("err = %v, want it to name %q", err, path)
+			}
+			if !strings.Contains(err.Error(), "no such file or directory") {
+				t.Errorf("err = %v, want it to carry the underlying cause", err)
+			}
+		})
+	}
+}
+
 func TestOpenStrictRefusesLoosePermissions(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "loose.db")
 	if err := os.WriteFile(path, nil, 0o644); err != nil {

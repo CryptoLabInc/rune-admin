@@ -21,10 +21,15 @@ func Open(path string) (*sql.DB, error) {
 	onDisk := !strings.Contains(path, ":memory:")
 	if onDisk {
 		// Pre-create with owner-only perms so a brand-new file is never briefly
-		// world-readable.
-		if f, err := os.OpenFile(path, os.O_CREATE, 0o600); err == nil {
-			_ = f.Close()
+		// world-readable. A failure here is reported rather than swallowed: the
+		// driver would fail too, but only as "unable to open database file",
+		// which names neither the path nor the reason (missing directory, wrong
+		// ownership, read-only mount).
+		f, err := os.OpenFile(path, os.O_CREATE, 0o600)
+		if err != nil {
+			return nil, fmt.Errorf("db: create %s: %w", path, err)
 		}
+		_ = f.Close()
 	}
 	dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)", path)
 	database, err := sql.Open("sqlite", dsn)
@@ -92,10 +97,15 @@ func OpenStrict(path string) (*sql.DB, error) {
 			}
 		}
 		// Pre-create with owner-only perms so a brand-new file is never briefly
-		// world-readable (sidecars inherit their permissions from it).
-		if f, err := os.OpenFile(path, os.O_CREATE, 0o600); err == nil {
-			_ = f.Close()
+		// world-readable (sidecars inherit their permissions from it). A failure
+		// here is reported rather than swallowed: the driver would fail too, but
+		// only as "unable to open database file", which names neither the path
+		// nor the reason (missing directory, wrong ownership, read-only mount).
+		f, err := os.OpenFile(path, os.O_CREATE, 0o600)
+		if err != nil {
+			return nil, fmt.Errorf("db: create %s: %w", path, err)
 		}
+		_ = f.Close()
 	}
 	dsn := fmt.Sprintf("file:%s?_txlock=immediate"+
 		"&_pragma=busy_timeout(5000)"+
