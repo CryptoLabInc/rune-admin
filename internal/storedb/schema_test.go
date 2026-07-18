@@ -53,7 +53,7 @@ func TestEnsureSchemaIdempotent(t *testing.T) {
 
 	for _, table := range []string{
 		"schema_migrations", "members", "invites",
-		"roles", "tokens", "groups", "memberships",
+		"roles", "tokens", "groups", "memberships", "read_exclusions",
 	} {
 		var name string
 		err := database.QueryRow(
@@ -130,6 +130,41 @@ func TestEnsureSchemaStampsBaselineOnce(t *testing.T) {
 	}
 	if version2 != version || description2 != description {
 		t.Errorf("baseline changed: (%d, %q) -> (%d, %q)", version, description, version2, description2)
+	}
+}
+
+// TestEnsureSchemaSkipsBaselineOnNonEmptyLedger pins the reason the stamp is
+// guarded on the ledger being empty rather than on its own version. A
+// baseline records which version an install STARTED at, so the moment the
+// ledger carries anything the stamp must add nothing. The state that makes
+// this matter is a future SchemaVersion bump meeting a database that started
+// earlier: guarding on version would insert a fresh "baseline" for the NEW
+// version onto an un-migrated database, which is exactly the lie the
+// migration runner this row exists to serve would act on.
+func TestEnsureSchemaSkipsBaselineOnNonEmptyLedger(t *testing.T) {
+	database := ensureTestSchema(t)
+
+	// Stand in for a ledger written by some other version of this package:
+	// clear the baseline this boot wrote and record a different version.
+	if _, err := database.Exec(`DELETE FROM schema_migrations`); err != nil {
+		t.Fatal(err)
+	}
+	const otherVersion = SchemaVersion + 1
+	if _, err := database.Exec(
+		`INSERT INTO schema_migrations (version, applied_at, description) VALUES (?, ?, ?)`,
+		otherVersion, "2030-01-01T00:00:00.000Z", "some later migration"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := EnsureSchema(database); err != nil {
+		t.Fatalf("EnsureSchema over an existing ledger: %v", err)
+	}
+
+	if n := countRows(t, database, "schema_migrations"); n != 1 {
+		t.Fatalf("schema_migrations rows = %d, want 1 — a non-empty ledger must not gain a baseline", n)
+	}
+	if version, _, _ := baselineRow(t, database); version != otherVersion {
+		t.Errorf("ledger version = %d, want the pre-existing %d", version, otherVersion)
 	}
 }
 

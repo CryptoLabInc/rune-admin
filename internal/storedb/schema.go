@@ -33,10 +33,13 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   description TEXT NOT NULL
 );
 -- EnsureSchema stamps the one baseline row (SchemaVersion,
--- schemaBaselineDescription) here right after installing this DDL, so a fresh
--- install starts from a RECORDED version: the first real migration runner
--- reads a baseline instead of an empty ledger it would have to guess about.
--- Nothing else writes this table — there is no migration to apply yet.
+-- schemaBaselineDescription) here right after installing this DDL, but ONLY
+-- while this table is empty: the baseline records which version an install
+-- STARTED at, so a ledger that already carries a row -- a baseline, or later
+-- an applied migration -- must never gain a second one. A fresh install
+-- therefore starts from a RECORDED version and the first real migration
+-- runner reads a baseline instead of an empty ledger it would have to guess
+-- about. Nothing else writes this table — there is no migration to apply yet.
 
 -- members (internal/members/types.go). CreatedAt byte-exact round-trip is
 -- test-pinned (store_test.go) => TEXT, never epoch. disabled_from is NULL
@@ -218,12 +221,20 @@ CREATE TABLE IF NOT EXISTS read_exclusions (
 CREATE INDEX IF NOT EXISTS idx_read_exclusions_group ON read_exclusions (group_id);
 `
 
-// EnsureSchema installs schema v1 into database and records the SchemaVersion
-// baseline in schema_migrations. Every DDL statement uses IF NOT EXISTS and
-// the stamp is ON CONFLICT DO NOTHING, so calling it on an already-initialized
-// database is a no-op: the baseline keeps the applied_at of the boot that
-// first wrote it. The two steps need no shared transaction for the same
-// reason — a crash between them leaves the next boot to finish the job.
+// EnsureSchema installs schema v1 into database and, while the migration
+// ledger is still empty, records the SchemaVersion baseline in
+// schema_migrations. Every DDL statement uses IF NOT EXISTS, and the stamp is
+// guarded on the ledger being EMPTY rather than on its own version — that
+// distinction is the whole point. A baseline states which version an install
+// STARTED at, so once any row exists (a baseline, or later an applied
+// migration) another must never be added. Guarding on version instead would,
+// after a SchemaVersion bump, stamp a brand-new "baseline" onto a database
+// that started at v1 and still needed migrating, telling the migration runner
+// this row exists to serve that it had nothing to do.
+//
+// Re-running is harmless but not free: the DDL and the guarded INSERT both
+// execute, so the database must be writable. The two steps share no
+// transaction — a crash between them leaves the next boot to finish the job.
 func EnsureSchema(database *sql.DB) error {
 	if _, err := database.Exec(SchemaV1); err != nil {
 		return fmt.Errorf("storedb: ensure schema: %w", err)
@@ -232,8 +243,8 @@ func EnsureSchema(database *sql.DB) error {
 	// version an install started at; without it a fresh database would hand
 	// that runner an empty ledger, indistinguishable from "version unknown".
 	if _, err := database.Exec(
-		`INSERT INTO schema_migrations (version, applied_at, description) VALUES (?, ?, ?)
-		 ON CONFLICT(version) DO NOTHING`,
+		`INSERT INTO schema_migrations (version, applied_at, description)
+		 SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM schema_migrations)`,
 		SchemaVersion, FormatTime(time.Now()), schemaBaselineDescription); err != nil {
 		return fmt.Errorf("storedb: stamp schema baseline: %w", err)
 	}
