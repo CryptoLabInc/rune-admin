@@ -69,6 +69,22 @@ func TestAdminListRolesIncludesDefaults(t *testing.T) {
 	}
 }
 
+// TestAdminActorPrefersSessionPrincipal pins the anti-forgery contract on the
+// /admin surface: withActor tags each request with the authenticated session
+// principal, and adminActor must prefer it over any client-supplied actor so the
+// audit/grant identity cannot be forged. The declared value is used only as a
+// fallback when no session principal is present.
+func TestAdminActorPrefersSessionPrincipal(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/tokens", nil)
+	withPrincipal := req.WithContext(WithActor(req.Context(), "owner@corp.com"))
+	if got := adminActor(withPrincipal, "attacker@evil.com"); got != "owner@corp.com" {
+		t.Errorf("adminActor with a session principal = %q, want owner@corp.com (the declared value must not win)", got)
+	}
+	if got := adminActor(req, "cli-operator"); got != "cli-operator" {
+		t.Errorf("adminActor without a session principal = %q, want the declared fallback cli-operator", got)
+	}
+}
+
 func TestAdminIssueListRevoke(t *testing.T) {
 	ts, _ := adminTestServer(t)
 
