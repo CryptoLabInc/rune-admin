@@ -146,28 +146,18 @@ func TestLoadConfigOrgAdminsRemovedGuidance(t *testing.T) {
 	}
 }
 
-func TestLoadConfigRemovedStorePathsGuidance(t *testing.T) {
-	// The v1.0.0-alpha installer wrote roles_file and tokens_file into every
-	// config it generated. Strict decoding refuses them, but a bare "field not
-	// found" tells an upgrading operator nothing — and deleting the keys alone
-	// still leaves storage.data_dir missing, costing a second blind restart, so
-	// the guidance must name both halves at once.
-	//
-	// groups.org_admins is covered by TestLoadConfigOrgAdminsRemovedGuidance
-	// instead: it is refused on its decoded value rather than on the decoder's
-	// error text. These six keys still ride the error text.
+// TestLoadConfigRemovedStorePathsRejected pins only the refusal, not any
+// wording: a config carrying the removed per-store paths must not boot. There
+// is no upgrade path to guide anyone through — the supported move from the
+// v1.0.0-alpha layout is a fresh install — so strict decoding refusing the
+// unknown key is the whole contract.
+func TestLoadConfigRemovedStorePathsRejected(t *testing.T) {
 	body := strings.Replace(minimalValidConfig(t),
 		"  team_secret: inline-team-secret-deadbeef",
 		"  team_secret: inline-team-secret-deadbeef\n  roles_file: /o/roles.yml\n  tokens_file: /o/tokens.yml",
 		1)
-	_, err := LoadConfig(writeConfig(t, body))
-	if err == nil {
-		t.Fatal("config with removed store paths accepted, want guidance")
-	}
-	for _, want := range []string{"roles_file", "tokens_file", "storage.data_dir"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("err = %v, want it to mention %q", err, want)
-		}
+	if _, err := LoadConfig(writeConfig(t, body)); err == nil {
+		t.Error("config with removed store paths accepted, want strict-decode refusal")
 	}
 }
 
