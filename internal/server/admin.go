@@ -229,11 +229,13 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 	})
 
 	// ── group RBAC routes ──────────────────────────────────────────────
-	// Plan §6-D8 layer 1: the local admin socket is an operator surface —
-	// full power plus audit. The §5 grant judge (groups.CanGrant) is NOT
-	// enforced here because a socket connection carries no identity; every
-	// mutation records "local-admin:<actor>" instead. The judge is
-	// enforced where authenticated identities exist (M2b RPC layer).
+	// Plan §6-D8 layer 1: the /admin surface is an operator surface — full power
+	// plus audit. The §5 grant judge (groups.CanGrant) is NOT enforced here
+	// because this surface is reached only by the authenticated console owner
+	// (cookie-gated, loopback; withActor tags the request), so the session itself
+	// is the grant authority; every mutation records that session principal as
+	// "local-admin:<actor>" (resolved by adminActor). The judge is enforced where
+	// a non-owner identity could act (the authenticated RPC layer).
 
 	mux.HandleFunc("GET /groups", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"groups": v.Groups().ListGroups()})
@@ -368,17 +370,24 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 				fmt.Sprintf("no member registered for email '%s': grants require a registered member", body.User))
 			return
 		}
-		ok, err := v.Groups().Revoke(key, r.PathValue("ref"))
+		// Revoking a membership must cut the user's access to the group, not just
+		// drop the direct row: if they also inherit read from an ancestor, that
+		// inherited read is cut in the same transaction — otherwise the group comes
+		// straight back as inherited read with its memory still readable (the same
+		// fix carried on the console team/drawer removal axes; plain Revoke here
+		// left this operator path open).
+		actor := adminActor(r, body.Actor)
+		revoked, excluded, err := v.Groups().RevokeWithReadExclusion(key, r.PathValue("ref"), localAdminActor(actor))
 		if err != nil {
 			writeGroupError(w, err)
 			return
 		}
-		if !ok {
+		if !revoked && !excluded {
 			writeError(w, http.StatusNotFound,
 				fmt.Sprintf("No membership for user '%s' on group '%s'", body.User, r.PathValue("ref")))
 			return
 		}
-		auditAdmin(v, "admin.group.revoke", adminActor(r, body.Actor), fmt.Sprintf("%s @ %s", body.User, r.PathValue("ref")))
+		auditAdmin(v, "admin.group.revoke", actor, fmt.Sprintf("%s @ %s", body.User, r.PathValue("ref")))
 		writeJSON(w, http.StatusOK, map[string]string{
 			"message": fmt.Sprintf("Revoked membership of '%s' on group '%s'", body.User, r.PathValue("ref")),
 		})

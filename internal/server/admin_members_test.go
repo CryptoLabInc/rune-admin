@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -264,6 +265,55 @@ func (emptyTagStats) GetTagStats([]string) (map[string]groups.TagStat, error) {
 // TestAdminAuditTargets: every admin mutation must record WHAT it acted on
 // (AuditEntry.target) — the member's email, the group (delete also keeps the
 // immutable id since names can be reused), and the "user @ group" membership.
+// TestAdminGroupRevokeCutsInheritedRead pins that POST /groups/{ref}/revoke cuts
+// the member's ACCESS to the group, not just the stored direct row: a member who
+// also inherits the group from an ancestor keeps inherited read otherwise (the
+// hole d0f451a fixed on the console removal axes; this operator path had stayed
+// on plain Revoke). Fails against the old plain-Revoke behavior.
+func TestAdminGroupRevokeCutsInheritedRead(t *testing.T) {
+	v := newAdminTestConsole(t)
+	gs := v.Groups()
+	parent, err := gs.CreateGroup("Div", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := gs.CreateGroup("Team", parent.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts, _ := memberAdminServer(t, v)
+	uid := createMember(t, ts, "lead@corp.com")
+	// Direct member of the child (a row to remove) AND of the ancestor (so the
+	// child is also reached by inheritance).
+	if _, err := gs.Grant(uid, child.ID, groups.RoleRead, "seed"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gs.Grant(uid, parent.ID, groups.RoleEdit, "seed"); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(gs.RecallScope(uid), child.ID) {
+		t.Fatal("precondition: child should be in the member's recall scope")
+	}
+
+	resp, err := http.Post(ts.URL+"/groups/"+child.ID+"/revoke", "application/json",
+		bytes.NewReader([]byte(`{"user":"lead@corp.com","actor":"heeyeon"}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("revoke status = %d, want 200", resp.StatusCode)
+	}
+
+	// The inherited read is cut even though the member still holds the ancestor.
+	if slices.Contains(gs.RecallScope(uid), child.ID) {
+		t.Errorf("RecallScope still contains the child after revoke — inherited read was NOT cut")
+	}
+	if !slices.Contains(gs.RecallScope(uid), parent.ID) {
+		t.Errorf("RecallScope lost the ancestor — revoke must cut the child only")
+	}
+}
+
 func TestAdminAuditTargets(t *testing.T) {
 	auditPath := filepath.Join(t.TempDir(), "audit.log")
 	v := newFileAuditConsole(t, auditPath)

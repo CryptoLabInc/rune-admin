@@ -507,12 +507,21 @@ func (h *consoleAPI) teamMembersRemoveBatch(w http.ResponseWriter, r *http.Reque
 		}
 		revoked, excluded, err := h.v.Groups().RevokeWithReadExclusion(uid, ref, actor)
 		if err != nil {
-			// The team vanished mid-batch (it was resolved up front) or the
-			// removal did not commit. Report within the doc's enum
-			// (USER_NOT_FOUND | NOT_TEAM_MEMBER) rather than a stray code.
-			slog.Warn("console: membership removal failed mid-batch",
+			var notFound groups.ErrGroupNotFound
+			if errors.As(err, &notFound) {
+				// Resolved up front, so this means the team vanished mid-batch
+				// (concurrent delete/rename) — not the user's membership state.
+				res.fail(uid, "TEAM_NOT_FOUND", "team not found")
+				continue
+			}
+			// The removal did not commit: the membership row is unchanged, so the
+			// member STILL has access. Reporting NOT_TEAM_MEMBER would read as
+			// "already not a member" and the operator would not retry while access
+			// persists — surface it as retryable instead (mirrors
+			// userMembershipsRemoveBatch).
+			slog.Warn("console: team-member removal did not commit",
 				"team", ref, "userId", uid, "err", err)
-			res.fail(uid, "NOT_TEAM_MEMBER", "user is not a member of this team")
+			res.fail(uid, "INTERNAL", "removal did not commit; retry")
 			continue
 		}
 		// Neither a direct grant to drop nor an inherited read to cancel: the
