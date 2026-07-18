@@ -877,6 +877,87 @@ func TestConsoleUserRemoveCutsInheritedRead(t *testing.T) {
 	}
 }
 
+// TestConsoleTeamMemberRemoveCutsInheritedRead is the team-screen twin of
+// TestConsoleUserRemoveCutsInheritedRead. Removing a member from a team via the
+// team member list (DELETE /teams/{id}/members) must cut their access to that
+// team even when they ALSO reach it by inheritance from an ancestor they belong
+// to — otherwise the team comes straight back as inherited read with its memory
+// still readable. d0f451a fixed this on the user-drawer axis but left the
+// team-screen axis on the plain Revoke; this pins the fix on this axis too.
+func TestConsoleTeamMemberRemoveCutsInheritedRead(t *testing.T) {
+	f := newConsoleAPIFixture(t)
+	gs := f.v.Groups()
+	// C-Level > Biz > AX (leaf).
+	clevel, err := gs.CreateGroup("C-Level", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	biz, err := gs.CreateGroup("Biz", clevel.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ax, err := gs.CreateGroup("AX", biz.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, err := f.members.Add("lead@corp.com", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The member is a DIRECT member of AX (so the team screen lists them and has
+	// a row to remove) AND a direct member of the ancestor C-Level (so they also
+	// reach AX by inheritance — the exact condition that made plain Revoke a lie).
+	if _, err := gs.Grant(u.ID, ax.ID, groups.RoleRead, "actor"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gs.Grant(u.ID, clevel.ID, groups.RoleEdit, "actor"); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(gs.RecallScope(u.ID), ax.ID) {
+		t.Fatal("precondition: AX should be in the member's recall scope")
+	}
+
+	status, body := f.do(t, http.MethodDelete, "/teams/"+ax.ID+"/members?userIds="+u.ID, "")
+	if status != http.StatusOK {
+		t.Fatalf("delete status=%d body=%s", status, body)
+	}
+	var res struct {
+		Succeeded []string `json:"succeeded"`
+		Failed    []struct {
+			ID   string `json:"id"`
+			Code string `json:"code"`
+		} `json:"failed"`
+	}
+	if err := json.Unmarshal(body, &res); err != nil {
+		t.Fatalf("unmarshal: %v (%s)", err, body)
+	}
+	if len(res.Succeeded) != 1 || res.Succeeded[0] != u.ID || len(res.Failed) != 0 {
+		t.Fatalf("result = %+v, want succeeded=[member]", res)
+	}
+
+	// The memory gate itself: AX is out of the recall scope even though the
+	// member is still on the C-Level ancestor. With the old plain Revoke this
+	// assertion FAILS — AX returns via inheritance with its memory readable.
+	if slices.Contains(gs.RecallScope(u.ID), ax.ID) {
+		t.Errorf("RecallScope = %v, still contains AX — inherited read was NOT cut", gs.RecallScope(u.ID))
+	}
+	// The denial cuts AX only: the ancestor the member actually belongs to and
+	// its other reachable nodes stay.
+	if !slices.Contains(gs.RecallScope(u.ID), clevel.ID) {
+		t.Errorf("RecallScope lost C-Level — the denial must cut AX only")
+	}
+	if !slices.Contains(gs.RecallScope(u.ID), biz.ID) {
+		t.Errorf("RecallScope lost Biz — the denial must cut AX only")
+	}
+
+	// Re-removing the now-fully-cut team reports NOT_TEAM_MEMBER (idempotent).
+	_, body = f.do(t, http.MethodDelete, "/teams/"+ax.ID+"/members?userIds="+u.ID, "")
+	_ = json.Unmarshal(body, &res)
+	if len(res.Failed) != 1 || res.Failed[0].Code != "NOT_TEAM_MEMBER" {
+		t.Errorf("re-delete = %+v, want NOT_TEAM_MEMBER (already blocked)", res)
+	}
+}
+
 // ── wire boundary: second-precision timestamps ─────────────────────────
 
 // TestWireTimeTruncatesToSecondPrecision pins the wireTime/wireTimePtr

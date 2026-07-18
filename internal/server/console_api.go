@@ -490,22 +490,34 @@ func (h *consoleAPI) teamMembersRemoveBatch(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	res := newBatchResult()
+	// Removing a member from a team must actually cut their access to it — not
+	// merely delete the stored direct row. If the member also reaches this team
+	// by inheritance from an ancestor they belong to, that inherited read has to
+	// be cut too, or the team comes straight back as inherited read with its
+	// memory still readable — the same failure d0f451a fixed on the user-drawer
+	// axis (RevokeWithReadExclusion), which this team-screen axis had kept using
+	// the plain Revoke and so left open. RevokeWithReadExclusion drops the direct
+	// grant AND records the read exclusion in one transaction; the actor tags who
+	// cut it (mirrors userMembershipsRemoveBatch).
+	actor := localAdminActor(actorFromContext(r.Context()))
 	for _, uid := range userIDs {
 		if _, err := h.ms.members.Get(uid); err != nil {
 			res.fail(uid, "USER_NOT_FOUND", "no such user")
 			continue
 		}
-		ok, err := h.v.Groups().Revoke(uid, ref)
+		revoked, excluded, err := h.v.Groups().RevokeWithReadExclusion(uid, ref, actor)
 		if err != nil {
-			// The team vanished mid-batch (it was resolved up front). The
-			// membership is effectively gone; report within the doc's enum
+			// The team vanished mid-batch (it was resolved up front) or the
+			// removal did not commit. Report within the doc's enum
 			// (USER_NOT_FOUND | NOT_TEAM_MEMBER) rather than a stray code.
 			slog.Warn("console: membership removal failed mid-batch",
 				"team", ref, "userId", uid, "err", err)
 			res.fail(uid, "NOT_TEAM_MEMBER", "user is not a member of this team")
 			continue
 		}
-		if !ok {
+		// Neither a direct grant to drop nor an inherited read to cancel: the
+		// user had no access to this team to begin with.
+		if !revoked && !excluded {
 			res.fail(uid, "NOT_TEAM_MEMBER", "user is not a member of this team")
 			continue
 		}
