@@ -15,13 +15,7 @@ export type TSessionMe = {
 /**
  * TSession is the /console/session response — the single truth for the route
  * guard. It always resolves 200; the discriminant is `logged_in`.
- *
- * `plan` is the account's subscription plan as a lowercase wire string
- * (currently always "free"; the value set is open). It is a console-owned,
- * top-level field — separate from `me` (the cloud principal passthrough) — so
- * its source can change without reshaping the principal. The UI capitalizes it
- * for display and falls back to "Free" when empty.
  */
 export type TSession =
   | { logged_in: false }
-  | { logged_in: true; expires_at: string; plan: string; me: TSessionMe };
+  | { logged_in: true; expires_at: string; me: TSessionMe };
