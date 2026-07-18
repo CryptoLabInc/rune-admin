@@ -86,10 +86,6 @@ func (s *SelfInviteIssuer) IssueSelfInvite(email, displayName string) (invites.C
 		s.dropIfNew(m.ID, newMember)
 		return invites.ClearBundle{}, InviteConnInfo{}, fmt.Errorf("issue invite: %w", err)
 	}
-	// Flush the token before the envelope's "invited" state escapes: a crash on
-	// the tokens debounce window would otherwise wrap a token that no longer
-	// exists (mirrors the admin invite path).
-	s.console.Tokens().Flush()
 
 	// Reinvite (not MarkInvited): a reused row may already be active, and
 	// MarkInvited only advances from registered — Reinvite moves any non-disabled
@@ -101,7 +97,6 @@ func (s *SelfInviteIssuer) IssueSelfInvite(email, displayName string) (invites.C
 		s.dropIfNew(m.ID, newMember)
 		return invites.ClearBundle{}, InviteConnInfo{}, fmt.Errorf("mark invited: %w", err)
 	}
-	s.members.Flush()
 
 	conn := s.conn
 	if _, pin, perr := caPEMAndPin(s.console.Config()); perr == nil {
@@ -117,5 +112,4 @@ func (s *SelfInviteIssuer) dropIfNew(id string, newMember bool) {
 		return
 	}
 	_ = s.members.Remove(id)
-	s.members.Flush()
 }

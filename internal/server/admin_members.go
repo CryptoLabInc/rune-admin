@@ -82,17 +82,12 @@ func registerMemberRoutes(mux *http.ServeMux, v *Console, ms *memberSubsystem) {
 			if _, gerr := v.Groups().Grant(m.ID, body.Group, grantRole, localAdminActor(adminActor(r, body.Actor))); gerr != nil {
 				// The transaction did not commit: undo the member.
 				_ = ms.members.Remove(m.ID)
-				ms.members.Flush()
 				writeGroupError(w, gerr)
 				return
 			}
-			// Commit the pair durably. Two YAML stores can't share one fsync, so
-			// a crash between the two flushes could still leave a member without
-			// its grant; the rollback above covers the common (grant-rejected)
-			// case, and the residual window is the same two-file gap the
-			// token/group stores already live with (see DELETE /tokens).
-			ms.members.Flush()
-			v.Groups().Flush()
+			// Add and Grant each commit their own transaction, so a crash
+			// between them could still leave a member without its grant; the
+			// rollback above covers the common (grant-rejected) case.
 			auditAdmin(v, "admin.group.grant", adminActor(r, body.Actor), fmt.Sprintf("%s @ %s (%s)", body.Email, body.Group, body.GroupRole))
 		}
 		auditAdmin(v, "admin.member.create", adminActor(r, body.Actor), body.Email)
@@ -241,24 +236,19 @@ func registerMemberRoutes(mux *http.ServeMux, v *Console, ms *memberSubsystem) {
 			return
 		}
 		// Durability invariant: a returned bundle implies the wrapped token is
-		// durable. Issue persisted the envelope synchronously (fsync+rename),
-		// but AddToken above sits on the tokens store's 100ms persist debounce
-		// — a crash inside that window would leave a durable envelope wrapping
-		// a token that no longer exists: an invite that can never authenticate,
-		// with no cleanup path. Flush the tokens store before the bundle (or
-		// the invited status) escapes. Flush runs the debounced persist
-		// synchronously and returns once it is on disk.
-		v.Tokens().Flush()
-		// The envelope is durably on disk (Issue is persist-before-return), so
-		// the member may now advance registered→invited. On failure, void the
-		// envelope and the token so no half-issued invite survives.
+		// durable. AddToken and Issue each commit before returning, so both the
+		// token and the envelope are already on disk here — a crash can never
+		// leave a durable envelope wrapping a token that no longer exists: an
+		// invite that can never authenticate, with no cleanup path. With the
+		// envelope durable, the member may now advance registered→invited. On
+		// failure, void the envelope and the token so no half-issued invite
+		// survives.
 		if err := ms.members.MarkInvited(m.ID); err != nil {
 			_ = ms.invites.RevokePending(bundle.Handle)
 			v.Tokens().RevokeToken(m.Email)
 			writeError(w, http.StatusInternalServerError, fmt.Sprintf("invite issued but member could not be advanced: %v", err))
 			return
 		}
-		ms.members.Flush()
 		// Email is a best-effort notification sent AFTER the invite is durably
 		// issued (design-decisions §8.3): "invited" means the envelope is on
 		// disk, not that mail was delivered. A delivery failure does NOT fail

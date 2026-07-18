@@ -4,8 +4,6 @@
 // in the unified store database (internal/storedb schema) behind an
 // in-memory read cache: reads are RLock map lookups, and every mutation
 // commits its SQLite transaction before the cache changes (write-through).
-// The legacy YAML file is consumed once by internal/storedb/yamlimport,
-// whose members format contract is LoadFromFile.
 package members
 
 // Member is one human identity. ID is an immutable UUIDv4 assigned at

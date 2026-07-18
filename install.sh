@@ -1070,50 +1070,23 @@ collect_and_write_config() {
       "" \
       "tokens:" \
       "  team_secret: ${team_secret}" \
-      "  roles_file: ${INSTALL_PREFIX}/configs/roles.yml" \
-      "  tokens_file: ${INSTALL_PREFIX}/configs/tokens.yml" \
       "" \
       "audit:" \
       "  mode: file+stdout" \
       "  path: ${INSTALL_PREFIX}/logs/audit.log" \
+      "" \
+      "storage:" \
+      "  # runeconsole.db, console-session.db and invite-mail.log live here." \
+      "  data_dir: ${INSTALL_PREFIX}/configs" \
       > "$conf_file"
     chmod 0640 "$conf_file"
     [[ "$SKIP_SERVICE" -eq 0 ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "$conf_file"
 
   fi
 
-  # roles.yml
-  local roles_file="${INSTALL_PREFIX}/configs/roles.yml"
-  if [[ ! -f "$roles_file" || "$FORCE" -eq 1 ]]; then
-    printf '%s\n' \
-      "roles:" \
-      "  admin:" \
-      "    scope:" \
-      "      - get_public_key" \
-      "      - decrypt_scores" \
-      "      - decrypt_metadata" \
-      "      - manage_tokens" \
-      "    top_k: 50" \
-      "    rate_limit: 150/60s" \
-      "  member:" \
-      "    scope:" \
-      "      - get_public_key" \
-      "      - decrypt_scores" \
-      "      - decrypt_metadata" \
-      "    top_k: 10" \
-      "    rate_limit: 30/60s" \
-      > "$roles_file"
-    chmod 0640 "$roles_file"
-    [[ "$SKIP_SERVICE" -eq 0 ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "$roles_file"
-  fi
-
-  # tokens.yml
-  local tokens_file="${INSTALL_PREFIX}/configs/tokens.yml"
-  if [[ ! -f "$tokens_file" || "$FORCE" -eq 1 ]]; then
-    printf 'tokens: []\n' > "$tokens_file"
-    chmod 0640 "$tokens_file"
-    [[ "$SKIP_SERVICE" -eq 0 ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "$tokens_file"
-  fi
+  # No roles.yml / tokens.yml are seeded: the daemon creates the store
+  # database itself and seeds the built-in admin/member roles into it on first
+  # boot, so a file here would be written and never read.
 
   success "Configuration written."
 }

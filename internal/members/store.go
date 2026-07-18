@@ -5,13 +5,10 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"sync"
 	"time"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/CryptoLabInc/rune-console/internal/storedb"
 )
@@ -21,8 +18,7 @@ import (
 // pure map lookups — zero SQL on the dataplane; every mutator commits its
 // row to the database before the maps change, so the cache can never get
 // ahead of durable state. A store with no sink attached (NewStore alone) is
-// a pure in-memory registry — how unit tests and the one-time YAML importer
-// use it.
+// a pure in-memory registry — how unit tests use it.
 type Store struct {
 	mu      sync.RWMutex
 	byID    map[string]*Member // keyed by immutable UUID
@@ -46,63 +42,12 @@ func NewStore() *Store {
 	}
 }
 
-// LoadFromFile reads a member registry from a legacy YAML file. It is the
-// one-time importer's input path (internal/storedb/yamlimport) — the daemon
-// loads from the store database via LoadFromDB — and its validation set is
-// the import contract: a missing file leaves the store empty (a fresh
-// console has no members); a duplicate id/email, a malformed UUID, a bad
-// status, or a non-email address fails the load, and with it the import.
-func (s *Store) LoadFromFile(path string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("read members file %s: %w", path, err)
-	}
-	var doc struct {
-		Members []Member `yaml:"members"`
-	}
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return fmt.Errorf("parse members file %s: %w", path, err)
-	}
-	for i := range doc.Members {
-		m := doc.Members[i]
-		if m.ID == "" {
-			return fmt.Errorf("members file %s: entry %d missing id", path, i)
-		}
-		if err := ValidateID(m.ID); err != nil {
-			return fmt.Errorf("members file %s: entry %d: %w", path, i, err)
-		}
-		if err := validateMemberEmail(m.Email); err != nil {
-			return fmt.Errorf("members file %s: entry %d: %w", path, i, err)
-		}
-		if !validStatus(m.Status) {
-			return fmt.Errorf("members file %s: entry %d has invalid status %q", path, i, m.Status)
-		}
-		if _, dup := s.byID[m.ID]; dup {
-			return fmt.Errorf("members file %s: duplicate member id '%s'", path, m.ID)
-		}
-		if _, dup := s.byEmail[m.Email]; dup {
-			return fmt.Errorf("members file %s: %w", path, ErrDuplicateEmail{Email: m.Email})
-		}
-		cp := m
-		s.byID[m.ID] = &cp
-		s.byEmail[m.Email] = &cp
-	}
-	return nil
-}
-
 // LoadFromDB attaches database (the unified store database, opened with
 // db.OpenStrict and carrying the storedb schema) as the write-through
 // persistence sink and loads the in-memory indexes from its members table.
 // NULL disabled_from / session_expired_at columns map to the stores' ""
-// empty-value convention. Rows are trusted as-is: they were either written
-// by this store's own mutators or funnelled through LoadFromFile's
-// validation by the importer, with the schema CHECKs as a second layer.
+// empty-value convention. Rows are trusted as-is: they are written by this
+// store's own mutators, with the schema CHECKs as a second layer.
 func (s *Store) LoadFromDB(database *sql.DB) error {
 	rows, err := database.Query(
 		`SELECT id, email, display_name, status, disabled_from, created_at, session_expired_at FROM members`)
@@ -122,7 +67,7 @@ func (s *Store) LoadFromDB(database *sql.DB) error {
 		}
 		m.DisabledFrom = disabledFrom.String
 		m.SessionExpiredAt = sessionExpiredAt.String
-		// ONE shared *Member per row, same aliasing as LoadFromFile and Add:
+		// ONE shared *Member per row, same aliasing as Add:
 		// mutators update the shared record and both indexes see it.
 		cp := m
 		byID[cp.ID] = &cp
@@ -501,20 +446,6 @@ func nullIfEmpty(v string) any {
 	}
 	return v
 }
-
-// Shutdown does nothing.
-//
-// Deprecated: persistence is write-through to SQLite (every mutation is
-// committed before it returns); kept so call sites compile, removed in a
-// follow-up release.
-func (s *Store) Shutdown() {}
-
-// Flush does nothing.
-//
-// Deprecated: persistence is write-through to SQLite (every mutation is
-// committed before it returns); kept so call sites compile, removed in a
-// follow-up release.
-func (s *Store) Flush() {}
 
 // newMemberID returns a canonical UUIDv4 string from crypto/rand. Hand-rolled
 // to keep the console on stdlib-only direct dependencies (same as groups).

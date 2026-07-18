@@ -12,8 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/CryptoLabInc/rune-console/internal/storedb"
 )
 
@@ -25,7 +23,7 @@ import (
 // exception is the last_used stamp, which is persisted asynchronously
 // (see runLastUsedWriter). Rate limiters are deliberately non-persistent.
 // A store with no sink attached (NewStore alone) is a pure in-memory
-// registry — how unit tests and the one-time YAML importer use it.
+// registry — how unit tests use it.
 type Store struct {
 	mu           sync.RWMutex
 	tokens       map[string]*Token // keyed by token string
@@ -57,89 +55,19 @@ func NewStore() *Store {
 	}
 }
 
-// LoadFromFiles reads roles and tokens from the legacy YAML pair. It is the
-// one-time importer's input path (internal/storedb/yamlimport) — the daemon
-// loads from the store database via LoadFromDB — and it preserves the legacy
-// load semantics as the import contract: a missing file loads defaults
-// (built-in roles, no tokens), the default roles are merged in when absent,
-// read-time defaults fill top_k 0 and empty rate_limit, the legacy `created`
-// key coalesces into issued_at, and a parse error fails the load (and with
-// it the import). It never writes anything.
-func (s *Store) LoadFromFiles(rolesPath, tokensPath string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Roles
-	if data, err := os.ReadFile(rolesPath); err == nil {
-		var doc struct {
-			Roles map[string]struct {
-				Scope     []string `yaml:"scope"`
-				TopK      int      `yaml:"top_k"`
-				RateLimit string   `yaml:"rate_limit"`
-			} `yaml:"roles"`
-		}
-		if err := yaml.Unmarshal(data, &doc); err != nil {
-			return fmt.Errorf("parse roles file %s: %w", rolesPath, err)
-		}
-		for name, cfg := range doc.Roles {
-			topK, rl := materializeRoleDefaults(cfg.TopK, cfg.RateLimit)
-			s.roles[name] = &Role{Name: name, Scope: cfg.Scope, TopK: topK, RateLimit: rl}
-		}
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("read roles file %s: %w", rolesPath, err)
-	}
-	for name, role := range DefaultRoles() {
-		if _, ok := s.roles[name]; !ok {
-			s.roles[name] = role
-		}
-	}
-
-	// Tokens
-	if data, err := os.ReadFile(tokensPath); err == nil {
-		var doc struct {
-			Tokens []struct {
-				User     string `yaml:"user"`
-				Token    string `yaml:"token"`
-				Role     string `yaml:"role"`
-				IssuedAt string `yaml:"issued_at"`
-				Created  string `yaml:"created"`
-				Expires  string `yaml:"expires"`
-			} `yaml:"tokens"`
-		}
-		if err := yaml.Unmarshal(data, &doc); err != nil {
-			return fmt.Errorf("parse tokens file %s: %w", tokensPath, err)
-		}
-		for _, e := range doc.Tokens {
-			issued := e.IssuedAt
-			if issued == "" {
-				issued = e.Created
-			}
-			tok := &Token{
-				User:     e.User,
-				Token:    e.Token,
-				Role:     e.Role,
-				IssuedAt: issued,
-				Expires:  e.Expires,
-			}
-			s.tokens[tok.Token] = tok
-			s.tokensByUser[tok.User] = tok
-		}
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("read tokens file %s: %w", tokensPath, err)
-	}
-	return nil
-}
-
 // LoadFromDB attaches database (the unified store database, opened with
 // db.OpenStrict and carrying the storedb schema) as the write-through
 // persistence sink, seeds the built-in admin/member roles as rows when
-// absent (replacing the legacy unconditional load-time merge and
-// install.sh's roles.yml seeding — an operator's stored override of a
-// default role is respected), loads the in-memory indexes from the roles
-// and tokens tables, and starts the async last_used writer. NULL
-// expires/last_used columns map to the store's "" empty-value convention.
-// Rows are trusted as-is: they were either written by this store's own
-// mutators or funnelled through LoadFromFiles' semantics by the importer.
+// absent, loads the in-memory indexes from the roles and tokens tables, and
+// starts the async last_used writer. NULL expires/last_used columns map to
+// the store's "" empty-value convention. Rows are trusted as-is: they are
+// written by this store's own mutators.
+//
+// The role seeding here is the ONLY path that materialises the built-in
+// admin/member roles, so a greenfield database gets them on first boot. An
+// operator's stored override of a default role is respected (the seed is
+// INSERT ... ON CONFLICT DO NOTHING), and further role customisation is a
+// runtime admin-API concern, not a config-file one.
 func (s *Store) LoadFromDB(database *sql.DB) error {
 	ctx := context.Background()
 
@@ -212,8 +140,8 @@ func (s *Store) LoadFromDB(database *sql.DB) error {
 		}
 		t.Expires = expires.String
 		t.LastUsed = lastUsed.String
-		// ONE shared *Token per row, same aliasing as LoadFromFiles and
-		// AddToken: mutators update the shared record and both indexes see it.
+		// ONE shared *Token per row, same aliasing as AddToken: mutators
+		// update the shared record and both indexes see it.
 		cp := t
 		byToken[cp.Token] = &cp
 		byUser[cp.User] = &cp
@@ -774,10 +702,10 @@ type lastUsedEvent struct {
 // best-effort telemetry).
 //
 // Lifecycle: started by LoadFromDB and deliberately abandoned at process
-// exit rather than flushed — Shutdown stays a no-op so daemon shutdown never
-// blocks on telemetry, and a stamp lost in the final instant merely means a
-// restart shows the previous persisted value. An UPDATE racing the daemon's
-// deferred database Close at exit at worst logs one error.
+// exit rather than flushed — there is no shutdown hook, so daemon shutdown
+// never blocks on telemetry, and a stamp lost in the final instant merely
+// means a restart shows the previous persisted value. An UPDATE racing the
+// daemon's deferred database Close at exit at worst logs one error.
 func (s *Store) runLastUsedWriter(queue <-chan lastUsedEvent) {
 	lastPersisted := make(map[string]time.Time)
 	for ev := range queue {
@@ -876,21 +804,6 @@ func nullIfEmpty(v string) any {
 	}
 	return v
 }
-
-// Shutdown does nothing.
-//
-// Deprecated: persistence is write-through to SQLite (every mutation is
-// committed before it returns) and the async last_used writer is abandoned
-// at process exit by design; kept so call sites compile, removed in a
-// follow-up release.
-func (s *Store) Shutdown() {}
-
-// Flush does nothing.
-//
-// Deprecated: persistence is write-through to SQLite (every mutation is
-// committed before it returns); kept so call sites compile, removed in a
-// follow-up release.
-func (s *Store) Flush() {}
 
 func newTokenString() (string, error) {
 	b := make([]byte, 16)

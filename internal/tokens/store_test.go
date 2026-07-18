@@ -3,7 +3,6 @@ package tokens
 import (
 	"database/sql"
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -960,88 +959,5 @@ func TestStaleLastUsedStampAfterRotationIsDropped(t *testing.T) {
 	}
 	if v.Valid {
 		t.Errorf("rotated row got the stale pre-rotation stamp %q", v.String)
-	}
-}
-
-// ── importer export surface ────────────────────────────────────────
-
-func TestExportTokensAndRolesFullFidelity(t *testing.T) {
-	s, _ := newTestStore(t)
-	tok, err := s.AddToken("alice", "member", intp(90))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	rows, hadDuplicates := s.ExportTokens()
-	if hadDuplicates {
-		t.Error("hadDuplicates = true for a clean store")
-	}
-	if len(rows) != 1 || rows[0].User != "alice" || rows[0].Token != tok.Token ||
-		rows[0].Role != "member" || rows[0].Expires != tok.Expires {
-		t.Errorf("ExportTokens = %+v, want alice's full row incl. plaintext", rows)
-	}
-
-	roles := s.ExportRoles()
-	if len(roles) != 2 || roles[0].Name != "admin" || roles[1].Name != "member" {
-		t.Fatalf("ExportRoles = %+v, want name-sorted admin/member", roles)
-	}
-	// Copies, not aliases: mutating the export must not touch store state.
-	roles[1].Scope[0] = "mutated"
-	if s.roles["member"].Scope[0] == "mutated" {
-		t.Error("ExportRoles aliases the live role scope slice")
-	}
-}
-
-func TestExportTokensDedupesLegacyDuplicatesKeepLast(t *testing.T) {
-	dir := t.TempDir()
-	tokensPath := filepath.Join(dir, "tokens.yml")
-	// Legacy duplicates load silently today (both maps keep-last); the
-	// export used by the SQLite importer must surface only the effective
-	// rows and report that shadowed rows existed.
-	body := `tokens:
-  - user: dup
-    token: evt_11111111111111111111111111111111
-    role: member
-    issued_at: "2026-01-01"
-  - user: dup
-    token: evt_22222222222222222222222222222222
-    role: member
-    issued_at: "2026-01-02"
-  - user: early
-    token: evt_33333333333333333333333333333333
-    role: member
-    issued_at: "2026-01-03"
-  - user: late
-    token: evt_33333333333333333333333333333333
-    role: member
-    issued_at: "2026-01-04"
-`
-	if err := os.WriteFile(tokensPath, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	s := NewStore()
-	if err := s.LoadFromFiles(filepath.Join(dir, "roles.yml"), tokensPath); err != nil {
-		t.Fatal(err)
-	}
-
-	rows, hadDuplicates := s.ExportTokens()
-	if !hadDuplicates {
-		t.Error("hadDuplicates = false, want true for a file with shadowed rows")
-	}
-	got := map[string]string{}
-	for _, r := range rows {
-		got[r.User] = r.Token
-	}
-	want := map[string]string{
-		"dup":  "evt_22222222222222222222222222222222", // last per user
-		"late": "evt_33333333333333333333333333333333", // last per token string
-	}
-	if len(got) != len(want) {
-		t.Fatalf("ExportTokens users = %v, want %v", got, want)
-	}
-	for user, token := range want {
-		if got[user] != token {
-			t.Errorf("ExportTokens[%s] = %q, want %q", user, got[user], token)
-		}
 	}
 }

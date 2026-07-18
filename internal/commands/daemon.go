@@ -19,7 +19,6 @@ import (
 	"github.com/CryptoLabInc/rune-console/internal/members"
 	"github.com/CryptoLabInc/rune-console/internal/server"
 	"github.com/CryptoLabInc/rune-console/internal/storedb"
-	"github.com/CryptoLabInc/rune-console/internal/storedb/yamlimport"
 	"github.com/CryptoLabInc/rune-console/internal/tokens"
 )
 
@@ -64,35 +63,12 @@ func runDaemonStart(ctx context.Context) error {
 		return fmt.Errorf("daemon: %w", err)
 	}
 
-	// One-time YAML→SQLite import, BEFORE any store is constructed: a first
-	// boot over a legacy data directory moves all four YAML stores into the
-	// database in one transaction and parks the files as *.yml.migrated; once
-	// the schema_migrations version row exists, leftovers are warned about
-	// and ignored; a fresh directory imports nothing (default roles are
-	// seeded by the tokens store at load). The importer injects the same
-	// person-key contract the daemon uses (members.ValidateID), so a legacy
-	// email-keyed memberships.yml refuses to import just as it refused to
-	// boot.
-	groupsPath, membershipsPath := cfg.GroupsFiles()
-	membersPath, invitesPath := cfg.MembersFiles()
-	if err := yamlimport.Import(ctx, storeDB, yamlimport.Sources{
-		RolesFile:       cfg.Tokens.RolesFile,
-		TokensFile:      cfg.Tokens.TokensFile,
-		MembersFile:     membersPath,
-		InvitesFile:     invitesPath,
-		GroupsFile:      groupsPath,
-		MembershipsFile: membershipsPath,
-	}, nil, slog.Default()); err != nil {
-		return fmt.Errorf("daemon: yaml import: %w", err)
-	}
-
 	// Token + role store: loads from and writes through the unified store
 	// database, seeding the default admin/member roles when absent.
 	store := tokens.NewStore()
 	if err := store.LoadFromDB(storeDB); err != nil {
 		return fmt.Errorf("daemon: load tokens: %w", err)
 	}
-	defer store.Shutdown()
 
 	// Group RBAC store (plan §6-D2): loads from and writes through the
 	// unified store database; the judge stays pure in-memory reads. A cyclic
@@ -115,7 +91,6 @@ func runDaemonStart(ctx context.Context) error {
 	if err := groupStore.LoadFromDB(storeDB); err != nil {
 		return fmt.Errorf("daemon: load groups: %w", err)
 	}
-	defer groupStore.Shutdown()
 
 	// Member registry (design-decisions §6.6/§8.3): loads from and writes
 	// through the unified store database.
@@ -123,7 +98,6 @@ func runDaemonStart(ctx context.Context) error {
 	if err := memberStore.LoadFromDB(storeDB); err != nil {
 		return fmt.Errorf("daemon: load members: %w", err)
 	}
-	defer memberStore.Shutdown()
 	// One-time invite wrap store (design-decisions §8.3): loads from and
 	// writes through the unified store database, sweeping aged-out pending
 	// codes at boot.
@@ -131,7 +105,6 @@ func runDaemonStart(ctx context.Context) error {
 	if err := inviteStore.LoadFromDB(storeDB); err != nil {
 		return fmt.Errorf("daemon: load invites: %w", err)
 	}
-	defer inviteStore.Shutdown()
 	mailer := server.NewLogMailer(cfg.MailLogFile())
 	// The invite endpoint is what a remote rune-mcp dials, so it must be a
 	// reachable address, not a loopback/bind host. When unset (or "auto") the

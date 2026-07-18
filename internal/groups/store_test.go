@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -15,13 +14,6 @@ import (
 	"github.com/CryptoLabInc/rune-console/internal/db"
 	"github.com/CryptoLabInc/rune-console/internal/storedb"
 )
-
-func writeFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0o640); err != nil {
-		t.Fatal(err)
-	}
-}
 
 // openTestDB opens the strict store database at path with schema v1
 // installed. Restart tests reopen the same path with a fresh handle; never
@@ -371,132 +363,6 @@ func TestLoadFromDBFreshIsEmpty(t *testing.T) {
 	}
 }
 
-// TestLoadMissingFilesIsEmpty pins the importer input contract (LoadFromFiles
-// is the yamlimport format spec): missing legacy files load empty.
-func TestLoadMissingFilesIsEmpty(t *testing.T) {
-	dir := t.TempDir()
-	s := NewStore()
-	if err := s.LoadFromFiles(filepath.Join(dir, "groups.yml"), filepath.Join(dir, "memberships.yml")); err != nil {
-		t.Fatalf("missing files should load empty: %v", err)
-	}
-	if got := s.ListGroups(); len(got) != 0 {
-		t.Errorf("groups = %+v, want empty", got)
-	}
-}
-
-// TestLoadRejectsCycle and the load-reject tests below pin the importer's
-// must-reject corpus: these YAML shapes fail LoadFromFiles, and with it the
-// one-time import. Database twins live in TestLoadFromDBRejectsBadTrees.
-func TestLoadRejectsCycle(t *testing.T) {
-	dir := t.TempDir()
-	gp := filepath.Join(dir, "groups.yml")
-	writeFile(t, gp, `groups:
-  - id: aaaa
-    name: a
-    parent_id: bbbb
-    created_at: "2026-07-06T00:00:00Z"
-  - id: bbbb
-    name: b
-    parent_id: aaaa
-    created_at: "2026-07-06T00:00:00Z"
-`)
-	if err := NewStore().LoadFromFiles(gp, filepath.Join(dir, "m.yml")); !errors.As(err, new(ErrCycle)) {
-		t.Errorf("cyclic load = %v, want ErrCycle (startup must fail)", err)
-	}
-}
-
-func TestLoadRejectsOverDeepChain(t *testing.T) {
-	dir := t.TempDir()
-	gp := filepath.Join(dir, "groups.yml")
-	var b strings.Builder
-	b.WriteString("groups:\n")
-	for i := 1; i <= MaxTreeDepth+1; i++ {
-		fmt.Fprintf(&b, "  - id: id%d\n    name: g%d\n    created_at: \"2026-07-06T00:00:00Z\"\n", i, i)
-		if i > 1 {
-			fmt.Fprintf(&b, "    parent_id: id%d\n", i-1)
-		}
-	}
-	writeFile(t, gp, b.String())
-	if err := NewStore().LoadFromFiles(gp, filepath.Join(dir, "m.yml")); !errors.As(err, new(ErrCycle)) {
-		t.Errorf("over-deep load = %v, want ErrCycle", err)
-	}
-}
-
-func TestLoadRejectsBadReferences(t *testing.T) {
-	dir := t.TempDir()
-
-	t.Run("duplicate id", func(t *testing.T) {
-		gp := filepath.Join(dir, "gdup.yml")
-		writeFile(t, gp, `groups:
-  - id: aaaa
-    name: a
-    created_at: "2026-07-06T00:00:00Z"
-  - id: aaaa
-    name: b
-    created_at: "2026-07-06T00:00:00Z"
-`)
-		if err := NewStore().LoadFromFiles(gp, filepath.Join(dir, "m.yml")); err == nil {
-			t.Error("duplicate id should fail load")
-		}
-	})
-
-	t.Run("invalid role", func(t *testing.T) {
-		gp := filepath.Join(dir, "g4.yml")
-		mp := filepath.Join(dir, "m4.yml")
-		writeFile(t, gp, "groups:\n  - id: aaaa\n    name: a\n    created_at: \"2026-07-06T00:00:00Z\"\n")
-		writeFile(t, mp, "memberships:\n  - user: u@corp.com\n    group_id: aaaa\n    role: superuser\n    granted_by: x\n    granted_at: \"2026-07-06T00:00:00Z\"\n")
-		if err := NewStore().LoadFromFiles(gp, mp); err == nil {
-			t.Error("invalid role should fail load")
-		}
-	})
-
-	t.Run("non-email membership user", func(t *testing.T) {
-		gp := filepath.Join(dir, "g5.yml")
-		mp := filepath.Join(dir, "m5.yml")
-		writeFile(t, gp, "groups:\n  - id: aaaa\n    name: a\n    created_at: \"2026-07-06T00:00:00Z\"\n")
-		writeFile(t, mp, "memberships:\n  - user: plainname\n    group_id: aaaa\n    role: read\n    granted_by: x\n    granted_at: \"2026-07-06T00:00:00Z\"\n")
-		if err := NewStore().LoadFromFiles(gp, mp); err == nil {
-			t.Error("non-email membership user should fail load (key is an email)")
-		}
-	})
-}
-
-// TestLoadDropsDanglingMembership — importer tolerance for legacy two-file
-// residue: a membership row referencing a group that no longer exists (a
-// crash between the old groups and memberships renames after a delete) must
-// be dropped — access-reducing, fail-closed — instead of failing the import.
-// In the database this state is unrepresentable (FK ON DELETE RESTRICT);
-// see TestForeignKeyGuardsMembershipsAtDBLayer.
-func TestLoadDropsDanglingMembership(t *testing.T) {
-	dir := t.TempDir()
-	gp := filepath.Join(dir, "groups.yml")
-	mp := filepath.Join(dir, "memberships.yml")
-	writeFile(t, gp, "groups:\n  - id: aaaa\n    name: a\n    created_at: \"2026-07-06T00:00:00Z\"\n")
-	writeFile(t, mp, `memberships:
-  - user: keep@corp.com
-    group_id: aaaa
-    role: read
-    granted_by: x
-    granted_at: "2026-07-06T00:00:00Z"
-  - user: dangling@corp.com
-    group_id: deleted-group
-    role: edit
-    granted_by: x
-    granted_at: "2026-07-06T00:00:00Z"
-`)
-	s := NewStore()
-	if err := s.LoadFromFiles(gp, mp); err != nil {
-		t.Fatalf("load with dangling membership must succeed (operator boot wedge): %v", err)
-	}
-	ms := s.ListMemberships()
-	if len(ms) != 1 || ms[0].User != "keep@corp.com" || ms[0].GroupID != "aaaa" {
-		t.Errorf("memberships after load = %+v, want only keep@corp.com on aaaa", ms)
-	}
-	if got := s.RecallScope("dangling@corp.com"); len(got) != 0 {
-		t.Errorf("dangling user's recall scope = %v, want empty (dropped, not granted)", got)
-	}
-}
-
 // TestLoadFromDBRejectsBadTrees — tree-shape validation stays in Go (the
 // schema has no self-FK on parent_id): a cyclic, over-deep, or unknown-parent
 // row set in the database fails the load, and with it daemon startup.
@@ -546,8 +412,8 @@ func TestLoadFromDBRejectsBadTrees(t *testing.T) {
 }
 
 // TestLoadFromDBUsesPersonKeyValidator — the database load routes every
-// membership row through the ACTIVE person-key validator, exactly like the
-// YAML load: a row the validator refuses fails the boot.
+// membership row through the ACTIVE person-key validator: a row the validator
+// refuses fails the boot.
 func TestLoadFromDBUsesPersonKeyValidator(t *testing.T) {
 	const ts = "2026-07-06T00:00:00Z"
 	seed := func(t *testing.T, user string) *sql.DB {
@@ -565,13 +431,26 @@ func TestLoadFromDBUsesPersonKeyValidator(t *testing.T) {
 		return database
 	}
 
+	// An accepted row must also be INDEXED: a load that validates a row and
+	// then drops it would otherwise pass here while the daemon boots with
+	// every membership silently missing.
+	wantIndexed := func(t *testing.T, s *Store, user string) {
+		t.Helper()
+		ms := s.ListMemberships()
+		if len(ms) != 1 || ms[0].User != user || ms[0].GroupID != "aaaa" {
+			t.Errorf("memberships = %+v, want exactly the %s grant on 'aaaa'", ms, user)
+		}
+	}
+
 	// Default (email) contract: refuses the member-key row, loads the email row.
 	if err := NewStore().LoadFromDB(seed(t, "member-42")); err == nil {
 		t.Error("default validator should refuse a member-key row (load must fail)")
 	}
-	if err := NewStore().LoadFromDB(seed(t, "alice@corp.com")); err != nil {
-		t.Errorf("default validator should load the email row: %v", err)
+	sd := NewStore()
+	if err := sd.LoadFromDB(seed(t, "alice@corp.com")); err != nil {
+		t.Fatalf("default validator should load the email row: %v", err)
 	}
+	wantIndexed(t, sd, "alice@corp.com")
 
 	// Injected contract: mirror image.
 	s := NewStore()
@@ -579,6 +458,7 @@ func TestLoadFromDBUsesPersonKeyValidator(t *testing.T) {
 	if err := s.LoadFromDB(seed(t, "member-42")); err != nil {
 		t.Fatalf("injected validator should load the member-key row: %v", err)
 	}
+	wantIndexed(t, s, "member-42")
 	s2 := NewStore()
 	s2.SetPersonKeyValidator(fakeMemberKeyValidator)
 	if err := s2.LoadFromDB(seed(t, "alice@corp.com")); err == nil {
@@ -639,6 +519,35 @@ func TestLoadFromDBRejectsDanglingMembership(t *testing.T) {
 	}
 	if err := NewStore().LoadFromDB(database); err == nil || !strings.Contains(err.Error(), "missing group") {
 		t.Errorf("dangling-membership load = %v, want missing-group refusal", err)
+	}
+}
+
+// TestLoadFromDBRejectsInvalidRole — the load refuses a membership row whose
+// role is outside read/write/edit. The CHECK constraint makes such a row
+// unrepresentable through this binary, so the seed suspends check constraints
+// the way TestLoadFromDBRejectsDanglingMembership suspends foreign keys: the
+// Go-side guard is what stands between an externally edited database and a
+// membership carrying a role no judge path knows how to rank.
+func TestLoadFromDBRejectsInvalidRole(t *testing.T) {
+	const ts = "2026-07-06T00:00:00Z"
+	database := newTestDB(t)
+	if _, err := database.Exec(
+		`INSERT INTO groups (id, name, parent_id, created_at) VALUES ('aaaa', 'a', '', ?)`, ts); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`PRAGMA ignore_check_constraints=ON`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(
+		`INSERT INTO memberships (user, group_id, role, granted_by, granted_at)
+		 VALUES ('u@corp.com', 'aaaa', 'superuser', 'x', ?)`, ts); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`PRAGMA ignore_check_constraints=OFF`); err != nil {
+		t.Fatal(err)
+	}
+	if err := NewStore().LoadFromDB(database); err == nil || !strings.Contains(err.Error(), "invalid role") {
+		t.Errorf("invalid-role load = %v, want invalid-role refusal", err)
 	}
 }
 
@@ -896,43 +805,6 @@ func TestPersonKeyValidatorInjected(t *testing.T) {
 	}
 }
 
-// TestLoadFromFilesUsesPersonKeyValidator — the load-time check runs
-// through the same validator: a row the active validator refuses fails
-// the load (daemon does not boot — greenfield-only, spec appendix B#10),
-// a row it accepts loads.
-func TestLoadFromFilesUsesPersonKeyValidator(t *testing.T) {
-	dir := t.TempDir()
-	gp := filepath.Join(dir, "groups.yml")
-	writeFile(t, gp, "groups:\n  - id: aaaa\n    name: a\n    created_at: \"2026-07-06T00:00:00Z\"\n")
-	memberRow := filepath.Join(dir, "m-member.yml")
-	writeFile(t, memberRow, "memberships:\n  - user: member-42\n    group_id: aaaa\n    role: read\n    granted_by: x\n    granted_at: \"2026-07-06T00:00:00Z\"\n")
-	emailRow := filepath.Join(dir, "m-email.yml")
-	writeFile(t, emailRow, "memberships:\n  - user: alice@corp.com\n    group_id: aaaa\n    role: read\n    granted_by: x\n    granted_at: \"2026-07-06T00:00:00Z\"\n")
-
-	// Default (email) contract: refuses the member-key row, loads the email row.
-	if err := NewStore().LoadFromFiles(gp, memberRow); err == nil {
-		t.Error("default validator should refuse a member-key row (load must fail)")
-	}
-	if err := NewStore().LoadFromFiles(gp, emailRow); err != nil {
-		t.Errorf("default validator should load the email row: %v", err)
-	}
-
-	// Injected contract: mirror image.
-	s := NewStore()
-	s.SetPersonKeyValidator(fakeMemberKeyValidator)
-	if err := s.LoadFromFiles(gp, memberRow); err != nil {
-		t.Fatalf("injected validator should load the member-key row: %v", err)
-	}
-	if ms := s.ListMemberships(); len(ms) != 1 || ms[0].User != "member-42" {
-		t.Errorf("memberships = %+v, want only member-42", ms)
-	}
-	s2 := NewStore()
-	s2.SetPersonKeyValidator(fakeMemberKeyValidator)
-	if err := s2.LoadFromFiles(gp, emailRow); err == nil {
-		t.Error("injected validator should refuse an email row (load must fail)")
-	}
-}
-
 func TestParseRole(t *testing.T) {
 	for _, good := range []string{"read", "write", "edit"} {
 		if _, err := ParseRole(good); err != nil {
@@ -953,14 +825,10 @@ func TestParseRole(t *testing.T) {
 	}
 }
 
-// TestReadExclusionPersistsAcrossReload — a carve-out that evaporated on
-// restart would silently hand back memory read that an admin took away, so the
-// denial must survive the memberships.yml round-trip.
 // TestReadExclusionPersistsAcrossReload pins the durability of a removed
 // inherited read: an exclusion that evaporated on restart would silently hand
-// back memory read an admin took away. DB reopen-same-path form (the YAML
-// round-trip this test originally used persists only through the one-time
-// importer now).
+// back memory read an admin took away, so the denial must survive a reopen of
+// the same database path.
 func TestReadExclusionPersistsAcrossReload(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "runeconsole.db")
 	s := newDBStore(t, openTestDB(t, path))

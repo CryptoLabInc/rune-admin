@@ -21,10 +21,15 @@ func Open(path string) (*sql.DB, error) {
 	onDisk := !strings.Contains(path, ":memory:")
 	if onDisk {
 		// Pre-create with owner-only perms so a brand-new file is never briefly
-		// world-readable.
-		if f, err := os.OpenFile(path, os.O_CREATE, 0o600); err == nil {
-			_ = f.Close()
+		// world-readable. A failure here is reported rather than swallowed: the
+		// driver would fail too, but only as "unable to open database file",
+		// which names neither the path nor the reason (missing directory, wrong
+		// ownership, read-only mount).
+		f, err := os.OpenFile(path, os.O_CREATE, 0o600)
+		if err != nil {
+			return nil, fmt.Errorf("db: create %s: %w", path, err)
 		}
+		_ = f.Close()
 	}
 	dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)", path)
 	database, err := sql.Open("sqlite", dsn)
@@ -51,8 +56,8 @@ func Open(path string) (*sql.DB, error) {
 const strictJournalSizeLimit = 4 << 20 // 4 MiB
 
 // OpenStrict opens the unified store database (runeconsole.db) with the
-// hardened posture the YAML-store migration requires on top of Open's
-// pragmas (busy_timeout, WAL, foreign_keys):
+// hardened posture that file — the sole home of every store's rows —
+// requires on top of Open's pragmas (busy_timeout, WAL, foreign_keys):
 //
 //   - _txlock=immediate (DSN parameter, not a pragma): database/sql has no
 //     per-transaction BEGIN IMMEDIATE API, so this is the only lever that
@@ -71,8 +76,8 @@ const strictJournalSizeLimit = 4 << 20 // 4 MiB
 // Unlike Open, an existing database file — or a -wal/-shm sidecar — whose
 // permissions grant any group/other access is refused outright instead of
 // silently chmod'ed: this file holds invite and token plaintext, so looser
-// perms mean a secret may already be exposed (fail closed, mirroring the
-// invites.yml load check). The 0600 pre-create for brand-new files is kept.
+// perms mean a secret may already be exposed, and fixing the mode would not
+// un-expose it. The 0600 pre-create for brand-new files is kept.
 //
 // Tests should pass a file under t.TempDir(); ":memory:"-style paths skip
 // all file handling but are unsafe with more than one pool connection.
@@ -92,10 +97,15 @@ func OpenStrict(path string) (*sql.DB, error) {
 			}
 		}
 		// Pre-create with owner-only perms so a brand-new file is never briefly
-		// world-readable (sidecars inherit their permissions from it).
-		if f, err := os.OpenFile(path, os.O_CREATE, 0o600); err == nil {
-			_ = f.Close()
+		// world-readable (sidecars inherit their permissions from it). A failure
+		// here is reported rather than swallowed: the driver would fail too, but
+		// only as "unable to open database file", which names neither the path
+		// nor the reason (missing directory, wrong ownership, read-only mount).
+		f, err := os.OpenFile(path, os.O_CREATE, 0o600)
+		if err != nil {
+			return nil, fmt.Errorf("db: create %s: %w", path, err)
 		}
+		_ = f.Close()
 	}
 	dsn := fmt.Sprintf("file:%s?_txlock=immediate"+
 		"&_pragma=busy_timeout(5000)"+

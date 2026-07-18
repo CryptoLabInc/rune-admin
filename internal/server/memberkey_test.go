@@ -3,9 +3,9 @@ package server
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -34,6 +34,63 @@ func newMemberKeyedConsole(t *testing.T) (*Console, *members.Store) {
 	v.SetMemberDirectory(reg)
 	v.Groups().SetPersonKeyValidator(members.ValidateID)
 	return v, reg
+}
+
+// seedMembershipGroupID is the group the seeded membership row points at.
+// Group ids are opaque record tags, so a short literal is legal here.
+const seedMembershipGroupID = "aaaa"
+
+// seedMembershipDB returns a fresh store database holding one group and one
+// membership row keyed by user — the on-disk state a daemon boots against.
+func seedMembershipDB(t *testing.T, user string) *sql.DB {
+	t.Helper()
+	const ts = "2026-07-06T00:00:00Z"
+	database := openTokensTestDB(t, filepath.Join(t.TempDir(), "runeconsole.db"))
+	if _, err := database.Exec(
+		`INSERT INTO groups (id, name, parent_id, created_at) VALUES (?, 'eng', '', ?)`,
+		seedMembershipGroupID, ts); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(
+		`INSERT INTO memberships (user, group_id, role, granted_by, granted_at) VALUES (?, ?, 'read', 'local-admin:test', ?)`,
+		user, seedMembershipGroupID, ts); err != nil {
+		t.Fatal(err)
+	}
+	return database
+}
+
+// TestGroupsLoadFromDBUnderRealMemberIDValidator pins the load boundary under
+// the validator the daemon actually injects (members.ValidateID), in both
+// directions. internal/groups must not import internal/members, so its own
+// validator test can only inject a stand-in — one that would REFUSE a real
+// UUID — which leaves the positive direction unproven there: nothing shows a
+// canonical member UUID survives the load. This package may import both, so
+// it is pinned here. The row must not merely load without error; it must be
+// INDEXED, or the daemon boots with every membership silently missing.
+func TestGroupsLoadFromDBUnderRealMemberIDValidator(t *testing.T) {
+	const memberUUID = "6f1d0e3a-1b2c-4d5e-8f90-a1b2c3d4e5f6"
+
+	// daemon.go order: validator first, then load.
+	s := groups.NewStore()
+	s.SetPersonKeyValidator(members.ValidateID)
+	if err := s.LoadFromDB(seedMembershipDB(t, memberUUID)); err != nil {
+		t.Fatalf("load of a member-UUID-keyed row = %v, want nil", err)
+	}
+	ms := s.ListMemberships()
+	if len(ms) != 1 || ms[0].User != memberUUID || ms[0].GroupID != seedMembershipGroupID {
+		t.Fatalf("memberships = %+v, want exactly the %s grant on %s", ms, memberUUID, seedMembershipGroupID)
+	}
+	if ms[0].Role != groups.RoleRead {
+		t.Errorf("loaded role = %q, want read", ms[0].Role)
+	}
+
+	// Mirror direction: the same contract refuses an email-keyed row.
+	s2 := groups.NewStore()
+	s2.SetPersonKeyValidator(members.ValidateID)
+	err := s2.LoadFromDB(seedMembershipDB(t, "alice@corp.com"))
+	if err == nil || !strings.Contains(err.Error(), "member id") {
+		t.Errorf("load of an email-keyed row = %v, want a refusal naming the member id contract", err)
+	}
 }
 
 // TestDataplaneResolvesEmailToMemberUUID pins the whole resolution chain:
@@ -333,44 +390,5 @@ func TestGetPermissionsMemberKeyed(t *testing.T) {
 	}
 	if !seenGhost {
 		t.Errorf("member_roles = %+v, want the orphaned key %s shown as-is", resp3.GetMemberRoles(), ghost.ID)
-	}
-}
-
-// TestMembershipsLoadRefusesEmailKeys — boot refusal semantics: with the
-// member-UUID validator injected (as the daemon does before LoadFromFiles), a
-// memberships.yml row keyed by an email fails the load with the member-id
-// error, so a legacy email-keyed file cannot boot (greenfield-only, spec
-// appendix B#10). A UUID-keyed row loads.
-func TestMembershipsLoadRefusesEmailKeys(t *testing.T) {
-	dir := t.TempDir()
-	groupsPath := filepath.Join(dir, "groups.yml")
-	writeTestFile(t, groupsPath, "groups:\n  - id: aaaa\n    name: a\n    created_at: \"2026-07-09T00:00:00Z\"\n")
-	emailRows := filepath.Join(dir, "m-email.yml")
-	writeTestFile(t, emailRows, "memberships:\n  - user: alice@corp.com\n    group_id: aaaa\n    role: read\n    granted_by: x\n    granted_at: \"2026-07-09T00:00:00Z\"\n")
-	uuidRows := filepath.Join(dir, "m-uuid.yml")
-	writeTestFile(t, uuidRows, "memberships:\n  - user: 6f1d0e3a-1b2c-4d5e-8f90-a1b2c3d4e5f6\n    group_id: aaaa\n    role: read\n    granted_by: x\n    granted_at: \"2026-07-09T00:00:00Z\"\n")
-
-	s := groups.NewStore()
-	s.SetPersonKeyValidator(members.ValidateID)
-	err := s.LoadFromFiles(groupsPath, emailRows)
-	if err == nil {
-		t.Fatal("email-keyed memberships row loaded, want boot refusal")
-	}
-	if !strings.Contains(err.Error(), "member id") {
-		t.Errorf("load error = %v, want the member-id format error", err)
-	}
-
-	s2 := groups.NewStore()
-	s2.SetPersonKeyValidator(members.ValidateID)
-	if err := s2.LoadFromFiles(groupsPath, uuidRows); err != nil {
-		t.Errorf("UUID-keyed memberships row failed to load: %v", err)
-	}
-}
-
-// writeTestFile writes a small fixture file (0600) or fails the test.
-func writeTestFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatal(err)
 	}
 }

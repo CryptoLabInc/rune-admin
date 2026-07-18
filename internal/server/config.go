@@ -80,8 +80,8 @@ type ConsoleConfig struct {
 	// the binary's embedded build.
 	FrontendDir string `yaml:"frontend_dir"`
 	// DBPath is the SQLite file backing the console session store; it holds
-	// the runespace-cloud session token at rest (kept 0600). Defaults beside
-	// tokens_file.
+	// the runespace-cloud session token at rest (kept 0600). Defaults into
+	// storage.data_dir.
 	DBPath string `yaml:"db_path"`
 }
 
@@ -101,12 +101,13 @@ func (c *Config) ConsolePort() int {
 	return c.Server.Console.Port
 }
 
-// ConsoleDBPath returns the session-store path, defaulting beside tokens_file.
+// ConsoleDBPath returns the session-store path, defaulting into the data
+// directory.
 func (c *Config) ConsoleDBPath() string {
 	if c.Server.Console.DBPath != "" {
 		return c.Server.Console.DBPath
 	}
-	return filepath.Join(filepath.Dir(c.Tokens.TokensFile), "console-session.db")
+	return filepath.Join(c.Storage.DataDir, "console-session.db")
 }
 
 type KeysConfig struct {
@@ -129,25 +130,20 @@ type RunespaceConfig struct {
 	Insecure   bool   `yaml:"insecure"` // true = plaintext dial (local dev)
 }
 
+// TokensConfig carries the team secret console tokens are minted from,
+// either inline or through a 0640-or-tighter file that Resolve()
+// materialises into TeamSecret.
 type TokensConfig struct {
 	TeamSecret     string `yaml:"team_secret"`
 	TeamSecretFile string `yaml:"team_secret_file"`
-	RolesFile      string `yaml:"roles_file"`
-	TokensFile     string `yaml:"tokens_file"`
 }
 
-// GroupsConfig configures the group RBAC store. File paths default to
-// groups.yml / memberships.yml next to tokens_file (same directory
-// convention as the token store); top_k caps default to plan §5 values
-// (read=10, write and above=50). The org admin is NOT configured here:
-// it is derived from the first-login console owner (a config-declared
-// org_admins entry was removed — LoadConfig turns a leftover line into
-// migration guidance).
+// GroupsConfig configures the group RBAC store: top_k caps default to plan
+// §5 values (read=10, write and above=50). The org admin is NOT configurable:
+// it is derived from the first-login console owner.
 type GroupsConfig struct {
-	GroupsFile      string `yaml:"groups_file"`
-	MembershipsFile string `yaml:"memberships_file"`
-	TopKRead        int    `yaml:"topk_read"`
-	TopKWrite       int    `yaml:"topk_write"`
+	TopKRead  int `yaml:"topk_read"`
+	TopKWrite int `yaml:"topk_write"`
 
 	// Deprecated: org_admins is never honored — the org admin is the account
 	// that first logs in to the console. The field is declared solely so a
@@ -158,49 +154,15 @@ type GroupsConfig struct {
 	OrgAdmins []string `yaml:"org_admins"`
 }
 
-// GroupsFiles resolves the group store paths, applying the
-// same-directory-as-tokens default.
-func (c *Config) GroupsFiles() (groupsPath, membershipsPath string) {
-	dir := filepath.Dir(c.Tokens.TokensFile)
-	groupsPath = c.Groups.GroupsFile
-	if groupsPath == "" {
-		groupsPath = filepath.Join(dir, "groups.yml")
-	}
-	membershipsPath = c.Groups.MembershipsFile
-	if membershipsPath == "" {
-		membershipsPath = filepath.Join(dir, "memberships.yml")
-	}
-	return groupsPath, membershipsPath
-}
-
-// MembersConfig configures the member registry + invite flow. All fields are
-// optional: the file paths default next to tokens_file (same convention as
-// the group store), the TTL defaults to 24 hours, and the mail log defaults
-// beside the data files — so configs written before this feature keep working
-// unchanged.
+// MembersConfig configures the member registry + invite flow. Every field is
+// optional: the TTL defaults to 24 hours and the mail log defaults beside the
+// other store artifacts.
 type MembersConfig struct {
-	MembersFile      string `yaml:"members_file"`       // default: members.yml beside tokens_file
-	InvitesFile      string `yaml:"invites_file"`       // default: invites.yml beside tokens_file
 	InviteTTLMinutes int    `yaml:"invite_ttl_minutes"` // default: 1440 = 24h (§8.3 wrap TTL as revised 2026-07-13: console UX policy adopted, residual risk offset by revoke/rotate)
 	ConsoleEndpoint  string `yaml:"console_endpoint"`   // ridden in the invite mail (conn info)
 	CAPemURL         string `yaml:"ca_pem_url"`
 	CAPemSHA256      string `yaml:"ca_pem_sha256"`
 	MailLogFile      string `yaml:"mail_log_file"` // LogMailer output; default: invite-mail.log
-}
-
-// MembersFiles resolves the member/invite store paths, applying the
-// same-directory-as-tokens default (clone of GroupsFiles).
-func (c *Config) MembersFiles() (membersPath, invitesPath string) {
-	dir := filepath.Dir(c.Tokens.TokensFile)
-	membersPath = c.Members.MembersFile
-	if membersPath == "" {
-		membersPath = filepath.Join(dir, "members.yml")
-	}
-	invitesPath = c.Members.InvitesFile
-	if invitesPath == "" {
-		invitesPath = filepath.Join(dir, "invites.yml")
-	}
-	return membersPath, invitesPath
 }
 
 // InviteTTL returns the wrap TTL, defaulting to 24 hours when unset — the
@@ -215,12 +177,13 @@ func (c *Config) InviteTTL() time.Duration {
 	return time.Duration(m) * time.Minute
 }
 
-// MailLogFile returns the LogMailer output path, defaulting beside tokens_file.
+// MailLogFile returns the LogMailer output path, defaulting into the data
+// directory.
 func (c *Config) MailLogFile() string {
 	if c.Members.MailLogFile != "" {
 		return c.Members.MailLogFile
 	}
-	return filepath.Join(filepath.Dir(c.Tokens.TokensFile), "invite-mail.log")
+	return filepath.Join(c.Storage.DataDir, "invite-mail.log")
 }
 
 // AuditConfig.Mode is one of: "", "file", "stdout", "file+stdout".
@@ -230,25 +193,62 @@ type AuditConfig struct {
 	Path string `yaml:"path"`
 }
 
-// StorageConfig configures the unified store database (runeconsole.db) that
-// replaces the per-store YAML files. The whole section is optional: when
-// db_path is unset the file defaults beside tokens_file, like every other
-// store artifact. Deliberately never written into generated or example
-// configs' active lines — LoadConfig decodes strictly (KnownFields), so a
-// config carrying storage: would make a pre-migration binary refuse to
-// start and break the documented rollback path.
+// StorageConfig says where the console keeps its state on disk. data_dir is
+// required: it is the directory every runtime artifact defaults into — the
+// unified store database (runeconsole.db), the console session database
+// (console-session.db) and the invite mail log. db_path optionally moves the
+// store database elsewhere; the other artifacts have their own overrides.
 type StorageConfig struct {
-	DBPath string `yaml:"db_path"`
+	DataDir string `yaml:"data_dir"`
+	DBPath  string `yaml:"db_path"`
 }
 
 // StoreDBPath returns the unified store database path, defaulting to
-// runeconsole.db beside tokens_file (the de-facto data directory every other
-// store path derives from).
+// runeconsole.db inside the data directory.
 func (c *Config) StoreDBPath() string {
 	if c.Storage.DBPath != "" {
 		return c.Storage.DBPath
 	}
-	return filepath.Join(filepath.Dir(c.Tokens.TokensFile), "runeconsole.db")
+	return filepath.Join(c.Storage.DataDir, "runeconsole.db")
+}
+
+// removedKeys lists the store-path keys the v1.0.0-alpha layout wrote that
+// this release no longer accepts, each paired with what took over its job.
+// Strict decoding rejects them with a bare "field X not found in type ...",
+// which tells an operator upgrading an alpha install nothing about the fix —
+// and removing the keys alone still leaves them one wall short, because
+// storage.data_dir is now required. LoadConfig names both halves at once, so
+// an upgrade takes one edit rather than two blind restarts.
+//
+// groups.org_admins is deliberately NOT here: it is declared as a deprecated
+// field and refused on its DECODED VALUE below, which cannot be broken by the
+// yaml library rewording its strict-decode message. That is the sturdier
+// mechanism of the two, and these six belong on it.
+var removedKeys = []struct{ field, replacedBy string }{
+	{"roles_file", "the built-in roles are seeded into the store database at boot"},
+	{"tokens_file", "tokens live in the store database"},
+	{"groups_file", "groups live in the store database"},
+	{"memberships_file", "memberships live in the store database"},
+	{"members_file", "the member registry lives in the store database"},
+	{"invites_file", "invites live in the store database"},
+}
+
+// removedKeyGuidance returns upgrade guidance when a strict-decode failure
+// names one or more removed keys, or "" when the failure is anything else.
+func removedKeyGuidance(decodeErr error) string {
+	msg := decodeErr.Error()
+	var found []string
+	for _, k := range removedKeys {
+		if strings.Contains(msg, "field "+k.field+" not found") {
+			found = append(found, k.field+" ("+k.replacedBy+")")
+		}
+	}
+	if len(found) == 0 {
+		return ""
+	}
+	return "this config predates the single-database layout. Remove " +
+		strings.Join(found, ", ") +
+		", then set storage.data_dir to the directory that should hold runeconsole.db"
 }
 
 // LoadConfig resolves the config path (caller override → ConfigLookupPaths)
@@ -273,6 +273,9 @@ func LoadConfig(override string) (*Config, error) {
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
+		if guidance := removedKeyGuidance(err); guidance != "" {
+			return nil, fmt.Errorf("parse config %s: %s: %w", path, guidance, err)
+		}
 		return nil, fmt.Errorf("parse config %s: %w (searched: %s)", path, err, strings.Join(searched, ", "))
 	}
 	// groups.org_admins no longer selects the org admin (it is the account that
@@ -409,11 +412,8 @@ func (c *Config) Validate() error {
 	if c.Keys.EmbeddingDim == 0 {
 		errs = append(errs, "keys.embedding_dim is required")
 	}
-	if c.Tokens.RolesFile == "" {
-		errs = append(errs, "tokens.roles_file is required")
-	}
-	if c.Tokens.TokensFile == "" {
-		errs = append(errs, "tokens.tokens_file is required")
+	if c.Storage.DataDir == "" {
+		errs = append(errs, "storage.data_dir is required")
 	}
 	if len(errs) > 0 {
 		return errors.New("config invalid:\n  - " + strings.Join(errs, "\n  - "))

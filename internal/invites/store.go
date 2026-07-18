@@ -10,8 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/CryptoLabInc/rune-console/internal/storedb"
 )
 
@@ -21,7 +19,7 @@ import (
 // database (with the aged-pending sweep as the transaction's first
 // statement) before the maps change, so the cache can never get ahead of
 // durable state. A store with no sink attached (NewStore alone) is a pure
-// in-memory store — how unit tests and the one-time YAML importer use it.
+// in-memory store — how unit tests use it.
 type Store struct {
 	mu       sync.RWMutex
 	byHandle map[string]*Invite
@@ -45,74 +43,6 @@ func NewStore() *Store {
 	}
 }
 
-// LoadFromFile reads invites from a legacy YAML file. It is the one-time
-// importer's input path (internal/storedb/yamlimport) — the daemon loads
-// from the store database via LoadFromDB — and its validation set is the
-// import contract: a missing file leaves the store empty; a group/other-
-// readable file, a duplicate handle/lease, an empty required field, a bad
-// status, or an unparseable non-empty expires_at fails the load, and with
-// it the import.
-func (s *Store) LoadFromFile(path string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("read invites file %s: %w", path, err)
-	}
-	// invites.yml holds pending evt_ plaintext, so it must stay owner-only.
-	// Refuse to load a secrets file that group/other can access — looser
-	// perms mean a token may already be exposed. Fail closed: a bad perm
-	// fails the import, like the validation errors below.
-	if info, serr := os.Stat(path); serr != nil {
-		return fmt.Errorf("stat invites file %s: %w", path, serr)
-	} else if perm := info.Mode().Perm(); perm&0o077 != 0 {
-		return fmt.Errorf("invites file %s has too-permissive mode %04o (must be 0600, owner-only)", path, perm)
-	}
-	var doc struct {
-		Invites []Invite `yaml:"invites"`
-	}
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return fmt.Errorf("parse invites file %s: %w", path, err)
-	}
-	for i := range doc.Invites {
-		inv := doc.Invites[i]
-		if inv.Handle == "" {
-			return fmt.Errorf("invites file %s: entry %d missing handle", path, i)
-		}
-		if inv.LeaseID == "" {
-			return fmt.Errorf("invites file %s: entry %d missing lease_id", path, i)
-		}
-		if inv.MemberID == "" || inv.Email == "" {
-			return fmt.Errorf("invites file %s: entry %d missing member_id or email", path, i)
-		}
-		if !validInviteStatus(inv.Status) {
-			return fmt.Errorf("invites file %s: entry %d has invalid status %q", path, i, inv.Status)
-		}
-		// A non-empty ExpiresAt must parse: isExpiredAt treats an
-		// unparseable timestamp as never-expires, which would keep a pending
-		// invite (and its live token) alive forever. Fail closed on load.
-		if inv.ExpiresAt != "" {
-			if _, perr := time.Parse(time.RFC3339, inv.ExpiresAt); perr != nil {
-				return fmt.Errorf("invites file %s: entry %d has unparseable expires_at %q: %w", path, i, inv.ExpiresAt, perr)
-			}
-		}
-		if _, dup := s.byHandle[inv.Handle]; dup {
-			return fmt.Errorf("invites file %s: duplicate handle '%s'", path, inv.Handle)
-		}
-		if _, dup := s.byLease[inv.LeaseID]; dup {
-			return fmt.Errorf("invites file %s: duplicate lease_id '%s'", path, inv.LeaseID)
-		}
-		cp := inv
-		s.byHandle[inv.Handle] = &cp
-		s.byLease[inv.LeaseID] = &cp
-	}
-	return nil
-}
-
 // LoadFromDB attaches database (the unified store database, opened with
 // db.OpenStrict and carrying the storedb schema) as the write-through
 // persistence sink and loads the in-memory indexes from its invites table.
@@ -120,9 +50,8 @@ func (s *Store) LoadFromFile(path string) error {
 // whose expires_at has passed is flipped to expired and its sealed plaintext
 // scrubbed, so a token that aged out while the daemon was down never
 // survives a restart. NULL token_value/expires_at columns map to the
-// store's "" empty-value convention. Rows are trusted as-is: they were
-// either written by this store's own mutators or funnelled through
-// LoadFromFile's validation by the importer, with the schema CHECKs and the
+// store's "" empty-value convention. Rows are trusted as-is: they are
+// written by this store's own mutators, with the schema CHECKs and the
 // forward-only status trigger as a second layer.
 func (s *Store) LoadFromDB(database *sql.DB) error {
 	// Boot-time sweep (its own transaction, injected clock): the write-path
@@ -159,8 +88,8 @@ func (s *Store) LoadFromDB(database *sql.DB) error {
 		}
 		inv.TokenValue = tokenValue.String
 		inv.ExpiresAt = expiresAt.String
-		// Fail-closed twin of LoadFromFile's parse check, tightened to the
-		// canonical form: expires_at must be storedb.TimeFormat (RFC3339 UTC,
+		// Fail-closed parse check, pinned to the canonical form:
+		// expires_at must be storedb.TimeFormat (RFC3339 UTC,
 		// fixed three-digit milliseconds) exactly as this store writes it,
 		// because sweepAgedPending compares the column TEXTUALLY
 		// (lexicographic == chronological only within that one fixed-width
@@ -179,7 +108,7 @@ func (s *Store) LoadFromDB(database *sql.DB) error {
 				return fmt.Errorf("invites: load from db: invite %s has non-canonical expires_at %q (want RFC3339 UTC with three-digit milliseconds, e.g. %q)", inv.Handle, inv.ExpiresAt, canonical)
 			}
 		}
-		// ONE shared *Invite per row, same aliasing as LoadFromFile and Issue:
+		// ONE shared *Invite per row, same aliasing as Issue:
 		// mutators update the shared record and both indexes see it.
 		cp := inv
 		byHandle[cp.Handle] = &cp
@@ -565,9 +494,8 @@ func (s *Store) persist(now time.Time, fn func(ctx context.Context, tx *sql.Tx) 
 // sides are CANONICAL storedb.TimeFormat (RFC3339 UTC, fixed three-digit
 // milliseconds — the fixed width is what makes lexicographic order time
 // order), and now comes from the injected clock, never datetime('now'). The
-// canonical form is enforced at every entry point: Issue writes it, the
-// YAML importer normalizes legacy timestamps to it, and LoadFromDB refuses
-// to boot on a row that deviates from it. The in-memory
+// canonical form is enforced at every entry point: Issue writes it and
+// LoadFromDB refuses to boot on a row that deviates from it. The in-memory
 // records are NOT updated here (callers hold no reference to every aged
 // row); reads stay correct because expiry is derived lazily from ExpiresAt.
 func sweepAgedPending(ctx context.Context, tx *sql.Tx, now time.Time) error {
@@ -598,20 +526,6 @@ func expectRows(res sql.Result, want int64, ref string) error {
 func expectOneRow(res sql.Result, ref string) error {
 	return expectRows(res, 1, ref)
 }
-
-// Shutdown does nothing.
-//
-// Deprecated: persistence is write-through to SQLite (every mutation is
-// committed before it returns); kept so call sites compile, removed in a
-// follow-up release.
-func (s *Store) Shutdown() {}
-
-// Flush does nothing.
-//
-// Deprecated: persistence is write-through to SQLite (every mutation is
-// committed before it returns); kept so call sites compile, removed in a
-// follow-up release.
-func (s *Store) Flush() {}
 
 // randHex returns 16 random bytes as a 32-char lowercase hex string.
 func randHex() (string, error) {

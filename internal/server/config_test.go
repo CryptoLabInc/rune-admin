@@ -25,10 +25,10 @@ runespace:
   insecure: true
 tokens:
   team_secret: inline-team-secret-deadbeef
-  roles_file: /tmp/roles.yml
-  tokens_file: /tmp/tokens.yml
 audit:
   mode: stdout
+storage:
+  data_dir: /tmp
 `
 }
 
@@ -93,12 +93,28 @@ func TestLoadConfigDefaultLookupErrorListsPaths(t *testing.T) {
 	}
 }
 
+// TestLoadConfigUnknownFieldsRejected — strict decoding refuses an unknown key
+// at every depth, not just the top level. A typo nested inside a section is the
+// likelier operator mistake, and it is the one that fails silently if
+// KnownFields only reached the outermost mapping: the section still decodes,
+// so the daemon boots with the intended setting quietly ignored.
 func TestLoadConfigUnknownFieldsRejected(t *testing.T) {
-	body := minimalValidConfig(t) + "extra_unknown_field: 42\n"
-	path := writeConfig(t, body)
-	_, err := LoadConfig(path)
-	if err == nil {
-		t.Error("unknown top-level field accepted, want strict error")
+	cases := map[string]string{
+		"top level": minimalValidConfig(t) + "extra_unknown_field: 42\n",
+		// Inside keys:, a section that already decodes fine. Deliberately not
+		// one of the removed keys — TestLoadConfigRemovedKeysGuidance owns
+		// those, and they take a different path (tailored guidance).
+		"nested in a section": strings.Replace(minimalValidConfig(t),
+			"  embedding_dim: 1024",
+			"  embedding_dim: 1024\n  extra_unknown_field: 42",
+			1),
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := LoadConfig(writeConfig(t, body)); err == nil {
+				t.Error("unknown field accepted, want strict error")
+			}
+		})
 	}
 }
 
@@ -127,6 +143,31 @@ func TestLoadConfigOrgAdminsRemovedGuidance(t *testing.T) {
 	// downgrade this to a bare "field not found in type server.GroupsConfig".
 	if strings.Contains(err.Error(), "not found in type") {
 		t.Errorf("err came from the strict-decode path, not the value check: %v", err)
+	}
+}
+
+func TestLoadConfigRemovedStorePathsGuidance(t *testing.T) {
+	// The v1.0.0-alpha installer wrote roles_file and tokens_file into every
+	// config it generated. Strict decoding refuses them, but a bare "field not
+	// found" tells an upgrading operator nothing — and deleting the keys alone
+	// still leaves storage.data_dir missing, costing a second blind restart, so
+	// the guidance must name both halves at once.
+	//
+	// groups.org_admins is covered by TestLoadConfigOrgAdminsRemovedGuidance
+	// instead: it is refused on its decoded value rather than on the decoder's
+	// error text. These six keys still ride the error text.
+	body := strings.Replace(minimalValidConfig(t),
+		"  team_secret: inline-team-secret-deadbeef",
+		"  team_secret: inline-team-secret-deadbeef\n  roles_file: /o/roles.yml\n  tokens_file: /o/tokens.yml",
+		1)
+	_, err := LoadConfig(writeConfig(t, body))
+	if err == nil {
+		t.Fatal("config with removed store paths accepted, want guidance")
+	}
+	for _, want := range []string{"roles_file", "tokens_file", "storage.data_dir"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %v, want it to mention %q", err, want)
+		}
 	}
 }
 
@@ -273,11 +314,10 @@ func TestRedactMasksSecrets(t *testing.T) {
 
 func TestValidateRejectsMissingFields(t *testing.T) {
 	cases := map[string]func(*Config){
-		"missing port":        func(c *Config) { c.Server.GRPC.Port = 0 },
-		"missing keys.path":   func(c *Config) { c.Keys.Path = "" },
-		"missing dim":         func(c *Config) { c.Keys.EmbeddingDim = 0 },
-		"missing roles_file":  func(c *Config) { c.Tokens.RolesFile = "" },
-		"missing tokens_file": func(c *Config) { c.Tokens.TokensFile = "" },
+		"missing port":      func(c *Config) { c.Server.GRPC.Port = 0 },
+		"missing keys.path": func(c *Config) { c.Keys.Path = "" },
+		"missing dim":       func(c *Config) { c.Keys.EmbeddingDim = 0 },
+		"missing data_dir":  func(c *Config) { c.Storage.DataDir = "" },
 	}
 	base := func() *Config {
 		path := writeConfig(t, minimalValidConfig(t))
@@ -335,10 +375,10 @@ func TestExampleConfigParsesCleanly(t *testing.T) {
 	}
 }
 
-func TestStoreDBPathDefaultsBesideTokensFile(t *testing.T) {
-	// A config predating the storage key must parse unchanged and derive the
-	// unified store DB path from tokens_file (the rollback contract: real
-	// configs never carry storage:).
+func TestStoreDBPathDefaultsIntoDataDir(t *testing.T) {
+	// With no explicit db_path the store database lands inside
+	// storage.data_dir, the directory every other runtime artifact
+	// also defaults into.
 	path := writeConfig(t, minimalValidConfig(t))
 	cfg, err := LoadConfig(path)
 	if err != nil {
@@ -350,9 +390,9 @@ func TestStoreDBPathDefaultsBesideTokensFile(t *testing.T) {
 }
 
 func TestStoreDBPathExplicitOverride(t *testing.T) {
-	body := minimalValidConfig(t) + `storage:
-  db_path: /var/lib/runeconsole/store.db
-`
+	// minimalValidConfig ends with the storage block, so an extra indented key
+	// continues that mapping instead of opening a duplicate storage:.
+	body := minimalValidConfig(t) + "  db_path: /var/lib/runeconsole/store.db\n"
 	path := writeConfig(t, body)
 	cfg, err := LoadConfig(path)
 	if err != nil {

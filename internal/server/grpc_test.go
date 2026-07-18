@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -114,21 +113,15 @@ func TestSearchTopKExceeded(t *testing.T) {
 
 const testInviteToken = "evt_00000000000000000000000000000000"
 
-// newRedemptionHarness wires a gRPC server with a temp-file-backed member
-// registry and invite store (Issue/Unwrap persist synchronously, so the
-// stores need real paths), and issues one invite for kim@example.com with
-// the given TTL. It returns the issued clear bundle for the tests to redeem.
+// newRedemptionHarness wires a gRPC server with an in-memory member registry
+// and invite store (no database attached, so the write-through persist is a
+// no-op and the tests read the stores' own state), and issues one invite for
+// kim@example.com with the given TTL. It returns the issued clear bundle for
+// the tests to redeem.
 func newRedemptionHarness(t *testing.T, ttl time.Duration) (*ConsoleGRPC, *invites.Store, *members.Store, *invites.ClearBundle) {
 	t.Helper()
-	dir := t.TempDir()
 	ms := members.NewStore()
-	if err := ms.LoadFromFile(filepath.Join(dir, "members.yml")); err != nil {
-		t.Fatal(err)
-	}
 	is := invites.NewStore()
-	if err := is.LoadFromFile(filepath.Join(dir, "invites.yml")); err != nil {
-		t.Fatal(err)
-	}
 	m, err := ms.Add("kim@example.com", "Kim")
 	if err != nil {
 		t.Fatal(err)
