@@ -8,6 +8,7 @@ import Radio from "@/components/elements/Radio";
 import ModalLayout from "@/components/layout/ModalLayout";
 import { buildTeamOptions } from "@/components/teams/teamOptions";
 import { cn } from "@/utils/cn";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TTeamTree } from "@/types/teamTypes";
 
 const styles = {
@@ -66,14 +67,14 @@ const DeleteTeamModal = ({
 
   if (hasChildren) {
     return (
-      <ModalLayout title="팀을 삭제할 수 없습니다" isOpen>
+      <ModalLayout title={MODAL_TITLES.deleteTeam(teamName)} isOpen>
         <p className="text-center text-base">
           하위 팀이 있는 팀은 삭제할 수 없습니다.
           <br />
-          하위 팀을 먼저 삭제한 후 다시 시도해주세요.
+          하위 팀을 먼저 삭제한 후 다시 시도해 주세요.
         </p>
         <Button
-          btnText="닫기"
+          btnText={BTN_TEXT.close}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
@@ -110,7 +111,7 @@ const DeleteTeamModal = ({
   };
 
   return (
-    <ModalLayout title={`팀 삭제 — ${teamName}`} isOpen isWide>
+    <ModalLayout title={MODAL_TITLES.deleteTeam(teamName)} isOpen isWide>
       <div className="flex w-full flex-col gap-4">
         <Notice tone="info">
           삭제하려는 팀의 기억 처리 방식을 선택해 주세요.
@@ -143,7 +144,7 @@ const DeleteTeamModal = ({
             />
             <Input
               id="delete-team-transfer-confirm"
-              labelText="확인 — 타겟 팀명 입력"
+              labelText="확인 - 타겟 팀명 입력"
               placeholder={targetName || "팀을 먼저 선택하세요"}
               maxLength={50}
               value={transferConfirm}
@@ -175,7 +176,7 @@ const DeleteTeamModal = ({
           <div className={styles.optionFields}>
             <Input
               id="delete-team-purge-confirm"
-              labelText="확인 — 삭제할 팀명 입력"
+              labelText="확인 - 삭제할 팀명 입력"
               placeholder={teamName}
               maxLength={50}
               value={purgeConfirm}
@@ -191,13 +192,13 @@ const DeleteTeamModal = ({
 
       <div className="flex w-full gap-2">
         <Button
-          btnText="취소"
+          btnText={BTN_TEXT.cancel}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="팀 삭제"
+          btnText={BTN_TEXT.deleteTeam}
           btnSize="md"
           btnColor="redFilled"
           disabled={!canSubmit}

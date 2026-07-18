@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import Button from "@/components/elements/Button";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 describe("Button", () => {
   it("renders the label and fires handleClick", async () => {
@@ -10,14 +11,14 @@ describe("Button", () => {
     const handleClick = vi.fn();
     render(
       <Button
-        btnText="초대하기"
+        btnText={BTN_TEXT.invite}
         btnSize="md"
         btnColor="mintFilled"
         handleClick={handleClick}
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "초대하기" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.invite }));
     expect(handleClick).toHaveBeenCalledOnce();
   });
 
@@ -26,7 +27,7 @@ describe("Button", () => {
     const handleClick = vi.fn();
     render(
       <Button
-        btnText="초대 전송"
+        btnText={BTN_TEXT.sendInvitation}
         btnSize="md"
         btnColor="mintFilled"
         handleClick={handleClick}
@@ -34,15 +35,19 @@ describe("Button", () => {
       />,
     );
 
-    const button = screen.getByRole("button", { name: "초대 전송" });
+    const button = screen.getByRole("button", {
+      name: BTN_TEXT.sendInvitation,
+    });
     expect(button).toBeDisabled();
     await user.click(button).catch(() => {});
     expect(handleClick).not.toHaveBeenCalled();
   });
 
   it("defaults to type=button and honors btnType", () => {
-    render(<Button btnText="저장" btnSize="sm" btnColor="grayOutline" />);
-    expect(screen.getByRole("button", { name: "저장" })).toHaveAttribute(
+    render(
+      <Button btnText={BTN_TEXT.save} btnSize="sm" btnColor="grayOutline" />,
+    );
+    expect(screen.getByRole("button", { name: BTN_TEXT.save })).toHaveAttribute(
       "type",
       "button",
     );
@@ -51,13 +56,13 @@ describe("Button", () => {
   it("merges an external className, external winning on conflict", () => {
     render(
       <Button
-        btnText="저장"
+        btnText={BTN_TEXT.save}
         btnSize="sm"
         btnColor="grayOutline"
         className="justify-start"
       />,
     );
-    const button = screen.getByRole("button", { name: "저장" });
+    const button = screen.getByRole("button", { name: BTN_TEXT.save });
     expect(button).toHaveClass("justify-start");
     expect(button).not.toHaveClass("justify-center");
   });

@@ -1,5 +1,6 @@
 // Team-member endpoints (SC-06·10·14): the "one team × many users" surface of
-// the membership data. List, add-existing-user, bulk role change, bulk remove.
+// the membership data. List, add member (server-judged, may create the user
+// and send a code), bulk role change, bulk remove.
 import {
   HttpError,
   paginate,
@@ -9,7 +10,7 @@ import {
 } from "../http.ts";
 import type { BatchResult } from "../http.ts";
 import type { Ctx } from "../router.ts";
-import { state } from "../store.ts";
+import { nextId, state } from "../store.ts";
 import type { Membership, Role, User } from "../types.ts";
 
 const GRANTABLE: Role[] = ["edit", "write", "read"];
@@ -65,21 +66,33 @@ export const addTeamMember = (ctx: Ctx): void => {
       "role must be edit|write|read",
     );
   }
-  const user = state.users.find(
-    (u) => u.account.toLowerCase() === account.toLowerCase(),
-  );
-  if (!user)
-    throw new HttpError(
-      404,
-      "USER_NOT_FOUND",
-      `no user with account ${account}`,
-    );
-  if (user.account.toLowerCase() === "admin@corp.com") {
+  if (account.toLowerCase() === "admin@corp.com") {
     throw new HttpError(
       409,
       "CANNOT_INVITE_ADMIN",
       "cannot add the console Admin account",
     );
+  }
+
+  /* Per-target-status judgment is the server's call (SC-10, API design):
+     new (unregistered) account → create the user (invite_pending) + add
+     membership + send a code · expired code/session → add membership +
+     fresh code (→ invite_pending) · online / pending in another team →
+     membership only, no code · already in THIS team → 409. */
+  let user = state.users.find(
+    (u) => u.account.toLowerCase() === account.toLowerCase(),
+  );
+  const isNew = !user;
+  if (!user) {
+    user = {
+      id: nextId("u"),
+      account,
+      status: "invite_pending",
+      lastAccessAt: null,
+      lastInvitedAt: new Date().toISOString(),
+      sessionExpiredAt: null,
+    };
+    state.users.push(user);
   }
   if (
     state.memberships.some((m) => m.teamId === teamId && m.userId === user.id)
@@ -89,6 +102,19 @@ export const addTeamMember = (ctx: Ctx): void => {
       "ALREADY_TEAM_MEMBER",
       "already a member of this team",
     );
+  }
+  const codeSent =
+    isNew ||
+    user.status === "session_expired" ||
+    user.status === "invite_expired";
+  if (codeSent) {
+    user.status = "invite_pending";
+    user.lastInvitedAt = new Date().toISOString();
+    state.invitations.push({
+      account: user.account,
+      issuedAt: new Date().toISOString(),
+      lastAccessAt: null,
+    });
   }
   const membership: Membership = {
     userId: user.id,

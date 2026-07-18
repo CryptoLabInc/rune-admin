@@ -8,6 +8,7 @@ import {
   TEAM_NAME_PATTERN,
   TEAM_NAME_RULE_TEXT,
 } from "@/components/teams/teamOptions";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TTeamTree } from "@/types/teamTypes";
 
 interface RenameTeamModalProps {
@@ -61,7 +62,7 @@ const RenameTeamModal = ({
       : undefined;
 
   return (
-    <ModalLayout title="팀 이름 변경" isOpen>
+    <ModalLayout title={MODAL_TITLES.renameTeam} isOpen>
       <div className="flex w-full flex-col gap-5">
         <Input
           id="rename-team-name"
@@ -76,13 +77,13 @@ const RenameTeamModal = ({
       </div>
       <div className="flex w-full gap-2">
         <Button
-          btnText="취소"
+          btnText={BTN_TEXT.cancel}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="저장"
+          btnText={BTN_TEXT.save}
           btnSize="md"
           btnColor="mintFilled"
           disabled={!canSubmit}

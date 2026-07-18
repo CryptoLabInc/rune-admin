@@ -38,4 +38,48 @@ describe("useRemoveTeamMembersMutation", () => {
     expect(keys).toContain(QUERY_KEYS.teamMembers);
     expect(keys).toContain(QUERY_KEYS.teamsTree);
   });
+
+  it("patches cached member pages from succeeded[] before any refetch", async () => {
+    vi.spyOn(teamMemberAPIs, "removeTeamMembers").mockResolvedValue(
+      jsonRes({
+        succeeded: ["u_1"],
+        failed: [{ id: "u_9", code: "X", message: "x" }],
+      }),
+    );
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    /* Seed the visible page cache; no observer, so no refetch can land —
+       any change to this entry comes from the mutation's cache patch. */
+    const pageKey = [QUERY_KEYS.teamMembers, "t_1", 1, 10];
+    client.setQueryData(pageKey, {
+      total: 12,
+      page: 1,
+      size: 10,
+      items: [
+        { userId: "u_1", account: "kim@corp.com", role: "read" },
+        { userId: "u_2", account: "lee@corp.com", role: "edit" },
+      ],
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(() => useRemoveTeamMembersMutation("t_1"), {
+      wrapper,
+    });
+    result.current.mutate(["u_1", "u_9"]);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const page = client.getQueryData<{
+      total: number;
+      items: { userId: string }[];
+    }>(pageKey);
+    /* Only the succeeded id is dropped; the failed one stays. */
+    expect(page?.items.map((m) => m.userId)).toEqual(["u_2"]);
+    expect(page?.total).toBe(11);
+  });
 });

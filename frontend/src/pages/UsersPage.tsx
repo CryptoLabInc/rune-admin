@@ -36,6 +36,7 @@ import { useUserQuery } from "@/hooks/queries/useUserQuery";
 import { useUsersQuery } from "@/hooks/queries/useUsersQuery";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { parseErrorCode } from "@/api/parseError";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import type { TDropdownOption } from "@/types/commonTypes";
 import type { TTeamMemberRole, TTeamTree } from "@/types/teamTypes";
 import type {
@@ -43,7 +44,7 @@ import type {
   TInviteResult,
   TUserListItem,
 } from "@/types/userTypes";
-import { useToastStore } from "@/stores/toastStore";
+import { useNoticeStore } from "@/stores/noticeStore";
 
 const styles = {
   page: "flex flex-col gap-3.5 p-4",
@@ -119,7 +120,7 @@ const UsersPage = () => {
   const [batchFailures, setBatchFailures] = useState<
     { account: string; reason: string }[] | null
   >(null);
-  const showToast = useToastStore((state) => state.showToast);
+  const showNotice = useNoticeStore((state) => state.showNotice);
 
   const { data: teams } = useTeamsTreeQuery();
   const detailQuery = useUserQuery(drawerUserId ?? "");
@@ -234,7 +235,7 @@ const UsersPage = () => {
     );
     const failed = targets.filter((_, i) => results[i].status === "rejected");
     if (failed.length === 0) {
-      showToast("초대 코드를 재전송했습니다.");
+      showNotice("초대 코드 재전송", "초대 코드를 재전송했습니다.", "info");
       return;
     }
     setBatchFailures(
@@ -265,7 +266,7 @@ const UsersPage = () => {
     }
 
     if (result.failed.length === 0) {
-      showToast("멤버를 삭제했습니다.");
+      showNotice("멤버 삭제", "멤버를 삭제했습니다.", "info");
       return;
     }
     if (succeededIds.length === 0) {
@@ -289,7 +290,7 @@ const UsersPage = () => {
           description="새로고침 후 다시 시도해 주세요."
           action={
             <Button
-              btnText="새로고침"
+              btnText={BTN_TEXT.refresh}
               btnSize="sm"
               btnColor="grayOutline"
               className="w-fit"
@@ -312,7 +313,7 @@ const UsersPage = () => {
           description="멤버를 초대하면 초대 코드가 이메일로 발송됩니다"
           action={
             <Button
-              btnText="+ 멤버 초대"
+              btnText={BTN_TEXT.inviteMember}
               btnSize="sm"
               btnColor="mintFilled"
               className="w-fit"
@@ -335,53 +336,63 @@ const UsersPage = () => {
     <section className={styles.page} aria-label="멤버 관리">
       <Table
         fluid
+        /* Fixed page height: thead 36px + 10 rows × 49px (h-8 status chip
+        + py-2). Short pages, empty, and loading all keep this height so
+        pagination never shifts the layout. */
+        scrollClassName="min-h-[526px]"
         toolbar={
           <div className="px-4 py-4">
-            <div className="flex flex-col items-start gap-2">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-end justify-between gap-4">
+              <div className="flex flex-col flex-wrap gap-5">
                 <SearchInput
                   value={search}
                   onChange={withPageReset(setSearch)}
                   placeholder="계정 검색"
                   maxLength={100}
-                  className="w-[200px]"
+                  className="w-50"
                 />
-                <Dropdown
-                  options={STATUS_OPTIONS}
-                  value={statusFilter}
-                  onChange={withPageReset(setStatusFilter)}
-                  size="sm"
-                  ariaLabel="status 필터"
-                  className="w-[150px]"
-                />
-                <Dropdown
-                  options={groupOptions}
-                  value={groupFilter}
-                  onChange={withPageReset(setGroupFilter)}
-                  size="sm"
-                  ariaLabel="group 필터"
-                  className="w-[150px]"
-                />
-                <Dropdown
-                  options={SORT_OPTIONS}
-                  value={sort}
-                  onChange={withPageReset(setSort)}
-                  size="sm"
-                  ariaLabel="정렬"
-                  className="w-[180px]"
-                />
+                {/* filter/order dropdown */}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-md text-faint">정렬 기준 </span>
+                    <Dropdown
+                      options={SORT_OPTIONS}
+                      value={sort}
+                      onChange={withPageReset(setSort)}
+                      size="sm"
+                      ariaLabel="정렬"
+                      className="w-36"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-md text-faint">status </span>
+                    <Dropdown
+                      options={STATUS_OPTIONS}
+                      value={statusFilter}
+                      onChange={withPageReset(setStatusFilter)}
+                      size="sm"
+                      ariaLabel="status 필터"
+                      className="w-32"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-md text-faint">team </span>
+                    <Dropdown
+                      options={groupOptions}
+                      value={groupFilter}
+                      onChange={withPageReset(setGroupFilter)}
+                      size="sm"
+                      ariaLabel="group 필터"
+                      className="w-40"
+                    />
+                  </div>
+                </div>
               </div>
+
               {/* Actions — second row, left-aligned (SC-11 no.4–6) */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 self-end">
                 <Button
-                  btnText="+ 멤버 초대"
-                  btnSize="sm"
-                  btnColor="mintFilled"
-                  className="w-fit"
-                  handleClick={() => setInviteOpen(true)}
-                />
-                <Button
-                  btnText="초대 코드 재전송"
+                  btnText={BTN_TEXT.resendInvitationCode}
                   btnSize="sm"
                   btnColor="grayOutline"
                   className="w-fit"
@@ -389,18 +400,20 @@ const UsersPage = () => {
                   handleClick={() => resendCodes(selectedUsers)}
                 />
                 <Button
-                  btnText="삭제"
+                  btnText={BTN_TEXT.delete}
                   btnSize="sm"
                   btnColor="redFilled"
                   className="w-fit"
                   disabled={selectedIds.size === 0}
                   handleClick={() => setBulkDeleteOpen(true)}
                 />
-                {selectedIds.size > 0 && (
-                  <span className="text-tag text-muted-foreground font-mono tracking-[0.08em]">
-                    {selectedIds.size} SELECTED
-                  </span>
-                )}
+                <Button
+                  btnText={BTN_TEXT.inviteMember}
+                  btnSize="sm"
+                  btnColor="mintFilled"
+                  className="w-fit"
+                  handleClick={() => setInviteOpen(true)}
+                />
               </div>
             </div>
           </div>

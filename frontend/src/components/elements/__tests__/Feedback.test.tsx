@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import Feedback from "@/components/elements/Feedback";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 describe("Feedback", () => {
   it("renders title, description, and the action slot", () => {
@@ -18,7 +19,7 @@ describe("Feedback", () => {
       screen.getByText("첫 팀은 조직 위계의 루트가 됩니다."),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "새 팀 만들기" }),
+      screen.getByRole("button", { name: BTN_TEXT.createTeam }),
     ).toBeInTheDocument();
   });
 

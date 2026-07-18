@@ -8,7 +8,9 @@ import UsersPage from "@/pages/UsersPage";
 import * as invitationAPIs from "@/api/invitationAPIs";
 import * as teamAPIs from "@/api/teamAPIs";
 import * as userAPIs from "@/api/userAPIs";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TUserListItem } from "@/types/userTypes";
+import { useNoticeStore } from "@/stores/noticeStore";
 
 const jsonRes = (body: unknown) =>
   ({ ok: true, json: async () => body }) as unknown as Response;
@@ -125,7 +127,9 @@ describe("UsersPage", () => {
     await typer.click(
       screen.getByRole("checkbox", { name: "k@corp.com 선택" }),
     );
-    expect(screen.getByText("1 SELECTED")).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: "k@corp.com 선택" }),
+    ).toBeChecked();
 
     /* Checked rows may drop out of the new result, so changing what's
        listed must reset the selection. */
@@ -133,7 +137,9 @@ describe("UsersPage", () => {
     await typer.click(screen.getByRole("option", { name: "세션 만료" }));
 
     await waitFor(() =>
-      expect(screen.queryByText("1 SELECTED")).not.toBeInTheDocument(),
+      expect(
+        screen.getByRole("checkbox", { name: "k@corp.com 선택" }),
+      ).not.toBeChecked(),
     );
   });
 
@@ -151,12 +157,16 @@ describe("UsersPage", () => {
     await typer.click(
       screen.getByRole("checkbox", { name: "k@corp.com 선택" }),
     );
-    expect(screen.getByText("1 SELECTED")).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: "k@corp.com 선택" }),
+    ).toBeChecked();
 
     await typer.click(screen.getByRole("button", { name: "2" }));
 
     await waitFor(() =>
-      expect(screen.queryByText("1 SELECTED")).not.toBeInTheDocument(),
+      expect(
+        screen.getByRole("checkbox", { name: "k@corp.com 선택" }),
+      ).not.toBeChecked(),
     );
   });
 
@@ -217,7 +227,9 @@ describe("UsersPage", () => {
     renderPage();
     await screen.findByText("k@corp.com");
 
-    await typer.click(screen.getByRole("button", { name: "+ 멤버 초대" }));
+    await typer.click(
+      screen.getByRole("button", { name: BTN_TEXT.inviteMember }),
+    );
     await typer.type(
       screen.getByPlaceholderText("user@corp.com"),
       "new@corp.com",
@@ -226,7 +238,9 @@ describe("UsersPage", () => {
     await typer.click(screen.getByRole("option", { name: "백엔드" }));
     await typer.click(screen.getByRole("button", { name: "세트 1 role" }));
     await typer.click(screen.getByRole("option", { name: "edit" }));
-    await typer.click(screen.getByRole("button", { name: "초대 전송" }));
+    await typer.click(
+      screen.getByRole("button", { name: BTN_TEXT.sendInvitation }),
+    );
 
     await waitFor(() =>
       expect(postSpy).toHaveBeenCalledWith({
@@ -235,7 +249,9 @@ describe("UsersPage", () => {
       }),
     );
     await waitFor(() =>
-      expect(screen.queryByText("멤버 초대")).not.toBeInTheDocument(),
+      expect(
+        screen.queryByText(MODAL_TITLES.inviteMember),
+      ).not.toBeInTheDocument(),
     );
   });
 
@@ -271,7 +287,9 @@ describe("UsersPage", () => {
     renderPage();
     await screen.findByText("k@corp.com");
 
-    await typer.click(screen.getByRole("button", { name: "+ 멤버 초대" }));
+    await typer.click(
+      screen.getByRole("button", { name: BTN_TEXT.inviteMember }),
+    );
     await typer.type(
       screen.getByPlaceholderText("user@corp.com"),
       "growth@corp.com",
@@ -283,7 +301,9 @@ describe("UsersPage", () => {
     await typer.click(screen.getByRole("option", { name: "그로스" }));
     await typer.click(screen.getByRole("button", { name: "세트 1 role" }));
     await typer.click(screen.getByRole("option", { name: "edit" }));
-    await typer.click(screen.getByRole("button", { name: "초대 전송" }));
+    await typer.click(
+      screen.getByRole("button", { name: BTN_TEXT.sendInvitation }),
+    );
 
     await waitFor(() =>
       expect(postSpy).toHaveBeenCalledWith({
@@ -304,7 +324,9 @@ describe("UsersPage", () => {
     renderPage();
     await screen.findByText("k@corp.com");
 
-    await typer.click(screen.getByRole("button", { name: "+ 멤버 초대" }));
+    await typer.click(
+      screen.getByRole("button", { name: BTN_TEXT.inviteMember }),
+    );
     await typer.type(
       screen.getByPlaceholderText("user@corp.com"),
       "k@corp.com",
@@ -313,7 +335,9 @@ describe("UsersPage", () => {
     await typer.click(screen.getByRole("option", { name: "백엔드" }));
     await typer.click(screen.getByRole("button", { name: "세트 1 role" }));
     await typer.click(screen.getByRole("option", { name: "edit" }));
-    await typer.click(screen.getByRole("button", { name: "초대 전송" }));
+    await typer.click(
+      screen.getByRole("button", { name: BTN_TEXT.sendInvitation }),
+    );
 
     expect(
       await screen.findByText(
@@ -336,11 +360,13 @@ describe("UsersPage", () => {
 
     await typer.click(screen.getByLabelText("k@corp.com 선택"));
     await typer.click(screen.getByLabelText("m@corp.com 선택"));
-    await typer.click(screen.getByRole("button", { name: "초대 코드 재전송" }));
+    await typer.click(
+      screen.getByRole("button", { name: BTN_TEXT.resendInvitationCode }),
+    );
 
-    const modal = (
-      await screen.findByText("일부 항목을 처리하지 못했습니다")
-    ).closest("div") as HTMLElement;
+    const modal = (await screen.findByText(MODAL_TITLES.batchFailure)).closest(
+      "div",
+    ) as HTMLElement;
     expect(within(modal).getByText("m@corp.com")).toBeInTheDocument();
     expect(within(modal).queryByText("k@corp.com")).not.toBeInTheDocument();
   });
@@ -359,15 +385,15 @@ describe("UsersPage", () => {
 
     await typer.click(screen.getByLabelText("k@corp.com 선택"));
     await typer.click(screen.getByLabelText("m@corp.com 선택"));
-    await typer.click(screen.getByRole("button", { name: "삭제" }));
+    await typer.click(screen.getByRole("button", { name: BTN_TEXT.delete }));
     await typer.click(
-      screen.getAllByRole("button", { name: "삭제" }).slice(-1)[0],
+      screen.getAllByRole("button", { name: BTN_TEXT.delete }).slice(-1)[0],
     );
 
     expect(deleteSpy).toHaveBeenCalledWith(["u_1", "u_2"]);
-    const modal = (
-      await screen.findByText("일부 항목을 처리하지 못했습니다")
-    ).closest("div") as HTMLElement;
+    const modal = (await screen.findByText(MODAL_TITLES.batchFailure)).closest(
+      "div",
+    ) as HTMLElement;
     expect(within(modal).getByText("m@corp.com")).toBeInTheDocument();
     expect(
       within(modal).getByText("사용자를 찾을 수 없습니다"),
@@ -375,25 +401,33 @@ describe("UsersPage", () => {
     expect(within(modal).queryByText("k@corp.com")).not.toBeInTheDocument();
   });
 
-  it("clears selection and shows success toast on a full-success bulk delete", async () => {
+  it("clears selection and shows success notice on a full-success bulk delete", async () => {
     mockListSuccess();
     vi.spyOn(userAPIs, "deleteUsers").mockResolvedValue(
       jsonRes({ succeeded: ["u_1", "u_2"], failed: [] }),
     );
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     const typer = userEvent.setup();
     renderPage();
     await screen.findByText("k@corp.com");
 
     await typer.click(screen.getByLabelText("k@corp.com 선택"));
     await typer.click(screen.getByLabelText("m@corp.com 선택"));
-    await typer.click(screen.getByRole("button", { name: "삭제" }));
+    await typer.click(screen.getByRole("button", { name: BTN_TEXT.delete }));
     await typer.click(
-      screen.getAllByRole("button", { name: "삭제" }).slice(-1)[0],
+      screen.getAllByRole("button", { name: BTN_TEXT.delete }).slice(-1)[0],
     );
 
     await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        "멤버 삭제",
+        "멤버를 삭제했습니다.",
+        "info",
+      ),
+    );
+    await waitFor(() =>
       expect(
-        screen.queryByText("일부 항목을 처리하지 못했습니다"),
+        screen.queryByText(MODAL_TITLES.batchFailure),
       ).not.toBeInTheDocument(),
     );
     await waitFor(() =>

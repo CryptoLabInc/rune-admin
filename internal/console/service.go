@@ -187,6 +187,12 @@ func (s *Service) handleSession(w http.ResponseWriter, r *http.Request) {
 				"logged_in":        true,
 				"expires_at":       sess.ExpiresAt.UTC().Format(time.RFC3339),
 				"engine_connected": s.engineReady(),
+				// TODO(plan-source): the account's subscription plan. The cloud
+				// source is undecided (workspace tier vs principal vs billing
+				// API), so this is a placeholder. Replace this one line with the
+				// real lookup once the source is settled; the wire contract
+				// (lowercase string, open value set) stays the same.
+				"plan": "free",
 			}
 			if len(sess.Me) > 0 {
 				resp["me"] = meWithAvatar(sess.Me)

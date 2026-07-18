@@ -72,6 +72,7 @@ export const sessionCheck = (ctx: Ctx): void => {
   sendJson(ctx.res, 200, {
     logged_in: true,
     expires_at: s.expiresAt,
+    plan: s.plan,
     me: s.me,
   });
 };

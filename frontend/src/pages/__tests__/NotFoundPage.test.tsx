@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import NotFoundPage from "@/pages/NotFoundPage";
 import * as authAPIs from "@/api/authAPIs";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 const jsonRes = (body: unknown) =>
   ({ ok: true, json: async () => body }) as unknown as Response;
@@ -42,12 +43,12 @@ describe("NotFoundPage", () => {
     expect(await screen.findByText("404 Not Found")).toBeInTheDocument();
     // PublicNavbar variant — its 시작하기 CTA is present, no profile menu.
     expect(
-      screen.getByRole("button", { name: "시작하기" }),
+      screen.getByRole("button", { name: BTN_TEXT.getStarted }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "프로필 메뉴" }),
     ).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "홈으로" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.home }));
     await waitFor(() =>
       expect(screen.getByText("LOGIN SCREEN")).toBeInTheDocument(),
     );
@@ -69,9 +70,9 @@ describe("NotFoundPage", () => {
       screen.getByRole("button", { name: "프로필 메뉴" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "시작하기" }),
+      screen.queryByRole("button", { name: BTN_TEXT.getStarted }),
     ).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "홈으로" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.home }));
     await waitFor(() =>
       expect(screen.getByText("TEAMS CONTENT")).toBeInTheDocument(),
     );

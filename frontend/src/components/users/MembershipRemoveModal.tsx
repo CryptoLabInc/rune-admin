@@ -4,9 +4,10 @@ import Button from "@/components/elements/Button";
 import Notice from "@/components/elements/Notice";
 import ModalLayout from "@/components/layout/ModalLayout";
 import ModalTable from "@/components/users/ModalTable";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TMembershipRemoveTarget } from "@/types/userTypes";
 
-const REMOVE_FAILED_MESSAGE = "멤버십 제거에 실패했습니다. 다시 시도해주세요.";
+const REMOVE_FAILED_MESSAGE = `멤버십 제거에 실패했습니다. 다시 시도해 주세요.`;
 
 interface MembershipRemoveModalProps {
   /** SC-06 entry: selected members × current team · SC-13 entry:
@@ -51,10 +52,10 @@ const MembershipRemoveModal = ({
 
   if (failed) {
     return (
-      <ModalLayout title="멤버십 제거" isOpen>
+      <ModalLayout title={MODAL_TITLES.removeMembership} isOpen>
         <p className="text-center text-base">{REMOVE_FAILED_MESSAGE}</p>
         <Button
-          btnText="닫기"
+          btnText={BTN_TEXT.close}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
@@ -64,11 +65,11 @@ const MembershipRemoveModal = ({
   }
 
   return (
-    <ModalLayout title="멤버십 제거" isOpen>
+    <ModalLayout title={MODAL_TITLES.removeMembership} isOpen>
       <div className="flex flex-col gap-4">
         <p className="text-base">다음 멤버십을 제거합니다:</p>
         <ModalTable
-          head={["account", "팀", "role"]}
+          head={["account", "팀", "권한"]}
           rows={targets.map((target) => [
             target.account,
             target.teamName,
@@ -83,13 +84,13 @@ const MembershipRemoveModal = ({
       </div>
       <div className="flex w-full items-center gap-4">
         <Button
-          btnText="닫기"
+          btnText={BTN_TEXT.close}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="제거"
+          btnText={BTN_TEXT.remove}
           btnSize="md"
           btnColor="redFilled"
           disabled={submitting}

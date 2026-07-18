@@ -7,7 +7,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import TreeDetailView from "@/components/teams/TreeDetailView";
 import * as teamAPIs from "@/api/teamAPIs";
 import * as teamMemberAPIs from "@/api/teamMemberAPIs";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TTeamMember, TTeamTree } from "@/types/teamTypes";
+import { useNoticeStore } from "@/stores/noticeStore";
 
 const jsonRes = (body: unknown) =>
   ({ ok: true, json: async () => body }) as unknown as Response;
@@ -256,12 +258,22 @@ describe("TreeDetailView", () => {
         createdAt: "2026-07-16T00:00:00Z",
       }),
     );
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     renderView();
-    await user.click(screen.getByRole("button", { name: "그룹 생성" }));
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.createGroup }),
+    );
     await user.type(screen.getByLabelText("팀 이름"), "New");
-    await user.click(screen.getByRole("button", { name: "생성" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.create }));
     await waitFor(() =>
       expect(create).toHaveBeenCalledWith({ name: "New", parentId: null }),
+    );
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        "팀 생성",
+        "팀이 생성되었습니다.",
+        "success",
+      ),
     );
   });
 
@@ -285,9 +297,11 @@ describe("TreeDetailView", () => {
       json: async () => ({ code: "TEAM_NAME_DUPLICATE" }),
     } as unknown as Response);
     renderView();
-    await user.click(screen.getByRole("button", { name: "그룹 생성" }));
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.createGroup }),
+    );
     await user.type(screen.getByLabelText("팀 이름"), "Infra");
-    await user.click(screen.getByRole("button", { name: "생성" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.create }));
     expect(
       await screen.findByText("같은 상위 팀에 동일한 이름이 이미 있습니다."),
     ).toBeInTheDocument();
@@ -318,14 +332,22 @@ describe("TreeDetailView", () => {
         createdAt: "2026-07-01T00:00:00Z",
       }),
     );
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     renderView();
-    await user.click(screen.getByRole("button", { name: "이름 변경" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.rename }));
     const input = screen.getByLabelText("팀 이름");
     await user.clear(input);
     await user.type(input, "Renamed");
-    await user.click(screen.getByRole("button", { name: "저장" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.save }));
     await waitFor(() =>
       expect(rename).toHaveBeenCalledWith("t_1", { name: "Renamed" }),
+    );
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        "팀 이름 변경",
+        "팀 이름이 변경되었습니다.",
+        "success",
+      ),
     );
   });
 
@@ -347,6 +369,7 @@ describe("TreeDetailView", () => {
     const del = vi
       .spyOn(teamAPIs, "deleteTeam")
       .mockResolvedValue({ ok: true } as Response);
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     const onSelectTeam = vi.fn();
     const client = new QueryClient({
       defaultOptions: {
@@ -366,22 +389,36 @@ describe("TreeDetailView", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    await user.click(screen.getByRole("button", { name: "팀 삭제" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.deleteTeam }));
     await user.click(screen.getByRole("radio", { name: /팀 내 기억 삭제/ }));
     await user.type(
-      screen.getByLabelText("확인 — 삭제할 팀명 입력"),
+      screen.getByLabelText("확인 - 삭제할 팀명 입력"),
       "Platform",
     );
     /* Two "팀 삭제" buttons exist once the confirm modal opens (the card
        trigger + the modal's confirm) — the confirm one is the last. */
-    const confirmButtons = screen.getAllByRole("button", { name: "팀 삭제" });
+    const confirmButtons = screen.getAllByRole("button", {
+      name: BTN_TEXT.deleteTeam,
+    });
     await user.click(confirmButtons[confirmButtons.length - 1]);
     await waitFor(() =>
       expect(del).toHaveBeenCalledWith("t_1", "purge", undefined),
     );
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        "팀 삭제",
+        "팀이 삭제되었습니다.",
+        "success",
+        expect.any(Function),
+      ),
+    );
+    /* Navigation must not fire until the notice is confirmed. */
+    expect(onSelectTeam).not.toHaveBeenCalled();
     /* t_1 is the just-deleted team — reselect must land on the OTHER
-       surviving root (t_2), never the dead one. */
-    await waitFor(() => expect(onSelectTeam).toHaveBeenCalledWith("t_2"));
+       surviving root (t_2), never the dead one — once the captured
+       onConfirm runs. */
+    showNoticeSpy.mock.calls.at(-1)![3]!();
+    expect(onSelectTeam).toHaveBeenCalledWith("t_2");
   });
 
   it("shows the mapped inline error when adding a member hits an existing membership", async () => {
@@ -405,11 +442,11 @@ describe("TreeDetailView", () => {
       json: async () => ({ code: "ALREADY_TEAM_MEMBER", message: "x" }),
     } as unknown as Response);
     renderView();
-    await user.click(screen.getByRole("button", { name: "+ 멤버 추가" }));
-    await user.type(screen.getByLabelText("계정명 (email)"), "kim@corp.com");
-    await user.click(screen.getByLabelText("role"));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.addMember }));
+    await user.type(screen.getByLabelText("이메일 (account)"), "kim@corp.com");
+    await user.click(screen.getByLabelText("권한 (role)"));
     await user.click(screen.getByRole("option", { name: "edit" }));
-    await user.click(screen.getByRole("button", { name: "초대하기" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.invite }));
     expect(
       await screen.findByText("이미 초대된 사용자입니다."),
     ).toBeInTheDocument();
@@ -417,8 +454,194 @@ describe("TreeDetailView", () => {
        while the modal is mounted, and the modal's own cancel/submit
        buttons are still present. */
     expect(
-      screen.getByRole("button", { name: "초대하기" }),
+      screen.getByRole("button", { name: BTN_TEXT.invite }),
     ).toBeInTheDocument();
+  });
+
+  it("shows a success notice when adding a member succeeds", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 0,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 0, page: 1, size: 10, items: [] }),
+    );
+    vi.spyOn(teamMemberAPIs, "addTeamMember").mockResolvedValue(
+      jsonRes(member()),
+    );
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
+    renderView();
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.addMember }));
+    await user.type(screen.getByLabelText("이메일 (account)"), "kim@corp.com");
+    await user.click(screen.getByLabelText("권한 (role)"));
+    await user.click(screen.getByRole("option", { name: "edit" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.invite }));
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        "멤버 추가",
+        "멤버를 추가했습니다.",
+        "success",
+      ),
+    );
+  });
+
+  it("shows a success notice when a full-success role change is applied", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 1,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 1, page: 1, size: 10, items: [member()] }),
+    );
+    vi.spyOn(teamMemberAPIs, "bulkRoleChange").mockResolvedValue(
+      jsonRes({ succeeded: ["u_1"], failed: [] }),
+    );
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
+    renderView();
+    await screen.findByText("kim@corp.com");
+    await user.click(screen.getByLabelText("kim@corp.com role"));
+    await user.click(screen.getByRole("option", { name: "read" }));
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.updateChanges }),
+    );
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.change }));
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        MODAL_TITLES.roleChange,
+        "변경사항이 저장되었습니다.",
+        "success",
+      ),
+    );
+  });
+
+  it("shows a failure notice when the bulk role-change request errors", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 1,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 1, page: 1, size: 10, items: [member()] }),
+    );
+    vi.spyOn(teamMemberAPIs, "bulkRoleChange").mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ code: "INTERNAL", message: "x" }),
+    } as unknown as Response);
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
+    renderView();
+    await screen.findByText("kim@corp.com");
+    await user.click(screen.getByLabelText("kim@corp.com role"));
+    await user.click(screen.getByRole("option", { name: "read" }));
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.updateChanges }),
+    );
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.change }));
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        MODAL_TITLES.roleChange,
+        "권한 변경에 실패했습니다.",
+        "error",
+      ),
+    );
+  });
+
+  it("shows a success notice when a full-success member removal completes", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 1,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 1, page: 1, size: 10, items: [member()] }),
+    );
+    vi.spyOn(teamMemberAPIs, "removeTeamMembers").mockResolvedValue(
+      jsonRes({ succeeded: ["u_1"], failed: [] }),
+    );
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
+    renderView();
+    await screen.findByText("kim@corp.com");
+    await user.click(
+      screen.getByRole("checkbox", { name: "kim@corp.com 선택" }),
+    );
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.remove }));
+    const confirmButtons = screen.getAllByRole("button", {
+      name: BTN_TEXT.remove,
+    });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        MODAL_TITLES.removeMembership,
+        "멤버십이 제거되었습니다.",
+        "success",
+      ),
+    );
+  });
+
+  it("shows a failure notice when the bulk member removal request errors", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 1,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 1, page: 1, size: 10, items: [member()] }),
+    );
+    vi.spyOn(teamMemberAPIs, "removeTeamMembers").mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ code: "INTERNAL", message: "x" }),
+    } as unknown as Response);
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
+    renderView();
+    await screen.findByText("kim@corp.com");
+    await user.click(
+      screen.getByRole("checkbox", { name: "kim@corp.com 선택" }),
+    );
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.remove }));
+    const confirmButtons = screen.getAllByRole("button", {
+      name: BTN_TEXT.remove,
+    });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        MODAL_TITLES.removeMembership,
+        "멤버십 제거에 실패했습니다.",
+        "error",
+      ),
+    );
   });
 
   it("shows the mapped inline error when deleting a childless team hits a server conflict", async () => {
@@ -445,13 +668,15 @@ describe("TreeDetailView", () => {
     /* t_1 has childCount: 0 in the TEAMS fixture, so DeleteTeamModal's
        client-side hasChildren gate passes and the confirm flow reaches
        the server, whose 409 drives the inline error mapping below. */
-    await user.click(screen.getByRole("button", { name: "팀 삭제" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.deleteTeam }));
     await user.click(screen.getByRole("radio", { name: /팀 내 기억 삭제/ }));
     await user.type(
-      screen.getByLabelText("확인 — 삭제할 팀명 입력"),
+      screen.getByLabelText("확인 - 삭제할 팀명 입력"),
       "Platform",
     );
-    const confirmButtons = screen.getAllByRole("button", { name: "팀 삭제" });
+    const confirmButtons = screen.getAllByRole("button", {
+      name: BTN_TEXT.deleteTeam,
+    });
     await user.click(confirmButtons[confirmButtons.length - 1]);
     expect(
       await screen.findByText("하위 팀이 있어 삭제할 수 없습니다."),
@@ -484,10 +709,12 @@ describe("TreeDetailView", () => {
     await user.click(
       screen.getByRole("checkbox", { name: "kim@corp.com 선택" }),
     );
-    await user.click(screen.getByRole("button", { name: "제거" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.remove }));
     /* Two "제거" buttons exist once the confirm modal opens (the table
        trigger + the modal's confirm) — the confirm one is the last. */
-    const confirmButtons = screen.getAllByRole("button", { name: "제거" });
+    const confirmButtons = screen.getAllByRole("button", {
+      name: BTN_TEXT.remove,
+    });
     await user.click(confirmButtons[confirmButtons.length - 1]);
     expect(await screen.findByText("팀 멤버가 아닙니다")).toBeInTheDocument();
   });

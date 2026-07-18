@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import Navbar from "@/components/navigation/Navbar";
 import * as authAPIs from "@/api/authAPIs";
 import * as workspaceAPIs from "@/api/workspaceAPIs";
+import { BTN_TEXT } from "@/constants/commonConstants";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 const jsonRes = (body: unknown) =>
   ({ ok: true, status: 200, json: async () => body }) as unknown as Response;
@@ -23,6 +25,7 @@ const renderNavbar = () => {
     <MemoryRouter initialEntries={["/teams"]}>
       <Routes>
         <Route path="/teams" element={<Navbar />} />
+        <Route path="/workspace" element={<div>WORKSPACE PAGE</div>} />
         <Route path="/login" element={<div>LOGIN SCREEN</div>} />
       </Routes>
     </MemoryRouter>,
@@ -31,7 +34,10 @@ const renderNavbar = () => {
 };
 
 describe("Navbar", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    useWorkspaceStore.getState().closeModal();
+  });
 
   it("signs out and navigates to /login", async () => {
     const user = userEvent.setup();
@@ -55,7 +61,7 @@ describe("Navbar", () => {
     await user.click(
       await screen.findByRole("button", { name: "프로필 메뉴" }),
     );
-    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.signOut }));
     expect(logout).toHaveBeenCalledOnce();
     await waitFor(() =>
       expect(screen.getByText("LOGIN SCREEN")).toBeInTheDocument(),
@@ -80,5 +86,27 @@ describe("Navbar", () => {
     const avatar = await screen.findByRole("img", { name: /프로필/ });
     expect(avatar).toHaveAttribute("src", "https://x/a.png");
     expect(await screen.findByText("워크스페이스 없음")).toBeInTheDocument();
+  });
+
+  it("routes to the empty-workspace page without opening the modal", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(authAPIs, "getConsoleSession").mockResolvedValue(
+      jsonRes({
+        logged_in: true,
+        expires_at: "2026-07-16T21:00:00Z",
+        me: { email: "admin@corp.com", avatar: "https://x/a.png" },
+      }),
+    );
+    vi.spyOn(workspaceAPIs, "getWorkspace").mockResolvedValue({
+      ok: false,
+      status: 404,
+    } as Response);
+
+    renderNavbar();
+
+    await user.click(await screen.findByText("워크스페이스 없음"));
+
+    expect(await screen.findByText("WORKSPACE PAGE")).toBeInTheDocument();
+    expect(useWorkspaceStore.getState().modalOpen).toBe(false);
   });
 });

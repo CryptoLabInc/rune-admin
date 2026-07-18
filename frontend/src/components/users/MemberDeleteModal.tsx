@@ -3,9 +3,27 @@ import { useState } from "react";
 import Button from "@/components/elements/Button";
 import ModalLayout from "@/components/layout/ModalLayout";
 import ModalTable from "@/components/users/ModalTable";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TMemberDeleteTarget } from "@/types/userTypes";
 
-const DELETE_FAILED_MESSAGE = "멤버 삭제에 실패했습니다. 다시 시도해주세요.";
+const DELETE_FAILED_MESSAGE = "멤버 삭제에 실패했습니다. 다시 시도해 주세요.";
+
+/** The team/role table, or the empty-state line when the target belongs
+    to no team (no group-role membership). */
+const memberTeams = (memberships: TMemberDeleteTarget["memberships"]) =>
+  memberships.length > 0 ? (
+    /* table-fixed: the 팀/권한 columns split 50/50 regardless of content,
+       so the per-user tables all line up. */
+    <ModalTable
+      head={["팀", "권한"]}
+      rows={memberships.map((m) => [m.teamName, m.role])}
+      className="table-fixed"
+    />
+  ) : (
+    <p className="text-muted-foreground border p-2 text-sm">
+      소속된 팀이 없습니다.
+    </p>
+  );
 
 interface MemberDeleteModalProps {
   /** Single entry (SC-13 [멤버 삭제]) or multi (SC-11 bulk [삭제]). */
@@ -35,8 +53,8 @@ const MemberDeleteModal = ({
 
   const single = targets.length === 1 ? targets[0] : null;
   const title = single
-    ? `멤버 삭제 — ${single.account}`
-    : `멤버 삭제 (${targets.length}명)`;
+    ? MODAL_TITLES.deleteMemberSingle(single.account)
+    : MODAL_TITLES.deleteMemberBulk(targets.length);
 
   const handleConfirm = async () => {
     setSubmitting(true);
@@ -55,7 +73,7 @@ const MemberDeleteModal = ({
       <ModalLayout title={title} isOpen>
         <p className="text-center text-base">{DELETE_FAILED_MESSAGE}</p>
         <Button
-          btnText="닫기"
+          btnText={BTN_TEXT.close}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
@@ -72,13 +90,7 @@ const MemberDeleteModal = ({
             <p className="text-base">
               {single.account} 계정을 삭제하며, 아래 팀에서 제거됩니다:
             </p>
-            {/* table-fixed: the 팀/role columns split 50/50 regardless
-                of content, so the per-user tables all line up. */}
-            <ModalTable
-              head={["팀", "role"]}
-              rows={single.memberships.map((m) => [m.teamName, m.role])}
-              className="table-fixed"
-            />
+            {memberTeams(single.memberships)}
           </>
         ) : (
           <>
@@ -88,11 +100,7 @@ const MemberDeleteModal = ({
             {targets.map((target) => (
               <div key={target.account} className="flex flex-col gap-2">
                 <b className="text-sm">{target.account}</b>
-                <ModalTable
-                  head={["팀", "role"]}
-                  rows={target.memberships.map((m) => [m.teamName, m.role])}
-                  className="table-fixed"
-                />
+                {memberTeams(target.memberships)}
               </div>
             ))}
           </>
@@ -100,13 +108,13 @@ const MemberDeleteModal = ({
       </div>
       <div className="flex w-full items-center gap-4">
         <Button
-          btnText="닫기"
+          btnText={BTN_TEXT.close}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="삭제"
+          btnText={BTN_TEXT.delete}
           btnSize="md"
           btnColor="redFilled"
           disabled={submitting}

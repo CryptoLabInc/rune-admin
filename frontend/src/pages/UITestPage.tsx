@@ -27,6 +27,7 @@ import TableToolbar from "@/components/table/TableToolbar";
 import TeamTree from "@/components/tree/TeamTree";
 import TeamTreeFooter from "@/components/tree/TeamTreeFooter";
 import { cn } from "@/utils/cn";
+import { BTN_TEXT } from "@/constants/commonConstants";
 import {
   BTN_HOT_VAR,
   MEMBER_STATUS_VAR,
@@ -43,13 +44,14 @@ import { useToastStore } from "@/stores/toastStore";
 type TUITestModal = "alert" | "confirm" | "wide" | "scroll" | null;
 
 /* Button theme roles (2026-07-13): filled primary/secondary/warning +
-   outline primary/secondary. Disabled is the shared gray fill. */
+   outline primary/secondary/danger. Disabled is the shared gray fill. */
 const BTN_THEMES: { color: TBTNColor; role: string; text: string }[] = [
   { color: "mintFilled", role: "filled · primary", text: "초대하기" },
   { color: "grayFilled", role: "filled · secondary", text: "나중에" },
   { color: "redFilled", role: "filled · warning", text: "팀 삭제" },
   { color: "mintOutline", role: "outline · primary", text: "새 팀 만들기" },
   { color: "grayOutline", role: "outline · secondary", text: "닫기" },
+  { color: "redOutline", role: "outline · danger", text: "멤버 삭제" },
 ];
 
 const ROLE_OPTIONS = [
@@ -315,7 +317,7 @@ const UITestPage = () => {
 
       <Section
         title="Button"
-        note="폼 컨트롤 — w-full 내장, 부모가 폭 제한. btnColor 5종 / btnSize 3종(높이 32·36·42px) · disabled는 전 테마 공통 gray fill(요청 진행 중에도 disabled 전달 — 별도 loading UI 없음)"
+        note="폼 컨트롤 — w-full 내장, 부모가 폭 제한. btnColor 6종 / btnSize 3종(높이 32·36·42px) · disabled는 전 테마 공통 gray fill(요청 진행 중에도 disabled 전달 — 별도 loading UI 없음)"
       >
         <h3 className="text-tag text-faint font-mono tracking-[0.07em]">
           THEME × STATE — btnSize=md 고정 · hover = focus-visible 동일 UI(박제)
@@ -359,17 +361,29 @@ const UITestPage = () => {
         <div className={specimenGrid}>
           <Specimen label="sm — 32px">
             <div className="w-[120px]">
-              <Button btnText="변경하기" btnSize="sm" btnColor="mintFilled" />
+              <Button
+                btnText={BTN_TEXT.change}
+                btnSize="sm"
+                btnColor="mintFilled"
+              />
             </div>
           </Specimen>
           <Specimen label="md — 36px">
             <div className="w-[160px]">
-              <Button btnText="초대하기" btnSize="md" btnColor="mintFilled" />
+              <Button
+                btnText={BTN_TEXT.invite}
+                btnSize="md"
+                btnColor="mintFilled"
+              />
             </div>
           </Specimen>
           <Specimen label="lg — 42px">
             <div className="w-[200px]">
-              <Button btnText="시작하기" btnSize="lg" btnColor="mintFilled" />
+              <Button
+                btnText={BTN_TEXT.getStarted}
+                btnSize="lg"
+                btnColor="mintFilled"
+              />
             </div>
           </Specimen>
         </div>
@@ -381,10 +395,10 @@ const UITestPage = () => {
             <TextButton btnText="회원탈퇴" />
           </Specimen>
           <Specimen label="red">
-            <TextButton btnText="삭제" tone="red" />
+            <TextButton btnText={BTN_TEXT.delete} tone="red" />
           </Specimen>
           <Specimen label="disabled">
-            <TextButton btnText="삭제" tone="red" disabled />
+            <TextButton btnText={BTN_TEXT.delete} tone="red" disabled />
           </Specimen>
         </div>
       </Section>
@@ -682,7 +696,7 @@ const UITestPage = () => {
             description="첫 팀은 조직 위계의 루트가 됩니다."
             action={
               <Button
-                btnText="새 팀 만들기"
+                btnText={BTN_TEXT.createTeam}
                 btnSize="sm"
                 btnColor="mintFilled"
                 className="w-fit"
@@ -700,7 +714,7 @@ const UITestPage = () => {
             description="새로고침 후 다시 시도해 주세요."
             action={
               <Button
-                btnText="새로고침"
+                btnText={BTN_TEXT.refresh}
                 btnSize="sm"
                 btnColor="grayOutline"
                 className="w-fit"
@@ -721,7 +735,7 @@ const UITestPage = () => {
           </Notice>
           <Notice tone="success">변경사항이 저장되었습니다.</Notice>
           <Notice tone="error">
-            멤버 추가에 실패했습니다. 다시 시도해주세요.
+            멤버 추가에 실패했습니다. 다시 시도해 주세요.
           </Notice>
         </div>
       </Section>
@@ -781,7 +795,7 @@ const UITestPage = () => {
           onClose={() => setDrawerOpen(false)}
           footer={
             <Button
-              btnText="닫기"
+              btnText={BTN_TEXT.close}
               btnSize="md"
               btnColor="grayOutline"
               handleClick={() => setDrawerOpen(false)}
@@ -841,7 +855,7 @@ const UITestPage = () => {
           </section>
           <div className="mt-3 flex justify-end border-t pt-3">
             <Button
-              btnText="변경사항 업데이트"
+              btnText={BTN_TEXT.updateChanges}
               btnSize="sm"
               btnColor="mintFilled"
               className="w-fit"
@@ -851,18 +865,22 @@ const UITestPage = () => {
           </div>
           <div className="mt-5 grid grid-cols-2 gap-2">
             <Button
-              btnText="초대 코드 재전송"
+              btnText={BTN_TEXT.resendInvitationCode}
               btnSize="sm"
               btnColor="grayOutline"
             />
-            <Button btnText="초대 취소" btnSize="sm" btnColor="grayFilled" />
             <Button
-              btnText="세션 비활성화"
+              btnText={BTN_TEXT.cancelInvitation}
+              btnSize="sm"
+              btnColor="grayFilled"
+            />
+            <Button
+              btnText={BTN_TEXT.deactivateSession}
               btnSize="sm"
               btnColor="grayOutline"
             />
             <TextButton
-              btnText="멤버 삭제"
+              btnText={BTN_TEXT.deleteMember}
               tone="red"
               className="justify-self-center"
             />
@@ -897,7 +915,10 @@ const UITestPage = () => {
             btnColor="grayOutline"
             className="w-fit"
             handleClick={() =>
-              showToast("역할 변경에 실패했습니다. 다시 시도해주세요.", "error")
+              showToast(
+                "권한 변경에 실패했습니다. 다시 시도해 주세요.",
+                "error",
+              )
             }
           />
         </div>
@@ -939,7 +960,7 @@ const UITestPage = () => {
         <ModalLayout title="저장소 삭제" isOpen>
           <p className="text-center text-base">저장소가 삭제되었습니다.</p>
           <Button
-            btnText="닫기"
+            btnText={BTN_TEXT.close}
             btnSize="md"
             btnColor="mintFilled"
             handleClick={closeModal}
@@ -954,13 +975,13 @@ const UITestPage = () => {
           </p>
           <div className="flex w-full items-center gap-4">
             <Button
-              btnText="닫기"
+              btnText={BTN_TEXT.close}
               btnSize="md"
               btnColor="grayOutline"
               handleClick={closeModal}
             />
             <Button
-              btnText="변경하기"
+              btnText={BTN_TEXT.change}
               btnSize="md"
               btnColor="mintFilled"
               handleClick={closeModal}
@@ -985,13 +1006,13 @@ const UITestPage = () => {
           </div>
           <div className="flex w-full items-center gap-4">
             <Button
-              btnText="닫기"
+              btnText={BTN_TEXT.close}
               btnSize="md"
               btnColor="grayOutline"
               handleClick={closeModal}
             />
             <Button
-              btnText="초대하기"
+              btnText={BTN_TEXT.invite}
               btnSize="md"
               btnColor="mintFilled"
               handleClick={closeModal}
@@ -1011,13 +1032,13 @@ const UITestPage = () => {
           </div>
           <div className="flex w-full items-center gap-4">
             <Button
-              btnText="닫기"
+              btnText={BTN_TEXT.close}
               btnSize="md"
               btnColor="grayOutline"
               handleClick={closeModal}
             />
             <Button
-              btnText="삭제"
+              btnText={BTN_TEXT.delete}
               btnSize="md"
               btnColor="redFilled"
               handleClick={closeModal}

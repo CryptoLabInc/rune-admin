@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:mock": "MOCK_TARGET=http://localhost:4000 vite",
     "mock": "node --experimental-strip-types mock-server/server.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",

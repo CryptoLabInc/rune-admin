@@ -6,7 +6,7 @@ import IconInfo from "@/components/icons/IconInfo";
 import { cn } from "@/utils/cn";
 
 const styles = {
-  wrap: "bg-surface text-muted-foreground grid grid-cols-[20px_1fr] items-start gap-2.5 rounded-md border px-3 py-3 text-sm leading-[1.5]",
+  wrap: "bg-surface text-muted-foreground grid grid-cols-[20px_1fr] items-center gap-2.5 rounded-md border px-3 py-3 text-sm leading-[1.5]",
   wrapError: "border-negative/20 bg-negative/[4%] text-negative",
   icon: "grid size-[18px] place-items-center rounded-full border border-current",
 };

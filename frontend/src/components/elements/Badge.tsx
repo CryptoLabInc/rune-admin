@@ -4,7 +4,7 @@ import type { TBadgeTone } from "@/types/styleTypes";
 
 const styles = {
   default:
-    "inline-flex h-6 w-fit cursor-pointer items-center justify-center rounded-full px-2 font-mono text-tag font-semibold tracking-[0.02em]",
+    "inline-flex min-w-6 h-6 w-fit cursor-pointer items-center justify-center rounded-full px-2 font-mono text-tag font-semibold tracking-[0.02em]",
 };
 
 interface BadgeProps {

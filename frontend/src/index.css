@@ -25,15 +25,20 @@
    * modules/rune-foundations/tokens.css (--rn-*). Dark is the default
    * theme; a light variant is under evaluation (2026-07-13) — its
    * overrides live in the `.light` scope in @layer base below.
+   *
+   * The four dark text tiers were lifted one notch (2026-07-18, variant
+   * C) to raise overall readability — faint was below WCAG AA (4.25:1)
+   * on --color-background; the ramp now clears AA while keeping the tier
+   * hierarchy. These diverge from the UIKIT --rn-* source noted below.
    */
   --color-background: #060b14; /* --rn-bg */
-  --color-foreground: #eaf2ff; /* --rn-ink */
-  --color-subtle: #bfcfe4; /* tier-2 text — long prose/card body (no UIKIT source, added 2026-07-12) */
-  --color-muted-foreground: #93a6c2; /* --rn-muted */
-  --color-faint: #64768f; /* --rn-faint — labels/captions only */
-  --color-border: rgba(146, 168, 196, 0.14); /* --rn-hair */
+  --color-foreground: #f4f8ff; /* --rn-ink, lifted 2026-07-18 (was #eaf2ff) */
+  --color-subtle: #cdd9ea; /* tier-2 text — long prose/card body (no UIKIT source, added 2026-07-12; lifted 2026-07-18, was #bfcfe4) */
+  --color-muted-foreground: #a6b6ce; /* --rn-muted, lifted 2026-07-18 (was #93a6c2) */
+  --color-faint: #8296b0; /* --rn-faint — labels/captions only; lifted 2026-07-18 (was #64768f, 4.25:1 → 6.5:1) */
+  --color-border: rgba(146, 168, 196, 0.4); /* --rn-hair */
   --color-border-strong: rgba(146, 168, 196, 0.32); /* --rn-hair-strong */
-  --color-panel: rgba(14, 24, 42, 0.55); /* --rn-panel */
+  --color-panel: rgba(14, 24, 42, 0.9); /* --rn-panel */
   --color-panel-solid: #0e182a; /* --rn-panel-solid — popover/dialog/drawer */
   --color-well: #040a13; /* --rn-bg-deep — input wells */
   --color-scrim: #040a13; /* overlay scrims — stays dark in both themes */

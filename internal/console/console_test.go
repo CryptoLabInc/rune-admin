@@ -168,6 +168,45 @@ func TestSessionEndpointNoCookie(t *testing.T) {
 	}
 }
 
+func TestSessionEndpointLoggedInIncludesPlan(t *testing.T) {
+	db := openTestDB(t)
+	h, _, err := NewHandler(Deps{
+		Port:       8787,
+		APIBaseURL: "http://cloud.invalid",
+		WebBaseURL: "http://web.invalid",
+		DB:         db,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Seed a live session in the same DB the handler reads from.
+	st, err := newSessionStore(db, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := st.create("tok123", "cloud_sess", json.RawMessage(`{"email":"a@x.io"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/console/session", nil) // same-origin
+	req.AddCookie(&http.Cookie{Name: cookieName, Value: sess.ID})
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var body map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &body)
+	if body["logged_in"] != true {
+		t.Fatalf("logged_in = %v, want true", body["logged_in"])
+	}
+	// plan is a top-level placeholder ("free") until the cloud source is wired.
+	if body["plan"] != "free" {
+		t.Errorf("plan = %v, want \"free\"", body["plan"])
+	}
+}
+
 func TestAPIRequiresSession(t *testing.T) {
 	h := newTestHandler(t)
 	req := httptest.NewRequest("GET", "/api/v1/teams/tree", nil)

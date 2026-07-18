@@ -10,6 +10,7 @@ import {
   TEAM_NAME_PATTERN,
   TEAM_NAME_RULE_TEXT,
 } from "@/components/teams/teamOptions";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TTeamTree } from "@/types/teamTypes";
 
 interface CreateTeamModalProps {
@@ -41,9 +42,7 @@ const CreateTeamModal = ({
   const trimmed = name.trim();
   const isInvalidFormat =
     trimmed.length > 0 && !TEAM_NAME_PATTERN.test(trimmed);
-  /* Client-side dup hint checks siblings of the chosen parent only — the
-     server is the authority (409 TEAM_NAME_DUPLICATE) since a duplicate
-     name is fine across different parents. */
+
   const isDuplicate = teams.some(
     (team) => team.parentId === (parentId || null) && team.name === trimmed,
   );
@@ -56,7 +55,7 @@ const CreateTeamModal = ({
       : undefined;
 
   return (
-    <ModalLayout title="새 팀 만들기" isOpen>
+    <ModalLayout title={MODAL_TITLES.createTeam} isOpen>
       <div className="flex w-full flex-col gap-5">
         <Input
           id="create-team-name"
@@ -76,20 +75,20 @@ const CreateTeamModal = ({
           onChange={setParentId}
         />
         <Notice tone="info">
-          상위 팀을 선택하면 상위 팀의 멤버와 역할이 새 팀에 자동 복사됩니다.
+          상위 팀을 선택하면 상위 팀의 멤버가 새 팀에 자동 복사됩니다. <br />
           멤버 편집은 팀 생성 후 상세 페이지에서 할 수 있습니다.
         </Notice>
         {error && <Notice tone="error">{error}</Notice>}
       </div>
       <div className="flex w-full gap-2">
         <Button
-          btnText="취소"
+          btnText={BTN_TEXT.cancel}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="생성"
+          btnText={BTN_TEXT.create}
           btnSize="md"
           btnColor="mintFilled"
           disabled={!canSubmit}

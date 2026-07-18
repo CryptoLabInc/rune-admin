@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import Button from "@/components/elements/Button";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 interface ProfileMenuProps {
   // avatar is optional: the backend omits it when the principal has no picture,
@@ -26,9 +27,10 @@ const AvatarFallback = () => (
 
 /**
  * ProfileMenu is the SC-03 navbar profile control: an avatar button that
- * toggles a popover showing the account, plan (Free — display-only), and a
- * Sign out action. The popover overlays (position:absolute, no layout shift)
- * and closes on outside click or Escape. Rendered only when logged in.
+ * toggles a popover showing the account, plan (static "Free" — display-only
+ * until the session API carries the account plan), and a Sign out action. The
+ * popover overlays (position:absolute, no layout shift) and closes on outside
+ * click or Escape. Rendered only when logged in.
  */
 const ProfileMenu = ({ me, onSignOut }: ProfileMenuProps) => {
   const [open, setOpen] = useState(false);
@@ -76,15 +78,15 @@ const ProfileMenu = ({ me, onSignOut }: ProfileMenuProps) => {
       {open && (
         <div
           role="menu"
-          className="border-border bg-background absolute top-full right-0 z-20 mt-2 w-52 rounded-md border p-3 shadow-md"
+          className="border-border bg-background absolute top-full right-0 z-20 mt-2 flex w-52 flex-col gap-3 rounded-md border p-3 shadow-md"
         >
-          <div className="text-foreground truncate text-sm font-medium">
+          <div className="text-foreground text-md truncate font-medium">
             {me.email}
           </div>
-          <div className="text-muted-foreground mt-0.5 text-xs">플랜: Free</div>
-          <hr className="border-border my-2.5" />
+          <div className="text-muted-foreground text-xs">플랜: Free</div>
+          <hr className="border-border my-2" />
           <Button
-            btnText="Sign out"
+            btnText={BTN_TEXT.signOut}
             btnSize="sm"
             btnColor="grayOutline"
             handleClick={onSignOut}

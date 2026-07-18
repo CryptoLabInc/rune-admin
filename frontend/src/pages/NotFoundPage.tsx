@@ -4,7 +4,7 @@ import Button from "@/components/elements/Button";
 import Navbar from "@/components/navigation/Navbar";
 import PublicNavbar from "@/components/navigation/PublicNavbar";
 import { useSessionQuery } from "@/hooks/queries/useSessionQuery";
-import { PATH_LIST } from "@/constants/commonConstants";
+import { BTN_TEXT, PATH_LIST } from "@/constants/commonConstants";
 
 /**
  * NotFoundPage is the 404 screen (SC-04). It is reachable whether or not the
@@ -28,7 +28,7 @@ const NotFoundPage = () => {
         <div>
           <h1 className="mb-4 text-2xl font-semibold">404 Not Found</h1>
           <Button
-            btnText="홈으로"
+            btnText={BTN_TEXT.home}
             btnSize="lg"
             btnColor="mintFilled"
             handleClick={() =>

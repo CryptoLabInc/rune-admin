@@ -7,6 +7,7 @@ import MemberStatus from "@/components/elements/MemberStatus";
 import Notice from "@/components/elements/Notice";
 import ModalLayout from "@/components/layout/ModalLayout";
 import { ROLE_OPTIONS } from "@/components/teams/teamOptions";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -39,11 +40,11 @@ const AddMemberModal = ({
   const canSubmit = trimmed.length > 0 && !invalidFormat && role !== "";
 
   return (
-    <ModalLayout title={`멤버 추가 — ${teamName}`} isOpen isWide>
-      <div className="flex w-full flex-col gap-5">
+    <ModalLayout title={MODAL_TITLES.addMember(teamName)} isOpen isWide>
+      <div className="flex w-full flex-col gap-6">
         <Input
           id="add-member-account"
-          labelText="계정명 (email)"
+          labelText="이메일 (account)"
           type="email"
           placeholder="user@corp.com"
           maxLength={100}
@@ -52,8 +53,8 @@ const AddMemberModal = ({
           error={invalidFormat ? "올바른 이메일 형식이 아닙니다." : undefined}
         />
         <Dropdown
-          label="role"
-          placeholder="role 선택"
+          label="권한 (role)"
+          placeholder="권한 선택"
           options={ROLE_OPTIONS}
           value={role}
           onChange={setRole}
@@ -70,13 +71,13 @@ const AddMemberModal = ({
       </div>
       <div className="flex w-full gap-2">
         <Button
-          btnText="취소"
+          btnText={BTN_TEXT.cancel}
           btnSize="md"
           btnColor="grayOutline"
           handleClick={onClose}
         />
         <Button
-          btnText="초대하기"
+          btnText={BTN_TEXT.invite}
           btnSize="md"
           btnColor="mintFilled"
           disabled={!canSubmit}

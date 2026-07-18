@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import ModalLayout from "@/components/layout/ModalLayout";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 describe("ModalLayout", () => {
   it("renders the title and children through a portal", () => {
@@ -15,7 +16,9 @@ describe("ModalLayout", () => {
     expect(
       screen.getByRole("heading", { name: "팀 삭제" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "닫기" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: BTN_TEXT.close }),
+    ).toBeInTheDocument();
   });
 
   it("locks body scroll while mounted and restores it on unmount", () => {

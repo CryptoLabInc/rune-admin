@@ -35,30 +35,31 @@ import { useTeamMembersQuery } from "@/hooks/queries/useTeamMembersQuery";
 import { useTeamQuery } from "@/hooks/queries/useTeamQuery";
 import { parseErrorCode } from "@/api/parseError";
 import { formatDate } from "@/utils/formatDate";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TMemberStatus, TTeamNode } from "@/types/commonTypes";
 import type {
   TTeamMemberRole,
   TTeamMemberStatus,
   TTeamTree,
 } from "@/types/teamTypes";
-import { useToastStore } from "@/stores/toastStore";
+import { useNoticeStore } from "@/stores/noticeStore";
 
 const styles = {
   body: "flex min-h-[340px] flex-1",
   /* Left tree panel (fixed width per wireframe) */
-  side: "border-border flex w-[240px] flex-none flex-col gap-2.5 border-r p-3",
+  side: "border-border flex w-50 flex-none flex-col gap-2.5 border-r p-3",
   /* Right detail area */
-  main: "flex min-w-0 flex-1 flex-col gap-3.5 p-4",
+  main: "flex min-w-0 flex-1 flex-col gap-5 p-4",
   teamCard: "border-border bg-surface rounded-lg border px-4 py-3",
   teamCardRow: "flex items-center gap-2",
-  teamName: "text-md flex-1 font-semibold",
+  teamName: "text-lg flex-1 font-semibold",
   teamMeta: "text-sm text-muted-foreground mt-1.5",
   membersRow: "flex items-center gap-2",
   membersTitle: "text-md flex-1 font-semibold",
   /* The detail panel is narrower than the users page — typical corp
      emails fit the 36% column; longer ones truncate with an ellipsis
      and keep the full address in the title tooltip. */
-  accountCell: "max-w-[280px] truncate",
+  accountCell: "max-w-[280px] truncate cursor-default",
   timeCell: "text-faint font-mono text-xs whitespace-nowrap",
   pendingActions: "flex flex-wrap items-center gap-2",
 };
@@ -226,7 +227,7 @@ const TreeDetailView = ({
       return next;
     });
 
-  const showToast = useToastStore((state) => state.showToast);
+  const showNotice = useNoticeStore((state) => state.showNotice);
 
   const baseRole = (userId: string, fallback: TTeamMemberRole) =>
     savedRoles.get(userId) ?? fallback;
@@ -246,7 +247,11 @@ const TreeDetailView = ({
   const applyRoleChanges = () => {
     setSavedRoles((prev) => new Map([...prev, ...pendingRoles]));
     setPendingRoles(new Map());
-    showToast("변경사항이 저장되었습니다.", "success");
+    showNotice(
+      MODAL_TITLES.roleChange,
+      "변경사항이 저장되었습니다.",
+      "success",
+    );
   };
 
   /* Modals (SC-07~10 + SC-06 state E). All confirm handlers below call
@@ -312,7 +317,7 @@ const TreeDetailView = ({
       {
         onSuccess: () => {
           closeModal();
-          showToast("팀이 생성되었습니다.", "success");
+          showNotice("팀 생성", "팀이 생성되었습니다.", "success");
         },
         onError: async (res) => {
           const code = await parseErrorCode(res);
@@ -328,7 +333,7 @@ const TreeDetailView = ({
       {
         onSuccess: () => {
           closeModal();
-          showToast("팀 이름이 변경되었습니다.", "success");
+          showNotice("팀 이름 변경", "팀 이름이 변경되었습니다.", "success");
         },
         onError: async (res) => {
           const code = await parseErrorCode(res);
@@ -347,11 +352,12 @@ const TreeDetailView = ({
       {
         onSuccess: () => {
           closeModal();
-          showToast("팀이 삭제되었습니다.", "success");
-          onSelectTeam(
-            teams.find((t) => t.parentId === null && t.id !== selectedTeam.id)
-              ?.id ?? "",
-          );
+          showNotice("팀 삭제", "팀이 삭제되었습니다.", "success", () => {
+            onSelectTeam(
+              teams.find((t) => t.parentId === null && t.id !== selectedTeam.id)
+                ?.id ?? "",
+            );
+          });
         },
         onError: async (res) => {
           const code = await parseErrorCode(res);
@@ -367,7 +373,7 @@ const TreeDetailView = ({
       {
         onSuccess: () => {
           closeModal();
-          showToast("멤버를 추가했습니다.", "success");
+          showNotice("멤버 추가", "멤버를 추가했습니다.", "success");
         },
         onError: async (res) => {
           const code = await parseErrorCode(res);
@@ -415,7 +421,11 @@ const TreeDetailView = ({
         },
         onError: () => {
           closeModal();
-          showToast("role 변경에 실패했습니다.", "error");
+          showNotice(
+            MODAL_TITLES.roleChange,
+            "권한 변경에 실패했습니다.",
+            "error",
+          );
         },
       },
     );
@@ -434,12 +444,20 @@ const TreeDetailView = ({
             })),
           );
         } else {
-          showToast("멤버십이 제거되었습니다.", "success");
+          showNotice(
+            MODAL_TITLES.removeMembership,
+            "멤버십이 제거되었습니다.",
+            "success",
+          );
         }
       },
       onError: () => {
         closeModal();
-        showToast("멤버십 제거에 실패했습니다.", "error");
+        showNotice(
+          MODAL_TITLES.removeMembership,
+          "멤버십 제거에 실패했습니다.",
+          "error",
+        );
       },
     });
   };
@@ -459,9 +477,9 @@ const TreeDetailView = ({
           TeamsPage header */}
       <aside className={styles.side} aria-label="팀 트리">
         <Button
-          btnText="그룹 생성"
+          btnText={BTN_TEXT.createGroup}
           btnSize="sm"
-          btnColor="mintFilled"
+          btnColor="mintOutline"
           handleClick={() => openTeamModal("create")}
         />
         <TeamTree
@@ -486,14 +504,14 @@ const TreeDetailView = ({
               {detail?.name ?? selectedTeam.name}
             </h3>
             <Button
-              btnText="이름 변경"
+              btnText={BTN_TEXT.rename}
               btnSize="sm"
               btnColor="grayOutline"
               className="w-fit"
               handleClick={() => openTeamModal("rename")}
             />
             <Button
-              btnText="팀 삭제"
+              btnText={BTN_TEXT.deleteTeam}
               btnSize="sm"
               btnColor="redFilled"
               className="w-fit"
@@ -501,59 +519,54 @@ const TreeDetailView = ({
             />
           </div>
           <p className={styles.teamMeta}>
-            상위 팀: {parentName} · 하위 팀: {childrenLabel} · 멤버{" "}
-            {memberCount}명 · 생성일 {formatDate(detail?.createdAt)}
+            상위 팀: {parentName} | 하위 팀: {childrenLabel} | 멤버:{" "}
+            {memberCount}명 | 생성일: {formatDate(detail?.createdAt)}
           </p>
         </div>
 
         <div className={styles.membersRow}>
-          <h3 className={styles.membersTitle}>멤버 ({total})</h3>
-          <Button
-            btnText="+ 멤버 추가"
-            btnSize="sm"
-            btnColor="grayOutline"
-            className="w-fit"
-            handleClick={() => setActiveModal("addMember")}
-          />
+          <h3 className={styles.membersTitle}>멤버 ({total})</h3>{" "}
+          <div className={styles.pendingActions}>
+            <Button
+              btnText={BTN_TEXT.updateChanges}
+              btnSize="sm"
+              btnColor="mintOutline"
+              className="w-fit"
+              disabled={pendingRoles.size === 0}
+              handleClick={() => setActiveModal("roleConfirm")}
+            />
+            <Button
+              btnText={BTN_TEXT.remove}
+              btnSize="sm"
+              btnColor="redFilled"
+              className="w-fit"
+              disabled={selectedIds.size === 0}
+              handleClick={() => setActiveModal("removeMembers")}
+            />
+            <Button
+              btnText={BTN_TEXT.addMember}
+              btnSize="sm"
+              btnColor="mintFilled"
+              className="w-fit"
+              handleClick={() => setActiveModal("addMember")}
+            />
+          </div>
         </div>
 
-        {/* Member table — GET /teams/{id}/members (paginated server-side).
-            fluid: fits the detail column at any width, never scrolls. */}
         <Table
           fluid
+          scrollClassName="min-h-[526px]"
           foot={
             <TableFoot
               info={`총 ${total}명 · ${PAGE_SIZE}명/페이지`}
-              className="flex-row"
+              className="flex-row items-center"
             >
-              {/* Right cluster: pager on top, SC-06 state A actions
-                  (no.14–15) beneath. Buttons disabled until usable:
-                  [변경사항 업데이트] needs staged role edits, [제거]
-                  needs checked members. */}
-              <div className="flex flex-col items-end gap-2">
+              <div className="flex flex-col items-end gap-3">
                 <Pagination
                   page={page}
                   totalPages={totalPages}
                   onChange={setPage}
                 />
-                <div className={styles.pendingActions}>
-                  <Button
-                    btnText="변경사항 업데이트"
-                    btnSize="sm"
-                    btnColor="mintFilled"
-                    className="w-fit"
-                    disabled={pendingRoles.size === 0}
-                    handleClick={() => setActiveModal("roleConfirm")}
-                  />
-                  <Button
-                    btnText="제거"
-                    btnSize="sm"
-                    btnColor="redFilled"
-                    className="w-fit"
-                    disabled={selectedIds.size === 0}
-                    handleClick={() => setActiveModal("removeMembers")}
-                  />
-                </div>
               </div>
             </TableFoot>
           }
@@ -630,7 +643,7 @@ const TreeDetailView = ({
                       size="sm"
                       changed={pendingRoles.has(member.userId)}
                       ariaLabel={`${member.account} role`}
-                      className="w-[96px]"
+                      className="w-24"
                     />
                   </TableCell>
                   <TableCell className={styles.timeCell}>

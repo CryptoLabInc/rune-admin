@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import TextButton from "@/components/elements/TextButton";
+import { BTN_TEXT } from "@/constants/commonConstants";
 
 describe("TextButton", () => {
   it("fires handleClick", async () => {
@@ -19,14 +20,14 @@ describe("TextButton", () => {
     const handleClick = vi.fn();
     render(
       <TextButton
-        btnText="삭제"
+        btnText={BTN_TEXT.delete}
         tone="red"
         disabled
         handleClick={handleClick}
       />,
     );
 
-    const button = screen.getByRole("button", { name: "삭제" });
+    const button = screen.getByRole("button", { name: BTN_TEXT.delete });
     expect(button).toBeDisabled();
     await user.click(button).catch(() => {});
     expect(handleClick).not.toHaveBeenCalled();
