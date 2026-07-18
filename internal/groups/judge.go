@@ -142,26 +142,25 @@ func (s *Store) groupAccessLocked(user string, byGroup map[string]*Membership) G
 	return GroupAccessView{Direct: direct, Inherited: inherited}
 }
 
-// CaptureTargets returns the sorted group IDs a user may TAG on capture
-// (plan §5 "capture 태그 대상", §6-D6): the user's DIRECT groups whose
-// role is at least write — inherited descendant groups are excluded on
-// purpose. This is the §0-critical invariant: capturing tags only the
-// author's own (possibly higher) group, so a superior's memory does not
-// leak downward into a subordinate group's recall scope.
+// CaptureTargets returns the sorted group IDs a user MAY tag on capture — the
+// candidate universe for explicit selection (the future rune-mcp multi-select):
+// the user's DIRECT groups whose role is at least write. Inherited descendant
+// groups are excluded on purpose — the §0-critical invariant: capture tags only
+// the author's own (possibly higher) group, so a superior's memory does not leak
+// downward into a subordinate group's recall scope.
+//
+// NOTE this is the full candidate set, NOT what automatic capture tags: auto
+// capture (CaptureTagSet with no explicit request) narrows further to the
+// TOP-MOST of these groups — see topMostDirectWriteLocked.
 //
 // Contrast RecallScope, which DOES expand downward: reading inherits to
 // descendants, writing does not broadcast to them.
 func (s *Store) CaptureTargets(user string) []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]string, 0)
-	for gid, m := range s.memberships[user] {
-		if !m.Role.AtLeast(RoleWrite) {
-			continue
-		}
-		if _, ok := s.groups[gid]; !ok {
-			continue
-		}
+	set := s.directWriteSetLocked(user)
+	out := make([]string, 0, len(set))
+	for gid := range set {
 		out = append(out, gid)
 	}
 	sort.Strings(out)
@@ -176,17 +175,21 @@ func (s *Store) CaptureTargets(user string) []string {
 //     belongs to with role >= write. Inherited descendants are rejected
 //     (ErrNotDirectMember) — the §0 invariant. Returns the resolved
 //     immutable group IDs (the opaque tags), de-duplicated and sorted.
-//   - requested empty: returns the user's direct write groups (the default,
-//     used by automatic capture which must not interrupt the conversation).
+//   - requested empty: returns the user's TOP-MOST direct write groups — the
+//     default taken by automatic capture, which runs with no per-item selection
+//     and so must not broadcast a memory below the author's own standing. See
+//     topMostDirectWriteLocked for the rule (top of each membership chain;
+//     unrelated branches each keep their own top, so two tops may differ in
+//     depth).
 //
 // A read-only user (no direct write group) is rejected with ErrNoWriteGroup
 // in both modes — this is the Q1 "read role capture" denial.
 func (s *Store) CaptureTagSet(user string, requested []string) ([]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	byGroup := s.memberships[user]
 
 	if len(requested) > 0 {
+		byGroup := s.memberships[user]
 		out := make([]string, 0, len(requested))
 		seen := make(map[string]bool, len(requested))
 		for _, ref := range requested {
@@ -210,22 +213,84 @@ func (s *Store) CaptureTagSet(user string, requested []string) ([]string, error)
 		return out, nil
 	}
 
-	// Default: every direct group the user may write to.
-	out := make([]string, 0)
-	for gid, m := range byGroup {
+	// Default (automatic capture): the user's TOP-MOST direct write groups.
+	// Auto capture carries no per-item group selection, so it must not push a
+	// memory wider than the author's own standing — tagging every direct write
+	// group would broadcast it down into every subordinate group's recall
+	// scope. Restricting to the top of each membership chain keeps an
+	// auto-captured memory at the highest level the author holds (§0 anti-leak,
+	// extended). The explicit branch above still lets a deliberate caller tag
+	// any direct write group, including a lower one (the future multi-select).
+	out := s.topMostDirectWriteLocked(user)
+	if len(out) == 0 {
+		return nil, ErrNoWriteGroup{User: user}
+	}
+	return out, nil
+}
+
+// directWriteSetLocked returns the set of group IDs the user DIRECTLY belongs to
+// with role >= write and that still exist — the single definition of the
+// "capturable" set. CaptureTargets sorts it into the candidate listing, and
+// automatic capture (topMostDirectWriteLocked) narrows it to the top of each
+// membership chain. Returned as a set because the top-most walk needs O(1)
+// ancestor lookups; the slice consumer converts it cheaply. Caller holds s.mu.
+func (s *Store) directWriteSetLocked(user string) map[string]bool {
+	set := make(map[string]bool)
+	for gid, m := range s.memberships[user] {
 		if !m.Role.AtLeast(RoleWrite) {
 			continue
 		}
 		if _, ok := s.groups[gid]; !ok {
 			continue
 		}
-		out = append(out, gid)
+		set[gid] = true
 	}
-	if len(out) == 0 {
-		return nil, ErrNoWriteGroup{User: user}
+	return set
+}
+
+// topMostDirectWriteLocked returns the sorted group IDs automatic capture tags:
+// the user's direct write+ groups, minus any that sit UNDER another of the
+// user's direct write+ groups. A group is kept unless one of its proper
+// ancestors is also a direct write+ group, so each membership chain contributes
+// exactly its top and unrelated branches each keep their own top — two tops need
+// not share a depth. This is the §0 anti-leak invariant applied to the author's
+// own groups: an auto-captured memory never lands below the author's highest
+// standing in a chain. Caller holds s.mu.
+func (s *Store) topMostDirectWriteLocked(user string) []string {
+	write := s.directWriteSetLocked(user)
+	out := make([]string, 0, len(write))
+	for gid := range write {
+		if !s.hasWriteAncestorLocked(gid, write) {
+			out = append(out, gid)
+		}
 	}
 	sort.Strings(out)
-	return out, nil
+	return out
+}
+
+// hasWriteAncestorLocked reports whether any PROPER ancestor of gid is in the
+// write set (the user's direct write+ groups). Walks the parent chain with a
+// visited set capped at MaxTreeDepth, matching every other ancestor walk here.
+// Caller holds s.mu.
+func (s *Store) hasWriteAncestorLocked(gid string, write map[string]bool) bool {
+	g, ok := s.groups[gid]
+	if !ok {
+		return false
+	}
+	visited := make(map[string]bool, MaxTreeDepth)
+	cur := g.ParentID
+	for cur != "" && !visited[cur] && len(visited) < MaxTreeDepth {
+		if write[cur] {
+			return true
+		}
+		visited[cur] = true
+		p, ok := s.groups[cur]
+		if !ok {
+			break
+		}
+		cur = p.ParentID
+	}
+	return false
 }
 
 // Permissions builds the GetPermissions projection for user (plan §6-D8 D8,

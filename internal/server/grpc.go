@@ -555,12 +555,14 @@ func (s *ConsoleGRPC) Insert(ctx context.Context, req *pb.InsertRequest) (*pb.In
 		return &pb.InsertResponse{Error: err.Error()}, status.Error(codes.PermissionDenied, err.Error())
 	}
 
-	// Capture write gate + tag selection in one judge call (plan §5, §6-D6):
-	// tags are the caller's DIRECT write groups. Inherited descendants are never
-	// tagged, so a superior's memory stays out of a subordinate group's recall
-	// scope (§0 top priority). The judge is keyed by the resolved person key
-	// (member UUID when registered). The pre-encrypted path carries no per-item
-	// share-group selection, so the caller tags with all direct write groups.
+	// Capture write gate + tag selection in one judge call (§0 anti-leak):
+	// tags are the caller's TOP-MOST direct write groups. Inherited descendants
+	// are never tagged, and a lower group the author also writes to is dropped in
+	// favor of the top of that chain, so an auto-captured memory stays out of a
+	// subordinate group's recall scope. The judge is keyed by the resolved person
+	// key (member UUID when registered). The pre-encrypted path carries no
+	// per-item share-group selection (that arrives with the future explicit
+	// multi-select), so automatic capture takes this top-most default.
 	tags, err := s.v.groups.CaptureTagSet(key, nil)
 	if err != nil {
 		st := mapGroupsError(err)

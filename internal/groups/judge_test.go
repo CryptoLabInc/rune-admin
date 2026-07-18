@@ -462,6 +462,87 @@ func TestCaptureTagSet(t *testing.T) {
 	})
 }
 
+// TestCaptureAutoTagsTopMostOnly pins the narrowed automatic-capture rule: the
+// DEFAULT (no explicit request) tags only the top-most direct write group in
+// each membership chain, never a lower group the author also writes to — so an
+// auto-captured memory stays at the author's highest standing and does not
+// broadcast down into a subordinate group's recall scope (§0, extended). The
+// explicit path is unaffected: a deliberate caller may still tag any direct
+// write group (the future rune-mcp multi-select).
+func TestCaptureAutoTagsTopMostOnly(t *testing.T) {
+	// Two independent branches:
+	//   hq(1) > dev(2) > search(3), and hq(1) > ops(2)
+	//   sales(1) > sales1(2)
+	s, hq, dev, search := testTree(t)
+	ops, err := s.CreateGroup("ops", hq.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sales, err := s.CreateGroup("sales", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sales1, err := s.CreateGroup("sales1", sales.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("nested chain collapses to the top ancestor", func(t *testing.T) {
+		const u = "lead@corp.com"
+		mustGrant(t, s, u, hq.ID, RoleWrite)
+		mustGrant(t, s, u, dev.ID, RoleEdit)     // under hq — dropped
+		mustGrant(t, s, u, search.ID, RoleWrite) // deeper under hq — dropped
+		if got, err := s.CaptureTagSet(u, nil); err != nil || !reflect.DeepEqual(got, []string{hq.ID}) {
+			t.Fatalf("auto tags = (%v, %v), want ([hq], nil)", got, err)
+		}
+		// Explicit selection of a lower group is still honored.
+		if got, err := s.CaptureTagSet(u, []string{dev.ID}); err != nil || !reflect.DeepEqual(got, []string{dev.ID}) {
+			t.Fatalf("explicit [dev] = (%v, %v), want ([dev], nil)", got, err)
+		}
+	})
+
+	t.Run("collapses through a non-member intermediate ancestor", func(t *testing.T) {
+		const u = "skip@corp.com"
+		mustGrant(t, s, u, hq.ID, RoleWrite)     // top of the chain
+		mustGrant(t, s, u, search.ID, RoleWrite) // deep leaf; dev (the link) NOT held
+		// The walk must climb search → dev → hq THROUGH the non-member dev to see
+		// that search sits under hq. A membership-only comparison would miss the
+		// link and wrongly keep both as tops (leaking down into search's scope).
+		if got, err := s.CaptureTagSet(u, nil); err != nil || !reflect.DeepEqual(got, []string{hq.ID}) {
+			t.Fatalf("auto tags = (%v, %v), want ([hq], nil) — search must collapse to hq", got, err)
+		}
+	})
+
+	t.Run("siblings at the same level are both tops", func(t *testing.T) {
+		const u = "sib@corp.com"
+		mustGrant(t, s, u, dev.ID, RoleWrite)
+		mustGrant(t, s, u, ops.ID, RoleWrite) // sibling of dev; hq not held
+		if got, err := s.CaptureTagSet(u, nil); err != nil || !reflect.DeepEqual(got, sortedCopy([]string{dev.ID, ops.ID})) {
+			t.Fatalf("auto tags = (%v, %v), want [dev, ops]", got, err)
+		}
+	})
+
+	t.Run("unrelated branches keep their own top at different depths", func(t *testing.T) {
+		const u = "twohats@corp.com"
+		mustGrant(t, s, u, hq.ID, RoleWrite)     // depth 1, branch A
+		mustGrant(t, s, u, sales1.ID, RoleWrite) // depth 2, branch B (unrelated)
+		// A global-min-depth rule would wrongly drop sales1 and tag sales work as
+		// hq; per-chain tops keep both.
+		if got, err := s.CaptureTagSet(u, nil); err != nil || !reflect.DeepEqual(got, sortedCopy([]string{hq.ID, sales1.ID})) {
+			t.Fatalf("auto tags = (%v, %v), want [hq, sales1]", got, err)
+		}
+	})
+
+	t.Run("a write child under an inherited (read) ancestor stays its own top", func(t *testing.T) {
+		const u = "midwrite@corp.com"
+		mustGrant(t, s, u, hq.ID, RoleRead)   // read only — not a write ancestor, uncapturable
+		mustGrant(t, s, u, dev.ID, RoleWrite) // dev is the top of the write set
+		if got, err := s.CaptureTagSet(u, nil); err != nil || !reflect.DeepEqual(got, []string{dev.ID}) {
+			t.Fatalf("auto tags = (%v, %v), want ([dev], nil)", got, err)
+		}
+	})
+}
+
 // TestCanGrantOrgAdminOnly — grant is reserved for the single org admin (Owner).
 func TestCanGrantOrgAdminOnly(t *testing.T) {
 	s, hq, _, search := testTree(t)
