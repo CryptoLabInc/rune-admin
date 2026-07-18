@@ -16,9 +16,8 @@ import (
 // and millisecond values mix: "2026-07-17T05:00:00Z" sorts AFTER
 // "2026-07-17T05:00:00.999Z" ('Z' > '.'), so a mixed column interleaves
 // wrongly — an aged invite could be swept too early or kept alive past its
-// TTL. Hence every stored instant, including values imported from legacy
-// YAML, is normalized to this one canonical width; sub-millisecond digits
-// are truncated by Format.
+// TTL. Hence every stored instant is normalized to this one canonical width;
+// sub-millisecond digits are truncated by Format.
 const TimeFormat = "2006-01-02T15:04:05.000Z07:00"
 
 // FormatTime renders t in the canonical storage form: UTC, fixed

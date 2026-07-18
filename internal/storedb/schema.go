@@ -1,8 +1,7 @@
 // Package storedb owns the unified store database (runeconsole.db): the
 // schema v1 DDL and the idempotent schema bootstrap. It is deliberately a
-// LEAF package (imports no store packages) so the store packages' own tests
-// can use the schema; the one-time YAML importer, which must import every
-// store package, lives in the storedb/yamlimport subpackage. The schema
+// LEAF package (imports no store packages) so every store package, and its
+// own tests, can depend on the schema without an import cycle. The schema
 // carries the branch-decision amendments (invite status 'revoked', relaxed
 // groups.id check, persisted tokens.last_used).
 package storedb
@@ -10,11 +9,17 @@ package storedb
 import (
 	"database/sql"
 	"fmt"
+	"time"
 )
 
-// SchemaVersion is the schema_migrations version this package installs and
-// the importer stamps once the YAML import has committed.
+// SchemaVersion is the schema version this package installs and EnsureSchema
+// stamps into schema_migrations as the baseline.
 const SchemaVersion = 1
+
+// schemaBaselineDescription is the description stamped alongside
+// SchemaVersion. It names the row for what it is: the version a fresh install
+// STARTS at, not a migration that ran.
+const schemaBaselineDescription = "initial schema baseline (not an applied migration)"
 
 // SchemaV1 is the complete schema v1 DDL. Every statement is idempotent
 // (IF NOT EXISTS) so EnsureSchema can run on every boot. All timestamps are
@@ -27,22 +32,16 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   applied_at  TEXT NOT NULL,
   description TEXT NOT NULL
 );
--- Row (1, ..., 'initial schema + yaml import') is inserted in the SAME
--- transaction as the imported rows: "schema exists and import ran" is one
--- atomic fact.
-
--- One row per YAML source consumed by the importer: makes the rolled-back-
--- then-re-upgraded divergence case detectable by content, not just file
--- presence.
-CREATE TABLE IF NOT EXISTS import_journal (
-  source      TEXT PRIMARY KEY,   -- absolute path of the imported file
-  sha256      TEXT NOT NULL,      -- content hash at import time
-  imported_at TEXT NOT NULL
-);
+-- EnsureSchema stamps the one baseline row (SchemaVersion,
+-- schemaBaselineDescription) here right after installing this DDL, so a fresh
+-- install starts from a RECORDED version: the first real migration runner
+-- reads a baseline instead of an empty ledger it would have to guess about.
+-- Nothing else writes this table — there is no migration to apply yet.
 
 -- members (internal/members/types.go). CreatedAt byte-exact round-trip is
--- test-pinned (store_test.go) => TEXT, never epoch. Legacy empty
--- disabled_from => NULL on import; Go restores NULL to 'registered'.
+-- test-pinned (store_test.go) => TEXT, never epoch. disabled_from is NULL
+-- unless the member is disabled (the CHECK below); Go maps NULL to the
+-- store's "" empty-value convention on load.
 CREATE TABLE IF NOT EXISTS members (
   id                 TEXT PRIMARY KEY
                        CHECK (length(id) = 36 AND id = lower(id)),  -- full UUIDv4 shape stays in Go ValidateID
@@ -73,8 +72,8 @@ END;
 -- history). NO FK on member_id — user delete revokes only PENDING invites
 -- before members.Remove, so consumed/expired history legitimately outlives
 -- its member. Soft reference, as today.
--- Status gains 'revoked' (branch decision): RevokePending writes 'revoked'
--- instead of overloading 'expired'; legacy YAML rows import as-is.
+-- Status carries 'revoked' (branch decision): RevokePending writes 'revoked'
+-- instead of overloading 'expired'.
 CREATE TABLE IF NOT EXISTS invites (
   handle        TEXT PRIMARY KEY
                   CHECK (length(handle) = 32 AND handle NOT GLOB '*[^0-9a-f]*'),
@@ -87,7 +86,7 @@ CREATE TABLE IF NOT EXISTS invites (
   role          TEXT NOT NULL,        -- role-name snapshot; no FK — history survives role deletion
   creation_path TEXT NOT NULL DEFAULT '',
   created_at    TEXT NOT NULL,
-  expires_at    TEXT,                 -- NULL = never expires (imported from ""); expiry stays lazy in Go against injected clock
+  expires_at    TEXT,                 -- NULL = never expires; expiry stays lazy in Go against injected clock
   status        TEXT NOT NULL
                   CHECK (status IN ('pending','consumed','compromised','expired','revoked'))
 );
@@ -124,8 +123,8 @@ END;
 -- roles + tokens (internal/tokens). scope = JSON TEXT array (only collection
 -- field; linear-scan set semantics in Go — a child table adds review surface
 -- for zero queries). rate_limit stays the 'N/Ws' API/file contract string.
--- admin/member are SEED ROWS inserted when absent at boot (replaces the
--- unconditional merge at load time and install.sh's roles.yml seeding);
+-- admin/member are SEED ROWS inserted by tokens.LoadFromDB when absent, so
+-- default-role presence is a boot invariant of the database itself;
 -- read-time defaults (top_k 0->5, rate_limit ''->'30/60s') materialize at
 -- write time.
 CREATE TABLE IF NOT EXISTS roles (
@@ -142,14 +141,14 @@ CREATE TABLE IF NOT EXISTS roles (
 -- NO FK on tokens.role: a dangling role must keep listing as '?' and real
 -- data dirs may contain it. NO FK on tokens.user: email in console flows,
 -- freeform for admin/demo tokens. Secrets stay PLAINTEXT this release
--- (rollback to the old binary must keep working; hashing is a named
--- follow-up) — the DB inherits the 0600 fail-closed posture instead.
+-- (hashing is a named follow-up) — the DB inherits the 0600 fail-closed
+-- posture instead.
 CREATE TABLE IF NOT EXISTS tokens (
   user      TEXT PRIMARY KEY,          -- one token per user (hard invariant, tokensByUser)
   token     TEXT NOT NULL UNIQUE,      -- plaintext 'evt_'+32hex; Validate's lookup key
   role      TEXT NOT NULL,             -- soft ref -> roles.name
-  issued_at TEXT NOT NULL,             -- date-only 'YYYY-MM-DD' (NOT RFC3339 — day-granularity expiry is a contract; legacy 'created' coalesced on import; legacy '' imported as-is)
-  expires   TEXT,                      -- date-only; NULL = never (imported from ''); deliberately NO format CHECK (unparseable == never)
+  issued_at TEXT NOT NULL,             -- date-only 'YYYY-MM-DD' (NOT RFC3339 — day-granularity expiry is a contract)
+  expires   TEXT,                      -- date-only; NULL = never; deliberately NO format CHECK (unparseable == never)
   last_used TEXT                       -- canonical TimeFormat (RFC3339 UTC ms); newly durable, written async + throttled, never inside Validate's lock
 );
 
@@ -158,11 +157,11 @@ CREATE TABLE IF NOT EXISTS tokens (
 -- enforces root-sibling uniqueness — NULL roots would silently kill it
 -- (UNIQUE treats NULLs as distinct). Consequence: no self-FK;
 -- unknown-parent/cycle/depth<=8 stay in Go at load and insert, exactly as
--- today. id values are FHE record tags: the importer copies them
--- byte-verbatim, with a test asserting byte-equality across migration.
--- id CHECK deliberately relaxed to non-empty (branch decision): today's
--- loader accepts non-UUID group ids, and import must not add a rejection
--- class; UUID shape enforcement stays in Go where it exists today.
+-- today. id values are opaque FHE record tags: stored and matched
+-- byte-verbatim, never parsed by the schema.
+-- id CHECK deliberately relaxed to non-empty (branch decision): the loader
+-- accepts non-UUID group ids, so the schema rejects only the empty id; UUID
+-- shape enforcement stays in Go where it exists today.
 CREATE TABLE IF NOT EXISTS groups (
   id         TEXT PRIMARY KEY
                CHECK (id <> ''),
@@ -207,9 +206,8 @@ END;
 -- that table's map as "the user's direct grants", so an exclusion living
 -- there would read as a grant. An exclusion only ever REMOVES access, and it
 -- is meaningless without its group, so it cascades with the group's deletion
--- (mirroring the store's purge; the YAML loader dropped group-less exclusion
--- rows on load for the same reason). NO FK on user — same pluggable
--- person-key rationale as memberships.
+-- (mirroring purgeExclusionsForGroupLocked in the store). NO FK on user —
+-- same pluggable person-key rationale as memberships.
 CREATE TABLE IF NOT EXISTS read_exclusions (
   user       TEXT NOT NULL,
   group_id   TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
@@ -220,13 +218,24 @@ CREATE TABLE IF NOT EXISTS read_exclusions (
 CREATE INDEX IF NOT EXISTS idx_read_exclusions_group ON read_exclusions (group_id);
 `
 
-// EnsureSchema installs schema v1 into database. Every DDL statement uses
-// IF NOT EXISTS, so calling it on an already-initialized database is a no-op;
-// it never stamps schema_migrations — only the importer records version 1,
-// in the same transaction as the imported rows.
+// EnsureSchema installs schema v1 into database and records the SchemaVersion
+// baseline in schema_migrations. Every DDL statement uses IF NOT EXISTS and
+// the stamp is ON CONFLICT DO NOTHING, so calling it on an already-initialized
+// database is a no-op: the baseline keeps the applied_at of the boot that
+// first wrote it. The two steps need no shared transaction for the same
+// reason — a crash between them leaves the next boot to finish the job.
 func EnsureSchema(database *sql.DB) error {
 	if _, err := database.Exec(SchemaV1); err != nil {
 		return fmt.Errorf("storedb: ensure schema: %w", err)
+	}
+	// The baseline is what a future migration runner reads to learn which
+	// version an install started at; without it a fresh database would hand
+	// that runner an empty ledger, indistinguishable from "version unknown".
+	if _, err := database.Exec(
+		`INSERT INTO schema_migrations (version, applied_at, description) VALUES (?, ?, ?)
+		 ON CONFLICT(version) DO NOTHING`,
+		SchemaVersion, FormatTime(time.Now()), schemaBaselineDescription); err != nil {
+		return fmt.Errorf("storedb: stamp schema baseline: %w", err)
 	}
 	return nil
 }

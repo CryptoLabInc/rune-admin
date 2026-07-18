@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/CryptoLabInc/rune-console/internal/db"
 )
@@ -51,7 +52,7 @@ func TestEnsureSchemaIdempotent(t *testing.T) {
 	}
 
 	for _, table := range []string{
-		"schema_migrations", "import_journal", "members", "invites",
+		"schema_migrations", "members", "invites",
 		"roles", "tokens", "groups", "memberships",
 	} {
 		var name string
@@ -71,11 +72,64 @@ func TestEnsureSchemaIdempotent(t *testing.T) {
 			t.Errorf("trigger %s missing: %v", trigger, err)
 		}
 	}
+}
 
-	// EnsureSchema never stamps a version — only the importer does, in the
-	// same transaction as the imported rows.
-	if n := countRows(t, database, "schema_migrations"); n != 0 {
-		t.Errorf("schema_migrations rows = %d, want 0 before import", n)
+// baselineRow reads the single schema_migrations row.
+func baselineRow(t *testing.T, database *sql.DB) (version int, appliedAt, description string) {
+	t.Helper()
+	if err := database.QueryRow(
+		`SELECT version, applied_at, description FROM schema_migrations`,
+	).Scan(&version, &appliedAt, &description); err != nil {
+		t.Fatalf("read baseline row: %v", err)
+	}
+	return version, appliedAt, description
+}
+
+// TestEnsureSchemaStampsBaselineOnce pins the schema_migrations baseline: a
+// freshly ensured database records exactly one row for SchemaVersion, and a
+// second boot neither duplicates nor rewrites it. Without the stamp a fresh
+// install would leave the ledger empty, so the first real migration runner
+// would read "no rows" instead of a recorded starting version.
+func TestEnsureSchemaStampsBaselineOnce(t *testing.T) {
+	database := ensureTestSchema(t)
+
+	if n := countRows(t, database, "schema_migrations"); n != 1 {
+		t.Fatalf("schema_migrations rows = %d, want exactly 1 baseline row", n)
+	}
+	version, appliedAt, description := baselineRow(t, database)
+	if version != SchemaVersion {
+		t.Errorf("baseline version = %d, want %d", version, SchemaVersion)
+	}
+	if description != schemaBaselineDescription {
+		t.Errorf("baseline description = %q, want %q", description, schemaBaselineDescription)
+	}
+	if _, err := time.Parse(TimeFormat, appliedAt); err != nil {
+		t.Errorf("baseline applied_at %q is not canonical TimeFormat: %v", appliedAt, err)
+	}
+
+	// Re-stamping must be a no-op, not an upsert. Two EnsureSchema calls can
+	// land in the same millisecond, which would make a plain before/after
+	// applied_at comparison vacuous — so park a sentinel that any DO UPDATE
+	// would visibly overwrite.
+	const sentinel = "2000-01-01T00:00:00.000Z"
+	if _, err := database.Exec(
+		`UPDATE schema_migrations SET applied_at = ? WHERE version = ?`, sentinel, SchemaVersion); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureSchema(database); err != nil {
+		t.Fatalf("second EnsureSchema: %v", err)
+	}
+
+	if n := countRows(t, database, "schema_migrations"); n != 1 {
+		t.Errorf("schema_migrations rows after second EnsureSchema = %d, want 1", n)
+	}
+	version2, appliedAt2, description2 := baselineRow(t, database)
+	if appliedAt2 != sentinel {
+		t.Errorf("applied_at = %q, want the untouched %q — second EnsureSchema rewrote the baseline",
+			appliedAt2, sentinel)
+	}
+	if version2 != version || description2 != description {
+		t.Errorf("baseline changed: (%d, %q) -> (%d, %q)", version, description, version2, description2)
 	}
 }
 
