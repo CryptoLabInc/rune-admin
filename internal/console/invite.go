@@ -35,14 +35,17 @@ func (s *Service) handleInvite(w http.ResponseWriter, r *http.Request) {
 
 	// The invite is addressed to the operator themselves; identity comes from
 	// the cloud principal cached on the session (no extra round-trip). Read it
-	// through the shared helpers, not a local unmarshal: the token this mints
-	// is keyed by the email, so it must carry the same canonical form as every
-	// other identity keyspace (emailFromMe lower-cases and trims).
+	// through the shared helpers, not a local unmarshal: the member row and
+	// token this mints are keyed by the email, so they must carry the same
+	// canonical form as every other identity keyspace. The mail is addressed
+	// with the raw spelling — the recipient's mail host, not this console,
+	// decides what its local part means.
 	email := emailFromMe(sess.Me)
 	if email == "" {
 		writeError(w, http.StatusBadGateway, "IDENTITY_UNAVAILABLE", "could not read the operator email from the session")
 		return
 	}
+	mailTo := rawEmailFromMe(sess.Me)
 	name := nameFromMe(sess.Me, email)
 
 	bundle, conn, err := s.inviter.IssueSelfInvite(email, name)
@@ -63,11 +66,12 @@ func (s *Service) handleInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// inviter == recipient (self-invite); expiry is the wrap TTL deadline.
-	if err := s.cloud.SendInvite(r.Context(), sess.CloudCookie(), email, name, reg, name, bundle.ExpiresAt); err != nil {
+	if err := s.cloud.SendInvite(r.Context(), sess.CloudCookie(), mailTo, name, reg, name, bundle.ExpiresAt); err != nil {
 		s.writeCloudError(w, sess, err)
 		return
 	}
 
 	// Never echo the registration string — delivery is mail-only by design.
-	writeJSON(w, http.StatusOK, map[string]any{"sent": true, "email": email})
+	// The reported address is the one actually mailed.
+	writeJSON(w, http.StatusOK, map[string]any{"sent": true, "email": mailTo})
 }

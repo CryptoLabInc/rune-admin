@@ -113,8 +113,15 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 		log:           log,
 	}
 
-	// Replay for an already-claimed console — see Deps.OwnerRegistrar.
-	if o := owner.get(); o != nil {
+	// Replay for an already-claimed console — see Deps.OwnerRegistrar. A read
+	// failure is NOT treated as "unclaimed": that would leave the console with
+	// no org admin until someone completes a fresh browser login, which a live
+	// cookie session actively prevents them from needing to do, so say it loudly.
+	switch o, oerr := owner.get(); {
+	case oerr != nil:
+		log.Error("console: could not read the owner claim at boot — the org admin is NOT set; "+
+			"restart once the session database is readable", "err", oerr.Error())
+	case o != nil:
 		s.registerOwnerBestEffort(o.Email, o.Me, "boot")
 	}
 
@@ -287,16 +294,29 @@ func meWithAvatar(me json.RawMessage) any {
 // emailFromMe extracts the email from the cached cloud principal (GET /me:
 // {id, email, name, picture, ...}). Returns "" when absent or unparseable.
 //
-// This is the console's single ingress for the cloud identity, so it is also
-// where that identity is canonicalized: the email is lower-cased and trimmed
-// before it reaches any downstream keyspace. Everything the email keys —
-// the org-admin set, the member registry, token usernames, the audit/grant
-// actor — compares case-SENSITIVELY, while the owner lock compares with
-// EqualFold; without one canonical form here, two spellings of one human could
-// key two member rows or leave a minted admin token failing IsOrgAdmin.
-// Google returns a canonical lower-case address today, but nothing in this
-// system enforces that, so it is pinned here rather than assumed.
+// This is the console's ingress for the cloud identity, so it is also where
+// that identity is canonicalized: the address is lower-cased and trimmed before
+// it reaches any downstream keyspace. Everything the email keys — the org
+// admin, the member registry, token usernames, the audit/grant actor — compares
+// case-SENSITIVELY, while the owner lock compares with EqualFold; without one
+// canonical form, two spellings of one human could key two member rows or leave
+// a minted admin token failing IsOrgAdmin. Google returns a canonical lower-case
+// address today, but nothing in this system enforces that, so it is pinned here
+// rather than assumed.
+//
+// Use rawEmailFromMe instead when handing the address to a system that owns its
+// own interpretation of it.
 func emailFromMe(me json.RawMessage) string {
+	return canonicalEmail(rawEmailFromMe(me))
+}
+
+// rawEmailFromMe returns the principal's address exactly as the cloud spelled
+// it. Reserved for handing the address OUTWARD (mail delivery), where the
+// receiving system — not this one — decides what the local part means: RFC 5321
+// leaves local-part interpretation to the destination host, so canonicalizing an
+// outbound recipient can address a different mailbox than the one that signed
+// in. Every internal key uses emailFromMe.
+func rawEmailFromMe(me json.RawMessage) string {
 	if len(me) == 0 {
 		return ""
 	}
@@ -306,7 +326,12 @@ func emailFromMe(me json.RawMessage) string {
 	if err := json.Unmarshal(me, &p); err != nil {
 		return ""
 	}
-	return strings.ToLower(strings.TrimSpace(p.Email))
+	return p.Email
+}
+
+// canonicalEmail is the one spelling every identity keyspace agrees on.
+func canonicalEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
 }
 
 // nameFromMe extracts the display name from the cached cloud principal (GET

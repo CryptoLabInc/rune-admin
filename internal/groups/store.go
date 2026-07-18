@@ -61,9 +61,13 @@ type Store struct {
 	// Kept OUT of memberships on purpose — every judge path iterates that map as
 	// "the user's direct grants", so an exclusion living there would read as a
 	// grant. Only the inheritance-expanding paths consult this map.
-	excluded  map[string]map[string]*ReadExclusion
-	orgAdmins map[string]bool // org admin (Owner) emails — grant authority (plan §5, §6-D8)
-	limits    Limits
+	excluded map[string]map[string]*ReadExclusion
+	// orgAdmin is THE organization admin's email — grant authority (plan §5,
+	// §6-D8). A single field, not a set: the plan mandates exactly one, and
+	// modeling it as a set is what would let a second one quietly appear.
+	// Empty means no admin is established (a console-less daemon).
+	orgAdmin string
+	limits   Limits
 
 	// validatePerson is the pluggable person-key contract; nil means the
 	// default (validateUserEmail). Read without locking — see
@@ -87,7 +91,6 @@ func NewStore() *Store {
 		children:    make(map[string][]string),
 		memberships: make(map[string]map[string]*Membership),
 		excluded:    make(map[string]map[string]*ReadExclusion),
-		orgAdmins:   make(map[string]bool),
 		limits:      DefaultLimits(),
 		now:         func() time.Time { return time.Now().UTC() },
 	}
@@ -130,17 +133,16 @@ func (s *Store) validatePersonKey(key string) error {
 func (s *Store) SetOrgAdmin(email string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.orgAdmins = make(map[string]bool, 1)
-	if email != "" {
-		s.orgAdmins[email] = true
-	}
+	s.orgAdmin = email
 }
 
-// IsOrgAdmin reports whether user is the organization admin (Owner).
+// IsOrgAdmin reports whether user is the organization admin (Owner). An empty
+// user is never the admin, so an unestablished admin cannot be matched by an
+// empty token identity.
 func (s *Store) IsOrgAdmin(user string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.orgAdmins[user]
+	return user != "" && s.orgAdmin == user
 }
 
 // SetLimits overrides the judge knobs. Zero fields keep their defaults.

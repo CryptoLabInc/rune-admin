@@ -394,7 +394,7 @@ func (s *Store) CanGrant(actor, targetUser, groupRef string, role Role) error {
 	if _, err := s.resolveLocked(groupRef); err != nil {
 		return err
 	}
-	if !s.orgAdmins[actor] {
+	if actor == "" || s.orgAdmin != actor {
 		return ErrNotAdmin{Actor: actor}
 	}
 	return nil

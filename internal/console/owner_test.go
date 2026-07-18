@@ -25,8 +25,50 @@ func newTestOwnerStore(t *testing.T) *ownerStore {
 
 func TestOwnerUnclaimed(t *testing.T) {
 	st := newTestOwnerStore(t)
-	if o := st.get(); o != nil {
+	o, err := st.get()
+	if err != nil {
+		t.Fatalf("get on a fresh store: %v", err)
+	}
+	if o != nil {
 		t.Errorf("fresh console should be unclaimed, got %+v", o)
+	}
+}
+
+func TestOwnerReadErrorIsNotUnclaimed(t *testing.T) {
+	// A failed read must not masquerade as "no owner": the caller derives the
+	// org admin from this, and silently reporting "unclaimed" would leave the
+	// console with no admin for the life of the process.
+	dbc := openTestDB(t)
+	st, err := newOwnerStore(dbc, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dbc.Exec(`DROP TABLE console_owner`); err != nil {
+		t.Fatal(err)
+	}
+	o, err := st.get()
+	if err == nil {
+		t.Error("get returned no error after the table went missing")
+	}
+	if o != nil {
+		t.Errorf("get returned an owner on a failed read: %+v", o)
+	}
+}
+
+func TestOwnerEmailStoredCanonical(t *testing.T) {
+	// The claim is the org-admin key and is never rewritten, so the spelling
+	// persisted here is the one the whole system lives with — it must match what
+	// emailFromMe hands the login path.
+	st := newTestOwnerStore(t)
+	if _, err := st.bindIfAbsent("  Alice@X.IO  ", json.RawMessage(`{"email":"Alice@X.IO"}`)); err != nil {
+		t.Fatal(err)
+	}
+	o, err := st.get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.Email != "alice@x.io" {
+		t.Errorf("stored owner email = %q, want alice@x.io", o.Email)
 	}
 }
 
@@ -48,8 +90,8 @@ func TestOwnerBindOnceWins(t *testing.T) {
 	if second.Email != "alice@x.io" {
 		t.Errorf("second bind returned %q, want incumbent alice@x.io", second.Email)
 	}
-	if got := st.get(); got == nil || got.Email != "alice@x.io" {
-		t.Errorf("owner after race = %+v, want alice@x.io", got)
+	if got, err := st.get(); err != nil || got == nil || got.Email != "alice@x.io" {
+		t.Errorf("owner after race = %+v (err %v), want alice@x.io", got, err)
 	}
 }
 
@@ -78,8 +120,8 @@ func TestOwnerPersistsAcrossRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := st2.get(); got == nil || got.Email != "alice@x.io" {
-		t.Errorf("owner after restart = %+v, want alice@x.io", got)
+	if got, err := st2.get(); err != nil || got == nil || got.Email != "alice@x.io" {
+		t.Errorf("owner after restart = %+v (err %v), want alice@x.io", got, err)
 	}
 }
 

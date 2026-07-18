@@ -148,6 +148,14 @@ type GroupsConfig struct {
 	MembershipsFile string `yaml:"memberships_file"`
 	TopKRead        int    `yaml:"topk_read"`
 	TopKWrite       int    `yaml:"topk_write"`
+
+	// Deprecated: org_admins is never honored — the org admin is the account
+	// that first logs in to the console. The field is declared solely so a
+	// config that still carries it is refused by LoadConfig with migration
+	// guidance; without the declaration, strict decoding rejects it first and
+	// the operator gets a bare "field not found" naming a Go type. Reading this
+	// value anywhere would reintroduce config-declared admins.
+	OrgAdmins []string `yaml:"org_admins"`
 }
 
 // GroupsFiles resolves the group store paths, applying the
@@ -265,16 +273,17 @@ func LoadConfig(override string) (*Config, error) {
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
-		// org_admins was removed when admin identity moved to the first-login
-		// console owner; KnownFields turns a leftover line into a hard parse
-		// error, so translate it into migration guidance. The match is
-		// intentionally broad (org_admins under any section, not just groups)
-		// since the field is unsupported everywhere now, and it keeps the same
-		// "(searched: …)" context the generic branch below carries.
-		if strings.Contains(err.Error(), "field org_admins not found") {
-			return nil, fmt.Errorf("parse config %s: org_admins is no longer supported — the org admin is the account that first logs in to the console; remove the org_admins entry from this config and restart: %w (searched: %s)", path, err, strings.Join(searched, ", "))
-		}
 		return nil, fmt.Errorf("parse config %s: %w (searched: %s)", path, err, strings.Join(searched, ", "))
+	}
+	// groups.org_admins no longer selects the org admin (it is the account that
+	// first logs in to the console). Refuse rather than ignore: a config naming
+	// an admin the daemon will not honor is a silent authority change. The check
+	// is on the decoded value, not on the decoder's error text, so it cannot be
+	// broken by a yaml library rewording its strict-decode message.
+	if len(cfg.Groups.OrgAdmins) > 0 {
+		return nil, fmt.Errorf("config %s: groups.org_admins is no longer supported — "+
+			"the org admin is the account that first logs in to the console; "+
+			"remove the org_admins entry from this config and restart", path)
 	}
 	cfg.Source = path
 
