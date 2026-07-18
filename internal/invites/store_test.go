@@ -671,135 +671,15 @@ func TestMutatorSQLFailureLeavesMapsUnchanged(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsUnparseableExpiresAt(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "invites.yml")
-	content := `invites:
-  - handle: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-    member_id: m1
-    email: u@corp.com
-    token_value: evt_x
-    role: member
-    lease_id: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-    creation_path: test.path
-    created_at: "2026-07-08T00:00:00Z"
-    expires_at: "not-a-timestamp"
-    status: pending
-`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := NewStore().LoadFromFile(path); err == nil || !strings.Contains(err.Error(), "expires_at") {
-		t.Errorf("load = %v, want an expires_at parse error", err)
-	}
-}
-
-func TestLoadRejectsTooPermissiveFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "invites.yml")
-	content := `invites:
-  - handle: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-    member_id: m1
-    email: u@corp.com
-    token_value: evt_x
-    role: member
-    lease_id: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-    creation_path: test.path
-    created_at: "2026-07-08T00:00:00Z"
-    expires_at: "2026-07-08T00:30:00Z"
-    status: pending
-`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	// Force a group/other-readable mode regardless of umask.
-	if err := os.Chmod(path, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := NewStore().LoadFromFile(path); err == nil || !strings.Contains(err.Error(), "too-permissive") {
-		t.Errorf("load of 0644 file = %v, want a too-permissive mode error", err)
-	}
-	// The same file, owner-only, loads cleanly.
-	if err := os.Chmod(path, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := NewStore().LoadFromFile(path); err != nil {
-		t.Errorf("0600 load = %v, want nil", err)
-	}
-}
-
-// TestLoadFromFileAcceptsRevokedStatus: a database re-imported or a row
-// written by the new RevokePending must reload — 'revoked' is part of the
-// valid status set everywhere a status string is validated.
-func TestLoadFromFileAcceptsRevokedStatus(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "invites.yml")
-	content := `invites:
-  - handle: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-    member_id: m1
-    email: u@corp.com
-    token_value: ""
-    role: member
-    lease_id: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-    creation_path: test.path
-    created_at: "2026-07-08T00:00:00Z"
-    expires_at: "2026-07-08T00:30:00Z"
-    status: revoked
-`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	s := NewStore()
-	if err := s.LoadFromFile(path); err != nil {
-		t.Fatalf("load of revoked row = %v, want nil", err)
-	}
-	if _, _, err := s.Unwrap("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"); !errors.As(err, new(ErrInviteExpired)) {
-		t.Errorf("unwrap of loaded revoked invite = %v, want ErrInviteExpired", err)
-	}
-}
-
-// ── importer export surface ────────────────────────────────────────
-
-func TestExportReturnsFullFidelityRows(t *testing.T) {
-	s := NewStore()
-	b1 := issueTest(t, s, "evt_secret1")
-	b2 := issueTest(t, s, "evt_secret2")
-	if _, _, err := s.Unwrap(b2.Handle); err != nil {
-		t.Fatal(err)
-	}
-
-	rows := s.Export()
-	if len(rows) != 2 {
-		t.Fatalf("Export returned %d rows, want 2", len(rows))
-	}
-	byHandle := map[string]Invite{}
-	for _, r := range rows {
-		byHandle[r.Handle] = r
-	}
-	pending := byHandle[b1.Handle]
-	if pending.TokenValue != "evt_secret1" || pending.Status != StatusPending ||
-		pending.LeaseID != b1.LeaseID || pending.MemberID != "member-1" {
-		t.Errorf("pending export row = %+v, want sealed plaintext + full fields", pending)
-	}
-	consumed := byHandle[b2.Handle]
-	if consumed.TokenValue != "" || consumed.Status != StatusConsumed {
-		t.Errorf("consumed export row = %+v, want scrubbed token", consumed)
-	}
-	// Sorted by handle for deterministic import order.
-	if !(rows[0].Handle < rows[1].Handle) {
-		t.Errorf("Export not handle-sorted: %q, %q", rows[0].Handle, rows[1].Handle)
-	}
-}
-
 // TestLoadFromDBRejectsNonCanonicalExpiresAt pins the boot-time fail-closed
-// twin of LoadFromFile's parse check, tightened to the canonical
-// storedb.TimeFormat (RFC3339 UTC, fixed three-digit milliseconds) the
-// textual aged-pending sweep depends on: an offset variant parses fine yet
-// would be swept at the wrong instant (a negative offset even prematurely,
-// scrubbing a still-valid invite); a bare-seconds value — the pre-migration
-// canonical form — textually sorts AFTER every same-second ms value ('Z' >
-// '.') and so interleaves wrongly with store-written rows; an unparseable
-// value would silently mean never-expires. All refuse boot.
+// check on a stored expires_at, held to the canonical storedb.TimeFormat
+// (RFC3339 UTC, fixed three-digit milliseconds) the textual aged-pending
+// sweep depends on: an offset variant parses fine yet would be swept at the
+// wrong instant (a negative offset even prematurely, scrubbing a still-valid
+// invite); a bare-seconds value — the pre-migration canonical form —
+// textually sorts AFTER every same-second ms value ('Z' > '.') and so
+// interleaves wrongly with store-written rows; an unparseable value would
+// silently mean never-expires. All refuse boot.
 func TestLoadFromDBRejectsNonCanonicalExpiresAt(t *testing.T) {
 	for name, expiresAt := range map[string]string{
 		"offset":       "2027-01-05T09:00:00+09:00",

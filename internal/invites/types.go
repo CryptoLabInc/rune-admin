@@ -13,7 +13,7 @@
 // synchronous(FULL) pragma: a COMMIT is durable on disk before the mutator
 // returns, so Issue and Unwrap keep their durable-before-release guarantees.
 // A store with no sink attached (NewStore alone) is pure in-memory — how the
-// server unit tests and the one-time YAML importer use it.
+// server unit tests use it.
 package invites
 
 // Invite is one wrapped token. Handle is the opaque single-use reference that
@@ -57,15 +57,6 @@ const (
 	StatusExpired     = "expired"
 	StatusRevoked     = "revoked"
 )
-
-func validInviteStatus(s string) bool {
-	switch s {
-	case StatusPending, StatusConsumed, StatusCompromised, StatusExpired, StatusRevoked:
-		return true
-	default:
-		return false
-	}
-}
 
 // clearBundle projects the secret-free view of an invite.
 func (inv *Invite) clearBundle() *ClearBundle {

@@ -5,8 +5,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -333,44 +331,5 @@ func TestGetPermissionsMemberKeyed(t *testing.T) {
 	}
 	if !seenGhost {
 		t.Errorf("member_roles = %+v, want the orphaned key %s shown as-is", resp3.GetMemberRoles(), ghost.ID)
-	}
-}
-
-// TestMembershipsLoadRefusesEmailKeys — boot refusal semantics: with the
-// member-UUID validator injected (as the daemon does before LoadFromFiles), a
-// memberships.yml row keyed by an email fails the load with the member-id
-// error, so a legacy email-keyed file cannot boot (greenfield-only, spec
-// appendix B#10). A UUID-keyed row loads.
-func TestMembershipsLoadRefusesEmailKeys(t *testing.T) {
-	dir := t.TempDir()
-	groupsPath := filepath.Join(dir, "groups.yml")
-	writeTestFile(t, groupsPath, "groups:\n  - id: aaaa\n    name: a\n    created_at: \"2026-07-09T00:00:00Z\"\n")
-	emailRows := filepath.Join(dir, "m-email.yml")
-	writeTestFile(t, emailRows, "memberships:\n  - user: alice@corp.com\n    group_id: aaaa\n    role: read\n    granted_by: x\n    granted_at: \"2026-07-09T00:00:00Z\"\n")
-	uuidRows := filepath.Join(dir, "m-uuid.yml")
-	writeTestFile(t, uuidRows, "memberships:\n  - user: 6f1d0e3a-1b2c-4d5e-8f90-a1b2c3d4e5f6\n    group_id: aaaa\n    role: read\n    granted_by: x\n    granted_at: \"2026-07-09T00:00:00Z\"\n")
-
-	s := groups.NewStore()
-	s.SetPersonKeyValidator(members.ValidateID)
-	err := s.LoadFromFiles(groupsPath, emailRows)
-	if err == nil {
-		t.Fatal("email-keyed memberships row loaded, want boot refusal")
-	}
-	if !strings.Contains(err.Error(), "member id") {
-		t.Errorf("load error = %v, want the member-id format error", err)
-	}
-
-	s2 := groups.NewStore()
-	s2.SetPersonKeyValidator(members.ValidateID)
-	if err := s2.LoadFromFiles(groupsPath, uuidRows); err != nil {
-		t.Errorf("UUID-keyed memberships row failed to load: %v", err)
-	}
-}
-
-// writeTestFile writes a small fixture file (0600) or fails the test.
-func writeTestFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatal(err)
 	}
 }

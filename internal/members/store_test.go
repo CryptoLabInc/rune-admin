@@ -3,7 +3,6 @@ package members
 import (
 	"database/sql"
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,13 +10,6 @@ import (
 	"github.com/CryptoLabInc/rune-console/internal/db"
 	"github.com/CryptoLabInc/rune-console/internal/storedb"
 )
-
-func writeFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0o640); err != nil {
-		t.Fatal(err)
-	}
-}
 
 func strptr(s string) *string { return &s }
 
@@ -385,83 +377,39 @@ func TestEmailImmutableAtDBLayer(t *testing.T) {
 	}
 }
 
-// TestLoadMissingFileIsEmpty pins the importer input contract (LoadFromFile
-// is the yamlimport format spec): a missing legacy file loads empty.
-func TestLoadMissingFileIsEmpty(t *testing.T) {
-	s := NewStore()
-	if err := s.LoadFromFile(filepath.Join(t.TempDir(), "members.yml")); err != nil {
-		t.Fatalf("missing file should load empty: %v", err)
+// TestValidateIDAcceptsCanonicalUUIDOnly covers the exported member-id format
+// contract on its own, with no store attached — the shape it runs in on the
+// live paths (the daemon injects it as the groups person-key validator at
+// boot, and the gRPC layer calls it to tell a member id from a token email).
+// The schema CHECK on members.id only pins length and lower-case, so the full
+// 8-4-4-4-12 hex shape is enforced here or nowhere.
+func TestValidateIDAcceptsCanonicalUUIDOnly(t *testing.T) {
+	// A freshly minted id is by definition the accepted shape.
+	good, err := newMemberID()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(s.List()) != 0 {
-		t.Errorf("store should be empty, got %+v", s.List())
+	if err := ValidateID(good); err != nil {
+		t.Errorf("ValidateID(%q) = %v, want nil", good, err)
 	}
-}
-
-// TestLoadRejectsDuplicateKeys pins the importer's must-reject corpus: these
-// YAML shapes fail LoadFromFile, and with it the one-time import.
-func TestLoadRejectsDuplicateKeys(t *testing.T) {
-	t.Run("duplicate id", func(t *testing.T) {
-		dir := t.TempDir()
-		p := filepath.Join(dir, "m.yml")
-		writeFile(t, p, `members:
-  - id: 11111111-1111-4111-8111-111111111111
-    email: a@corp.com
-    status: invited
-    created_at: "2026-07-08T00:00:00Z"
-  - id: 11111111-1111-4111-8111-111111111111
-    email: b@corp.com
-    status: invited
-    created_at: "2026-07-08T00:00:00Z"
-`)
-		if err := NewStore().LoadFromFile(p); err == nil {
-			t.Error("duplicate id should fail load")
+	bad := []string{
+		"alice@corp.com",                        // an email is not a member id
+		"not-a-uuid",                            // free-form text
+		"",                                      // empty
+		"11111111-1111-4111-8111-11111111111",   // 35 chars
+		"11111111-1111-4111-8111-1111111111111", // 37 chars
+		"111111111-111-4111-8111-111111111111",  // right length, dashes misplaced
+		"11111111-1111-4111-8111-11111111111g",  // non-hex digit
+		"AAAAAAAA-1111-4111-8111-111111111111",  // upper-case hex
+	}
+	for _, id := range bad {
+		err := ValidateID(id)
+		if err == nil {
+			t.Errorf("ValidateID(%q) = nil, want an error", id)
+			continue
 		}
-	})
-
-	t.Run("duplicate email", func(t *testing.T) {
-		dir := t.TempDir()
-		p := filepath.Join(dir, "m.yml")
-		writeFile(t, p, `members:
-  - id: 11111111-1111-4111-8111-111111111111
-    email: dup@corp.com
-    status: invited
-    created_at: "2026-07-08T00:00:00Z"
-  - id: 22222222-2222-4222-8222-222222222222
-    email: dup@corp.com
-    status: active
-    created_at: "2026-07-08T00:00:00Z"
-`)
-		err := NewStore().LoadFromFile(p)
-		if !errors.As(err, new(ErrDuplicateEmail)) {
-			t.Errorf("duplicate email load = %v, want ErrDuplicateEmail", err)
+		if !strings.Contains(err.Error(), "member id") {
+			t.Errorf("ValidateID(%q) err = %v, want a member id error", id, err)
 		}
-	})
-
-	t.Run("bad status", func(t *testing.T) {
-		dir := t.TempDir()
-		p := filepath.Join(dir, "m.yml")
-		writeFile(t, p, `members:
-  - id: 11111111-1111-4111-8111-111111111111
-    email: a@corp.com
-    status: zombie
-    created_at: "2026-07-08T00:00:00Z"
-`)
-		if err := NewStore().LoadFromFile(p); err == nil || !strings.Contains(err.Error(), "status") {
-			t.Errorf("bad status load = %v, want status error", err)
-		}
-	})
-
-	t.Run("non-uuid id", func(t *testing.T) {
-		dir := t.TempDir()
-		p := filepath.Join(dir, "m.yml")
-		writeFile(t, p, `members:
-  - id: not-a-uuid
-    email: a@corp.com
-    status: invited
-    created_at: "2026-07-08T00:00:00Z"
-`)
-		if err := NewStore().LoadFromFile(p); err == nil {
-			t.Error("non-uuid id should fail load")
-		}
-	})
+	}
 }

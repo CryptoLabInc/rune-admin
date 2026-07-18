@@ -17,14 +17,11 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
-	"os"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"time"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/CryptoLabInc/rune-console/internal/storedb"
 )
@@ -101,7 +98,7 @@ type PersonKeyValidator func(key string) error
 
 // SetPersonKeyValidator replaces the person-key contract; nil restores
 // the default (validateUserEmail). It must be called at boot, before
-// LoadFromFiles and before any Grant/judge traffic — the validator is
+// LoadFromDB and before any Grant/judge traffic — the validator is
 // read without locking, so swapping it concurrently with use is unsafe.
 func (s *Store) SetPersonKeyValidator(v PersonKeyValidator) {
 	s.validatePerson = v
@@ -156,157 +153,20 @@ func (s *Store) SetLimits(l Limits) {
 	}
 }
 
-// LoadFromFiles reads groups and memberships from a legacy YAML pair. It is
-// the one-time importer's input path (internal/storedb/yamlimport) — the
-// daemon loads from the store database via LoadFromDB — and its validation
-// set is the import contract: missing files leave the store empty (a fresh
-// console has no groups); a cyclic or over-deep tree, an unknown parent
-// reference, or a duplicate id/name fails the load, and with it the import.
-// One case is fail-soft: a membership row referencing an unknown group is
-// DROPPED with a warning instead of failing the load — the legacy pair was
-// written as two separate atomic renames, so a crash between them could
-// strand such a row, and dropping it only ever reduces access (fail-closed).
-func (s *Store) LoadFromFiles(groupsPath, membershipsPath string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Groups
-	if data, err := os.ReadFile(groupsPath); err == nil {
-		var doc struct {
-			Groups []Group `yaml:"groups"`
-		}
-		if err := yaml.Unmarshal(data, &doc); err != nil {
-			return fmt.Errorf("parse groups file %s: %w", groupsPath, err)
-		}
-		for i := range doc.Groups {
-			g := doc.Groups[i]
-			if g.ID == "" || g.Name == "" {
-				return fmt.Errorf("groups file %s: entry %d missing id or name", groupsPath, i)
-			}
-			if _, dup := s.groups[g.ID]; dup {
-				return fmt.Errorf("groups file %s: duplicate group id '%s'", groupsPath, g.ID)
-			}
-			cp := g
-			s.groups[g.ID] = &cp
-			s.byName[g.Name] = append(s.byName[g.Name], &cp)
-		}
-		for id, g := range s.groups {
-			if g.ParentID == "" {
-				continue
-			}
-			if _, ok := s.groups[g.ParentID]; !ok {
-				return fmt.Errorf("groups file %s: group '%s' references unknown parent '%s'", groupsPath, id, g.ParentID)
-			}
-			s.children[g.ParentID] = append(s.children[g.ParentID], id)
-		}
-		// Names are unique only among siblings (plan §6). Reject a persisted
-		// file that puts two groups with the same name under the same parent.
-		siblingName := make(map[string]string, len(s.groups)) // parentID\x00name -> first id
-		for id, g := range s.groups {
-			k := g.ParentID + "\x00" + g.Name
-			if prev, dup := siblingName[k]; dup {
-				return fmt.Errorf("groups file %s: %w (groups %q and %q share a name under the same parent)", groupsPath, ErrDuplicateName{Name: g.Name}, prev, id)
-			}
-			siblingName[k] = id
-		}
-		// Cycle + depth validation: visited-set walk up every parent
-		// chain, capped at MaxTreeDepth hops (plan §6-D2).
-		for id := range s.groups {
-			if _, err := s.depthLocked(id); err != nil {
-				return fmt.Errorf("groups file %s: %w", groupsPath, err)
-			}
-		}
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("read groups file %s: %w", groupsPath, err)
-	}
-
-	// Memberships
-	if data, err := os.ReadFile(membershipsPath); err == nil {
-		var doc struct {
-			Memberships   []Membership    `yaml:"memberships"`
-			ExcludedReads []ReadExclusion `yaml:"excluded_reads"`
-		}
-		if err := yaml.Unmarshal(data, &doc); err != nil {
-			return fmt.Errorf("parse memberships file %s: %w", membershipsPath, err)
-		}
-		for i := range doc.Memberships {
-			m := doc.Memberships[i]
-			if m.GroupID == "" {
-				return fmt.Errorf("memberships file %s: entry %d missing group_id", membershipsPath, i)
-			}
-			if err := s.validatePersonKey(m.User); err != nil {
-				return fmt.Errorf("memberships file %s: entry %d: %w", membershipsPath, i, err)
-			}
-			if !m.Role.Valid() {
-				return fmt.Errorf("memberships file %s: entry %d has invalid role %q", membershipsPath, i, string(m.Role))
-			}
-			if _, ok := s.groups[m.GroupID]; !ok {
-				// Dangling row — the legacy pair was written as two separate
-				// renames, so a crash between them (e.g. after a revoke+delete
-				// inside one debounce window) could strand a membership whose
-				// group is already gone. Dropping it is access-reducing
-				// (fail-closed); failing the import would wedge the migration
-				// on residue the old persist machinery left behind by design.
-				fmt.Fprintf(os.Stderr, "groups: memberships file %s: entry %d references unknown group '%s' — dropping membership for user '%s'\n",
-					membershipsPath, i, m.GroupID, m.User)
-				continue
-			}
-			if s.memberships[m.User] == nil {
-				s.memberships[m.User] = make(map[string]*Membership)
-			}
-			if _, dup := s.memberships[m.User][m.GroupID]; dup {
-				return fmt.Errorf("memberships file %s: duplicate membership (user '%s', group '%s')", membershipsPath, m.User, m.GroupID)
-			}
-			cp := m
-			s.memberships[m.User][m.GroupID] = &cp
-		}
-		// Removed inherited reads. An exclusion only ever REMOVES access, so a
-		// dropped row is fail-open — validate strictly and drop only when the
-		// group is gone (the exclusion is then meaningless: no group, no read).
-		for i := range doc.ExcludedReads {
-			d := doc.ExcludedReads[i]
-			if d.GroupID == "" {
-				return fmt.Errorf("memberships file %s: excluded_reads entry %d missing group_id", membershipsPath, i)
-			}
-			if err := s.validatePersonKey(d.User); err != nil {
-				return fmt.Errorf("memberships file %s: excluded_reads entry %d: %w", membershipsPath, i, err)
-			}
-			if _, ok := s.groups[d.GroupID]; !ok {
-				fmt.Fprintf(os.Stderr, "groups: memberships file %s: excluded_reads entry %d references unknown group '%s' — dropping exclusion for user '%s'\n",
-					membershipsPath, i, d.GroupID, d.User)
-				continue
-			}
-			if s.excluded[d.User] == nil {
-				s.excluded[d.User] = make(map[string]*ReadExclusion)
-			}
-			if _, dup := s.excluded[d.User][d.GroupID]; dup {
-				return fmt.Errorf("memberships file %s: duplicate excluded_read (user '%s', group '%s')", membershipsPath, d.User, d.GroupID)
-			}
-			cp := d
-			s.excluded[d.User][d.GroupID] = &cp
-		}
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("read memberships file %s: %w", membershipsPath, err)
-	}
-
-	return nil
-}
-
 // LoadFromDB attaches database (the unified store database, opened with
 // db.OpenStrict and carrying the storedb schema) as the write-through
 // persistence sink and loads the in-memory indexes from its groups and
-// memberships tables. The Go-side structural validation runs exactly as on
-// the legacy YAML load: an unknown parent reference or a cyclic/over-deep
-// tree fails the load (the schema has no self-FK on parent_id, so tree shape
-// is Go's job), and every membership row is routed through the active
-// person-key validator — call it after SetPersonKeyValidator, like
-// LoadFromFiles. Group ids are copied byte-verbatim: they are the opaque FHE
-// record tags, and non-UUID ids are legal (the schema only requires
-// non-empty). Unlike the legacy load there is no fail-soft case: a
-// membership row whose group is missing fails the load, because the
-// memberships.group_id foreign key makes that state unrepresentable through
-// this binary — reaching it means the database was edited externally, and a
-// SQLite file (unlike the old two-file pair) is repairable in place.
+// memberships tables. Go-side structural validation runs here: an unknown
+// parent reference or a cyclic/over-deep tree fails the load (the schema has
+// no self-FK on parent_id, so tree shape is Go's job), and every membership
+// row is routed through the active person-key validator — call it after
+// SetPersonKeyValidator. Group ids are copied byte-verbatim: they are the
+// opaque FHE record tags, and non-UUID ids are legal (the schema only
+// requires non-empty). There is no fail-soft case: a membership row whose
+// group is missing fails the load, because the memberships.group_id foreign
+// key makes that state unrepresentable through this binary — reaching it
+// means the database was edited externally, and a SQLite file is repairable
+// in place.
 func (s *Store) LoadFromDB(database *sql.DB) error {
 	gRows, err := database.Query(`SELECT id, name, parent_id, created_at FROM groups`)
 	if err != nil {
@@ -712,8 +572,8 @@ func (s *Store) DeleteGroup(ref string, stats TagStatsProvider) (Group, error) {
 
 // purgeExclusionsForGroupLocked drops every user's read exclusion on a group that is
 // being deleted. The guards let a group with exclusions (they are not memberships)
-// through deletion, so without this the rows would outlive their group and
-// LoadFromFiles would just drop them with a warning on the next boot.
+// through deletion, so without this the rows would outlive the group they
+// refer to, leaving a meaningless exclusion behind.
 // Caller must hold s.mu for writing.
 func (s *Store) purgeExclusionsForGroupLocked(id string) {
 	for user, byGroup := range s.excluded {
@@ -1114,29 +974,6 @@ func (s *Store) ListMemberships() []Membership {
 			nj = gj.Name
 		}
 		return ni < nj
-	})
-	return out
-}
-
-// ExportReadExclusions returns every removed inherited read, sorted by user
-// then group id — the one-time YAML importer's full-fidelity export surface
-// (internal/storedb/yamlimport). An exclusion that failed to migrate would
-// fail OPEN (the removed access would come back), so the importer must carry
-// these rows with the memberships they subtract from.
-func (s *Store) ExportReadExclusions() []ReadExclusion {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := make([]ReadExclusion, 0)
-	for _, byGroup := range s.excluded {
-		for _, d := range byGroup {
-			out = append(out, *d)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].User != out[j].User {
-			return out[i].User < out[j].User
-		}
-		return out[i].GroupID < out[j].GroupID
 	})
 	return out
 }
