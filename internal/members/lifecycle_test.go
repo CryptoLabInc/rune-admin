@@ -132,9 +132,11 @@ func TestDisabledFromDBRoundTrip(t *testing.T) {
 }
 
 // TestLegacyDisabledRowRestoresToRegistered: rows disabled before
-// DisabledFrom existed carry no marker (the importer writes NULL for them);
-// they restore to registered — the lifecycle entry state — never straight to
-// active.
+// DisabledFrom existed carry no marker (disabled_from is nullable and its
+// CHECK still admits NULL on a disabled row, so such a row stays
+// representable even though no store write makes one — entering disabled
+// always stamps the prior status); they restore to registered — the
+// lifecycle entry state — never straight to active.
 func TestLegacyDisabledRowRestoresToRegistered(t *testing.T) {
 	database := newTestDB(t)
 	const id = "33333333-3333-4333-8333-333333333333"

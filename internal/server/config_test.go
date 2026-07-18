@@ -93,12 +93,28 @@ func TestLoadConfigDefaultLookupErrorListsPaths(t *testing.T) {
 	}
 }
 
+// TestLoadConfigUnknownFieldsRejected — strict decoding refuses an unknown key
+// at every depth, not just the top level. A typo nested inside a section is the
+// likelier operator mistake, and it is the one that fails silently if
+// KnownFields only reached the outermost mapping: the section still decodes,
+// so the daemon boots with the intended setting quietly ignored.
 func TestLoadConfigUnknownFieldsRejected(t *testing.T) {
-	body := minimalValidConfig(t) + "extra_unknown_field: 42\n"
-	path := writeConfig(t, body)
-	_, err := LoadConfig(path)
-	if err == nil {
-		t.Error("unknown top-level field accepted, want strict error")
+	cases := map[string]string{
+		"top level": minimalValidConfig(t) + "extra_unknown_field: 42\n",
+		// Inside keys:, a section that already decodes fine. Deliberately not
+		// one of the removed keys — TestLoadConfigRemovedKeysGuidance owns
+		// those, and they take a different path (tailored guidance).
+		"nested in a section": strings.Replace(minimalValidConfig(t),
+			"  embedding_dim: 1024",
+			"  embedding_dim: 1024\n  extra_unknown_field: 42",
+			1),
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := LoadConfig(writeConfig(t, body)); err == nil {
+				t.Error("unknown field accepted, want strict error")
+			}
+		})
 	}
 }
 

@@ -431,13 +431,26 @@ func TestLoadFromDBUsesPersonKeyValidator(t *testing.T) {
 		return database
 	}
 
+	// An accepted row must also be INDEXED: a load that validates a row and
+	// then drops it would otherwise pass here while the daemon boots with
+	// every membership silently missing.
+	wantIndexed := func(t *testing.T, s *Store, user string) {
+		t.Helper()
+		ms := s.ListMemberships()
+		if len(ms) != 1 || ms[0].User != user || ms[0].GroupID != "aaaa" {
+			t.Errorf("memberships = %+v, want exactly the %s grant on 'aaaa'", ms, user)
+		}
+	}
+
 	// Default (email) contract: refuses the member-key row, loads the email row.
 	if err := NewStore().LoadFromDB(seed(t, "member-42")); err == nil {
 		t.Error("default validator should refuse a member-key row (load must fail)")
 	}
-	if err := NewStore().LoadFromDB(seed(t, "alice@corp.com")); err != nil {
-		t.Errorf("default validator should load the email row: %v", err)
+	sd := NewStore()
+	if err := sd.LoadFromDB(seed(t, "alice@corp.com")); err != nil {
+		t.Fatalf("default validator should load the email row: %v", err)
 	}
+	wantIndexed(t, sd, "alice@corp.com")
 
 	// Injected contract: mirror image.
 	s := NewStore()
@@ -445,6 +458,7 @@ func TestLoadFromDBUsesPersonKeyValidator(t *testing.T) {
 	if err := s.LoadFromDB(seed(t, "member-42")); err != nil {
 		t.Fatalf("injected validator should load the member-key row: %v", err)
 	}
+	wantIndexed(t, s, "member-42")
 	s2 := NewStore()
 	s2.SetPersonKeyValidator(fakeMemberKeyValidator)
 	if err := s2.LoadFromDB(seed(t, "alice@corp.com")); err == nil {
