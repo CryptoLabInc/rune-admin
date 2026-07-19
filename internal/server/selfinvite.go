@@ -39,8 +39,8 @@ func NewSelfInviteIssuer(v *Console, m *members.Store, i *invites.Store, conn In
 // IssueSelfInvite (re)issues an invite for email and returns the clear bundle
 // (Handle = wrapping token) plus the connection info. The CA pin in the
 // returned conn is recomputed live from the console's own CA/cert so it always
-// matches what GetCACert will serve; when TLS is disabled the pin is left as
-// configured (typically empty).
+// matches what GetCACert will serve; on a missing-cert misconfiguration the pin
+// is left as configured (typically empty).
 func (s *SelfInviteIssuer) IssueSelfInvite(email, displayName string) (invites.ClearBundle, InviteConnInfo, error) {
 	// Reuse the operator's existing member row (and its immutable UUID) when one
 	// is present: group memberships are keyed by that UUID, so deleting and

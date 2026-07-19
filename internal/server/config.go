@@ -55,10 +55,9 @@ type GRPCConfig struct {
 }
 
 type TLSConfig struct {
-	Cert    string `yaml:"cert"`
-	Key     string `yaml:"key"`
-	CA      string `yaml:"ca"` // installer-issued ca.pem, served to clients over GetCACert (bootstrap)
-	Disable bool   `yaml:"disable"`
+	Cert string `yaml:"cert"`
+	Key  string `yaml:"key"`
+	CA   string `yaml:"ca"` // installer-issued ca.pem, served to clients over GetCACert (bootstrap)
 }
 
 // ConsoleConfig configures the local console HTTP listener that hosts the
@@ -349,10 +348,8 @@ func (c *Config) Validate() error {
 	if c.Server.Console.Enabled && c.Cloud.APIBaseURL == "" {
 		errs = append(errs, "cloud.api_base_url is required when server.console.enabled")
 	}
-	if !c.Server.GRPC.TLS.Disable {
-		if c.Server.GRPC.TLS.Cert == "" || c.Server.GRPC.TLS.Key == "" {
-			errs = append(errs, "server.grpc.tls.cert and server.grpc.tls.key are required (or set server.grpc.tls.disable=true)")
-		}
+	if c.Server.GRPC.TLS.Cert == "" || c.Server.GRPC.TLS.Key == "" {
+		errs = append(errs, "server.grpc.tls.cert and server.grpc.tls.key are required")
 	}
 	if c.Keys.Path == "" {
 		errs = append(errs, "keys.path is required")

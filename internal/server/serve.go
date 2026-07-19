@@ -57,9 +57,7 @@ func Serve(ctx context.Context, v *Console, consoleHandler http.Handler) error {
 		grpc.MaxRecvMsgSize(MaxMessageSize),
 		grpc.MaxSendMsgSize(MaxMessageSize),
 		grpc.UnaryInterceptor(interceptor),
-	}
-	if tlsCreds != nil {
-		opts = append(opts, grpc.Creds(tlsCreds))
+		grpc.Creds(tlsCreds),
 	}
 	gs := grpc.NewServer(opts...)
 	pb.RegisterConsoleServiceServer(gs, NewConsoleGRPC(v))
@@ -157,12 +155,8 @@ func grpcHost(cfg *Config) string {
 }
 
 func loadTLSCredentials(t TLSConfig) (credentials.TransportCredentials, error) {
-	if t.Disable {
-		slog.Warn("console: TLS disabled — gRPC traffic is unencrypted (dev mode only)")
-		return nil, nil
-	}
 	if t.Cert == "" || t.Key == "" {
-		return nil, errors.New("server.grpc.tls.cert and server.grpc.tls.key are required (or set disable=true)")
+		return nil, errors.New("server.grpc.tls.cert and server.grpc.tls.key are required")
 	}
 	cert, err := tls.LoadX509KeyPair(t.Cert, t.Key)
 	if err != nil {

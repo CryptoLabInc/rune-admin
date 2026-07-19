@@ -13,8 +13,8 @@ import (
 // pins the same digest into the registration string — reading from the one
 // source keeps the served CA and the pinned digest from drifting apart.
 //
-// It returns an error when TLS is disabled (no CA/cert path), so a plaintext
-// dev console produces an empty pin rather than a stale one.
+// It returns an error when no CA/cert path is configured (a misconfiguration —
+// TLS is mandatory), so the caller emits an empty pin rather than a stale one.
 func caPEMAndPin(cfg *Config) (pem []byte, sha256hex string, err error) {
 	path := cfg.Server.GRPC.TLS.CA
 	if path == "" {
@@ -23,7 +23,7 @@ func caPEMAndPin(cfg *Config) (pem []byte, sha256hex string, err error) {
 		path = cfg.Server.GRPC.TLS.Cert
 	}
 	if path == "" {
-		return nil, "", errors.New("console has no CA/cert configured (TLS disabled?)")
+		return nil, "", errors.New("console has no CA/cert configured")
 	}
 	pem, err = os.ReadFile(path)
 	if err != nil {

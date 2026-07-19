@@ -4,8 +4,15 @@ package tests
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"database/sql"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"net"
 	"net/http"
 	"os"
@@ -17,7 +24,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/CryptoLabInc/rune-console/internal/db"
 	"github.com/CryptoLabInc/rune-console/internal/storedb"
@@ -43,17 +50,19 @@ func freePort(t *testing.T) int {
 }
 
 // writeBootConfig writes a minimal boot config for dataDir at the given ports
-// and returns its path. Shape mirrors livetest/dev-fullstack.sh: TLS disabled
-// (dev mode), no static runespace endpoint, console enabled so /healthz is
-// served. cloud.* is required-when-console-enabled but only dialed on login,
-// and the explicit members.console_endpoint skips the boot-time public-IP
-// probe (no network dependency in CI). The FIRST boot over a data dir
+// and returns its path. TLS is mandatory on the gRPC listener (there is no
+// disable switch), so it generates a self-signed serving cert under dataDir and
+// points the config at it. No static runespace endpoint, console enabled so
+// /healthz is served. cloud.* is required-when-console-enabled but only dialed
+// on login, and the explicit members.console_endpoint skips the boot-time
+// public-IP probe (no network dependency in CI). The FIRST boot over a data dir
 // generates FHE keys under keys.path, which dominates startup time; a later
 // boot over the same dir reuses them.
 func writeBootConfig(t *testing.T, dataDir, name string, grpcPort, consolePort int) string {
 	t.Helper()
+	certPath, keyPath := writeSelfSignedCert(t, dataDir)
 	conf := fmt.Sprintf(`server:
-  grpc: { host: 127.0.0.1, port: %d, tls: { disable: true } }
+  grpc: { host: 127.0.0.1, port: %d, tls: { cert: %s, key: %s } }
   console: { enabled: true, port: %d }
 cloud: { api_base_url: https://cloud.invalid, web_base_url: https://cloud.invalid }
 keys: { path: %s, embedding_dim: 1024 }
@@ -63,7 +72,7 @@ storage: { data_dir: %s }
 members: { console_endpoint: "127.0.0.1:%d" }
 audit: { mode: stdout }
 `,
-		grpcPort, consolePort,
+		grpcPort, certPath, keyPath, consolePort,
 		filepath.Join(dataDir, "keys"),
 		dataDir,
 		grpcPort)
@@ -72,6 +81,54 @@ audit: { mode: stdout }
 		t.Fatal(err)
 	}
 	return path
+}
+
+// writeSelfSignedCert generates a self-signed TLS cert+key valid for 127.0.0.1
+// under dir and returns their paths. It is its own trust anchor (IsCA), so a
+// client pins the same cert file as its root to dial the daemon over TLS. The
+// pair is generated once per dir: successive boots over one data dir (boot1,
+// boot2) then present an identical cert the client pins a single time.
+func writeSelfSignedCert(t *testing.T, dir string) (certPath, keyPath string) {
+	t.Helper()
+	certPath = filepath.Join(dir, "server.pem")
+	keyPath = filepath.Join(dir, "server.key")
+	if _, err := os.Stat(certPath); err == nil {
+		return certPath, keyPath
+	}
+
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "runeconsole-e2e"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+		DNSNames:              []string{"localhost"},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &priv.PublicKey, priv)
+	if err != nil {
+		t.Fatalf("create cert: %v", err)
+	}
+	keyDER, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		t.Fatalf("marshal key: %v", err)
+	}
+	if err := os.WriteFile(certPath,
+		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyPath,
+		pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return certPath, keyPath
 }
 
 // daemon is one runeconsole process under test.
@@ -377,10 +434,16 @@ func TestDaemonBootsServesSeededStoresAndShutsDownCleanly(t *testing.T) {
 		}
 	}()
 
-	// Plain gRPC: the config disables TLS. WaitForReady on each call absorbs
-	// the gap between /healthz answering and gs.Serve accepting.
+	// TLS gRPC: the daemon serves with the self-signed cert writeBootConfig
+	// generated in dir; the client pins that same cert as its root (ServerName
+	// 127.0.0.1 matches the cert SAN). WaitForReady on each call absorbs the gap
+	// between /healthz answering and gs.Serve accepting.
+	creds, err := credentials.NewClientTLSFromFile(filepath.Join(dir, "server.pem"), "127.0.0.1")
+	if err != nil {
+		t.Fatalf("load client TLS creds: %v", err)
+	}
 	conn, err := grpc.NewClient(fmt.Sprintf("127.0.0.1:%d", grpcPort2),
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
+		grpc.WithTransportCredentials(creds))
 	if err != nil {
 		t.Fatalf("dial gRPC: %v", err)
 	}

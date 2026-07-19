@@ -15,7 +15,8 @@ func minimalValidConfig(t *testing.T) string {
     host: 127.0.0.1
     port: 50051
     tls:
-      disable: true
+      cert: /tmp/rune-console-test.pem
+      key: /tmp/rune-console-test.key
 keys:
   path: /tmp/rune-console-keys
   embedding_dim: 1024
@@ -329,10 +330,12 @@ func TestValidateRejectsMissingFields(t *testing.T) {
 }
 
 func TestValidateRejectsTLSWithoutCertKey(t *testing.T) {
+	// TLS is mandatory: dropping cert/key from an otherwise-valid config must
+	// fail Validate (there is no disable escape hatch).
 	body := strings.Replace(
 		minimalValidConfig(t),
-		"      disable: true",
-		"      disable: false",
+		"      cert: /tmp/rune-console-test.pem\n      key: /tmp/rune-console-test.key\n",
+		"",
 		1,
 	)
 	path := writeConfig(t, body)
@@ -341,7 +344,7 @@ func TestValidateRejectsTLSWithoutCertKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := cfg.Validate(); err == nil {
-		t.Error("Validate accepted TLS enabled without cert/key")
+		t.Error("Validate accepted TLS without cert/key")
 	}
 }
 

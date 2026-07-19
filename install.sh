@@ -1108,7 +1108,6 @@ collect_and_write_config() {
       "      cert: ${INSTALL_PREFIX}/certs/server.pem" \
       "      key: ${INSTALL_PREFIX}/certs/server.key" \
       "      ca: ${INSTALL_PREFIX}/certs/ca.pem" \
-      "      disable: false" \
       "  console:" \
       "    enabled: true" \
       "    port: 8787" \

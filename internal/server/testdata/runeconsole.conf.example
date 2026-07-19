@@ -15,7 +15,6 @@ server:
     tls:
       cert: /opt/runeconsole/certs/server.pem
       key: /opt/runeconsole/certs/server.key
-      disable: false        # true for dev only — never in production
   console:
     enabled: true           # loopback HTTP console (auth + SPA + admin); 127.0.0.1 only
     port: 8787
