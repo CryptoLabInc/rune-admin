@@ -75,9 +75,6 @@ VERSION="${VERSION:-dev}"
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 PKG="github.com/CryptoLabInc/rune-console/internal/commands"
-# fe:build (emptyOutDir) wipes the committed embed placeholder; restore it so
-# a direct `go build`/`go test` on a fresh checkout still compiles the embed.
-mkdir -p internal/console/webdist && touch internal/console/webdist/.gitkeep
 go build \
   -o bin/runeconsole \
   -ldflags "-X '${PKG}.buildVersion=${VERSION}' -X '${PKG}.buildCommit=${COMMIT}' -X '${PKG}.buildDate=${DATE}'" \
@@ -150,7 +147,12 @@ run = "pnpm dev"
 [tasks."fe:build"]
 description = "Type-check and build frontend for production"
 dir = "frontend"
-run = "pnpm build"
+run = """
+pnpm build
+# vite emptyOutDir wipes the committed embed placeholder; restore it so a direct
+# `go build`/`go test` on a fresh checkout still finds internal/console/webdist.
+mkdir -p ../internal/console/webdist && touch ../internal/console/webdist/.gitkeep
+"""
 
 [tasks."fe:lint"]
 description = "Lint frontend sources"
