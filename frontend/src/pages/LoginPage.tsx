@@ -72,9 +72,7 @@ const LoginPage = () => {
             />
             {!failed && (
               <p className="text-muted-foreground mt-3 text-sm">
-                로그인을 위해 Runespace로 이동합니다.
-                <br />
-                로그인이 완료되면 관리자 페이지로 되돌아옵니다.
+                콘솔을 사용하기 위해 RUNE 계정이 필요합니다.
               </p>
             )}
           </div>
