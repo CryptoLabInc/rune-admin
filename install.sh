@@ -509,6 +509,76 @@ open_console_tunnel() {
   fi
 }
 
+# install_connect_shortcut writes a `runeconsole connect` command into the
+# invoking user's shell rc (zsh → .zshrc, bash → .bashrc, else .profile) so the
+# loopback console tunnel can be reopened later without retyping the ssh command.
+# Idempotent: a marker-delimited block is rewritten in place on re-install (so a
+# changed IP / key path propagates). If a real `runeconsole` binary is already on
+# PATH the shortcut is skipped so it is never shadowed.
+install_connect_shortcut() {
+  local key_path=$1 public_ip=$2
+  local login_user="${SUDO_USER:-$(id -un)}"
+  local user_home; user_home=$(eval echo "~${login_user}")
+
+  # Detect the login shell (works under sudo): passwd on Linux, dscl on macOS,
+  # $SHELL as a last resort — then map it to the rc file we append to.
+  local login_shell=""
+  if command -v getent >/dev/null 2>&1; then
+    login_shell=$(getent passwd "$login_user" 2>/dev/null | cut -d: -f7)
+  fi
+  if [[ -z "$login_shell" ]] && command -v dscl >/dev/null 2>&1; then
+    login_shell=$(dscl . -read "/Users/${login_user}" UserShell 2>/dev/null | awk '{print $2}')
+  fi
+  [[ -z "$login_shell" ]] && login_shell="${SHELL:-}"
+
+  local rc_file
+  case "$login_shell" in
+    *zsh)  rc_file="${user_home}/.zshrc" ;;
+    *bash) rc_file="${user_home}/.bashrc" ;;
+    *)     rc_file="${user_home}/.profile" ;;
+  esac
+
+  # Never shadow an existing runeconsole command on PATH.
+  if command -v runeconsole >/dev/null 2>&1; then
+    warn "A 'runeconsole' command already exists on PATH — skipping the shell shortcut."
+    printf '  Reconnect manually:  ssh -i %s -L 8787:127.0.0.1:8787 ubuntu@%s\n' "$key_path" "$public_ip"
+    return 0
+  fi
+
+  local begin="# >>> runeconsole connect >>>"
+  local end="# <<< runeconsole connect <<<"
+
+  # Drop any previous block so a re-install refreshes the key path / IP.
+  if [[ -f "$rc_file" ]] && grep -qF "$begin" "$rc_file"; then
+    local tmp; tmp=$(mktemp)
+    sed "/# >>> runeconsole connect >>>/,/# <<< runeconsole connect <<</d" "$rc_file" > "$tmp" && mv "$tmp" "$rc_file"
+  fi
+
+  cat >> "$rc_file" <<EOF
+${begin}
+# Reach the loopback-only Rune-Console on the CSP VM over an SSH tunnel.
+runeconsole() {
+  case "\$1" in
+    connect)
+      if command -v lsof >/dev/null 2>&1 && lsof -iTCP:8787 -sTCP:LISTEN -P -n >/dev/null 2>&1; then
+        echo "runeconsole: already reachable -> http://127.0.0.1:8787"; return 0
+      fi
+      ssh -f -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -i "${key_path}" -L 8787:127.0.0.1:8787 "ubuntu@${public_ip}" && echo "runeconsole: tunnel open -> http://127.0.0.1:8787" || echo "runeconsole: failed to open the tunnel (check the SSH key / network)"
+      ;;
+    disconnect)
+      pkill -f "8787:127.0.0.1:8787 ubuntu@${public_ip}" && echo "runeconsole: tunnel closed" || echo "runeconsole: no tunnel running"
+      ;;
+    *)
+      echo "usage: runeconsole {connect|disconnect}  # connect, then browse http://127.0.0.1:8787"
+      ;;
+  esac
+}
+${end}
+EOF
+  [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "$rc_file" 2>/dev/null || true
+  success "Added 'runeconsole connect' to ${rc_file} (open a new shell or run 'source ${rc_file}' to use it)."
+}
+
 csp_summary() {
   local csp=$1
   local tf_dir="${INSTALL_DIR_CSP}/deployment"
@@ -528,8 +598,11 @@ csp_summary() {
   printf '\n'
   printf 'Access the console (loopback-only on the VM, reached over an SSH tunnel):\n'
   open_console_tunnel "$key_path" "$public_ip"
+  install_connect_shortcut "$key_path" "$public_ip" || warn "Could not add the 'runeconsole connect' shortcut."
   printf '\n'
-  printf '  Reopen it later, or from another machine (copy the private key first):\n'
+  printf '  Using it now: the tunnel above is live — browse http://127.0.0.1:8787\n'
+  printf '  Reconnect later:  runeconsole connect   (in a new shell)\n'
+  printf '  From another machine (copy the private key first):\n'
   printf '    ssh -i %s -L 8787:127.0.0.1:8787 ubuntu@%s\n' "$key_path" "$public_ip"
   printf '  SSH (port 22) is open, so key possession is all you need — no firewall change.\n'
   printf '\n'
