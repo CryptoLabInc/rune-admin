@@ -201,7 +201,7 @@ func runDaemonStart(ctx context.Context) error {
 			// status so a reinstalled console (fresh team_secret) can detect that the
 			// cloud-held runespace is orphaned.
 			TeamHash: crypto.TeamHash(cfg.Tokens.TeamSecret),
-			Inviter:       selfInviter,
+			Inviter:  selfInviter,
 			OwnerRegistrar: func(email, displayName string) error {
 				// The console owner IS the single org admin (identity
 				// unification, dual-role §11): authority derives from the

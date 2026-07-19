@@ -3,6 +3,7 @@ package console
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/CryptoLabInc/rune-console/internal/cloud"
 )
@@ -23,7 +24,7 @@ func (s *Service) handleWorkspaceConnect(w http.ResponseWriter, r *http.Request)
 		s.writeCloudError(w, sess, err)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, workspaceView(ws))
+	writeJSON(w, http.StatusAccepted, s.setStatus(workspaceView(ws)))
 }
 
 // handleWorkspaceDelete (DELETE /api/v1/workspace) permanently deprovisions the
@@ -77,7 +78,7 @@ func (s *Service) handleWorkspaceStatus(w http.ResponseWriter, r *http.Request) 
 		// CLOUD_AUTH_EXPIRED badge below: recreating supersedes reconnecting, and a
 		// reinstall often has no persisted credential to expire in the first place.
 		// Not logged — the SPA polls this every few seconds.
-		view := workspaceView(ws)
+		view := s.setStatus(workspaceView(ws))
 		view["orphaned"] = true
 		writeJSON(w, http.StatusOK, view)
 		return
@@ -94,7 +95,21 @@ func (s *Service) handleWorkspaceStatus(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadGateway, "CLOUD_AUTH_EXPIRED", "cloud credential expired; reconnect the workspace")
 		return
 	}
-	writeJSON(w, http.StatusOK, workspaceView(ws))
+	writeJSON(w, http.StatusOK, s.setStatus(workspaceView(ws)))
+}
+
+func (s *Service) setStatus(view map[string]any) map[string]any {
+	connected := s.engineReady()
+	view["engine_connected"] = connected // whether connected or not
+
+	if s.dp != nil && !connected {
+		if msg, at := s.dp.LastConnectError(); msg != "" {
+			view["last_connect_error"] = msg
+			view["last_connect_error_at"] = at.Format(time.RFC3339)
+		}
+	}
+
+	return view
 }
 
 // consolePhase validates the runespace-cloud observed phase against the phase
@@ -159,7 +174,7 @@ func (s *Service) writeWorkspaceAccepted(w http.ResponseWriter, r *http.Request,
 	if ws, err := s.cloud.GetWorkspace(r.Context(), sess.CloudCookie()); err == nil && ws != nil {
 		view = workspaceView(ws)
 	}
-	writeJSON(w, http.StatusAccepted, view)
+	writeJSON(w, http.StatusAccepted, s.setStatus(view))
 }
 
 // handleWorkspaceStop (POST /api/v1/workspace/stop) asks the cloud to stop
