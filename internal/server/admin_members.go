@@ -254,7 +254,7 @@ func registerMemberRoutes(mux *http.ServeMux, v *Console, ms *memberSubsystem) {
 		// disk, not that mail was delivered. A delivery failure does NOT fail
 		// the request or roll back state — the operator resends; the invite
 		// stands.
-		if err := ms.mailer.SendInvite(r.Context(), m.Email, *bundle, ms.conn); err != nil {
+		if err := ms.mailer.SendInvite(r.Context(), m.Email, m.DisplayName, *bundle, ms.conn); err != nil {
 			slog.Warn("invite mail delivery failed; invite stands, operator can resend",
 				"member_id", m.ID, "email", m.Email, "err", err)
 		}

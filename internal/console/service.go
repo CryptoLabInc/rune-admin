@@ -189,21 +189,23 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 	// The specific /api/v1/workspace* and /api/v1/invite routes above take
 	// precedence (Go 1.22 pattern specificity); this subtree handles the rest.
 	// The /api/v1 prefix is stripped so the mounted mux sees /teams/tree etc.,
-	// and withActor injects the authenticated operator as the audit actor. When
-	// no domain handler is wired the group falls back to the 501 skeleton.
+	// and withOperator injects the authenticated operator (audit actor + cloud
+	// session cookie for the invite relay). When no domain handler is wired the
+	// group falls back to the 501 skeleton.
 	if d.DomainHandler != nil {
-		mux.Handle("/api/v1/", s.origin(s.requireSession(s.withActor(http.StripPrefix("/api/v1", d.DomainHandler)))))
+		mux.Handle("/api/v1/", s.origin(s.requireSession(s.withOperator(http.StripPrefix("/api/v1", d.DomainHandler)))))
 	} else {
 		mux.Handle("/api/v1/", s.origin(s.requireSession(http.HandlerFunc(apiNotImplemented))))
 	}
 
-	// Admin operations (origin + cookie gated), mounted under /admin/. withActor
-	// tags the request with the authenticated session principal so admin
-	// mutations audit (and grant as) the real operator instead of a
-	// client-supplied actor field — this surface is the highest-power one, so its
-	// audit trail must not be forgeable. Matches the /api/v1 domain mount above.
+	// Admin operations (origin + cookie gated), mounted under /admin/. withOperator
+	// tags the request with the authenticated session principal so admin mutations
+	// audit (and grant as) the real operator instead of a client-supplied actor
+	// field — this surface is the highest-power one, so its audit trail must not be
+	// forgeable — and injects the operator's cloud session cookie so the invite
+	// relay can send. Matches the /api/v1 domain mount above.
 	if d.AdminHandler != nil {
-		mux.Handle("/admin/", s.origin(s.requireSession(s.withActor(http.StripPrefix("/admin", d.AdminHandler)))))
+		mux.Handle("/admin/", s.origin(s.requireSession(s.withOperator(http.StripPrefix("/admin", d.AdminHandler)))))
 	}
 
 	return mux, dp, nil
@@ -263,19 +265,22 @@ func (s *Service) origin(next http.Handler) http.Handler {
 	})
 }
 
-// withActor tags the request context with the authenticated operator's email
-// (from the rc_session principal) so the mounted domain handlers audit the real
-// principal. It runs after requireSession, so a session is guaranteed present;
-// a principal missing an email flows through as "" (audited as "unknown").
-func (s *Service) withActor(next http.Handler) http.Handler {
+// withOperator tags the request context with the authenticated operator's email
+// (audit actor) and their runespace-cloud session cookie, so the mounted admin/
+// domain handlers audit the real principal and the cloud-relay invite mailer can
+// authenticate the send as the operator. It runs after requireSession, so a
+// session is guaranteed present; a principal missing an email flows through as ""
+// (audited as "unknown").
+func (s *Service) withOperator(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		actor := ""
+		ctx := r.Context()
 		if c, err := r.Cookie(cookieName); err == nil {
 			if sess := s.sessions.get(c.Value); sess != nil {
-				actor = emailFromMe(sess.Me)
+				ctx = server.WithActor(ctx, emailFromMe(sess.Me))
+				ctx = server.WithCloudCookie(ctx, sess.CloudCookie())
 			}
 		}
-		next.ServeHTTP(w, r.WithContext(server.WithActor(r.Context(), actor)))
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

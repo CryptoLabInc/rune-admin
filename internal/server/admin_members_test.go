@@ -26,23 +26,24 @@ import (
 )
 
 // memberAdminServer wires a member subsystem over the given console and returns
-// the test server plus the mail-log path. Like the daemon, it injects the
-// member-UUID person-key contract into the groups store: with a member
-// subsystem wired, memberships are keyed by member id, never by email.
-func memberAdminServer(t *testing.T, v *Console) (*httptest.Server, string) {
+// the test server plus the recording mailer that captured its invite sends. Like
+// the daemon, it injects the member-UUID person-key contract into the groups
+// store: with a member subsystem wired, memberships are keyed by member id, never
+// by email.
+func memberAdminServer(t *testing.T, v *Console) (*httptest.Server, *recordingMailer) {
 	t.Helper()
 	v.Groups().SetPersonKeyValidator(members.ValidateID)
-	mailLog := filepath.Join(t.TempDir(), "mail.log")
+	rec := &recordingMailer{}
 	ms := &memberSubsystem{
 		members: members.NewStore(),
 		invites: invites.NewStore(),
-		mailer:  NewLogMailer(mailLog),
+		mailer:  rec,
 		conn:    InviteConnInfo{ConsoleEndpoint: "console.example:8443"},
 		ttl:     30 * time.Minute,
 	}
 	ts := httptest.NewServer(buildAdminMux(v, ms))
 	t.Cleanup(ts.Close)
-	return ts, mailLog
+	return ts, rec
 }
 
 func newFileAuditConsole(t *testing.T, auditPath string) *Console {
@@ -175,7 +176,7 @@ func TestAdminPatchMembers(t *testing.T) {
 
 func TestAdminInviteIssuesWrappedToken(t *testing.T) {
 	v := newAdminTestConsole(t)
-	ts, mailLog := memberAdminServer(t, v)
+	ts, rec := memberAdminServer(t, v)
 	id := createMember(t, ts, "invitee@corp.com")
 
 	resp, err := http.Post(ts.URL+"/members/"+id+"/invite", "application/json",
@@ -207,22 +208,13 @@ func TestAdminInviteIssuesWrappedToken(t *testing.T) {
 		t.Error("no token issued for invitee@corp.com")
 	}
 
-	// The mailer recorded exactly one line.
-	data, err := os.ReadFile(mailLog)
-	if err != nil {
-		t.Fatal(err)
+	// The mailer relayed exactly one invite, carrying the opaque wrap handle but
+	// never the raw evt_ token.
+	if len(rec.sent) != 1 {
+		t.Fatalf("mailer relayed %d invites, want 1", len(rec.sent))
 	}
-	lines := 0
-	for _, ln := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
-		if strings.TrimSpace(ln) != "" {
-			lines++
-		}
-	}
-	if lines != 1 {
-		t.Errorf("mail log has %d lines, want 1: %s", lines, data)
-	}
-	if strings.Contains(string(data), "evt_") {
-		t.Errorf("mail log leaked an evt_ token: %s", data)
+	if blob, _ := json.Marshal(rec.sent[0].bundle); strings.Contains(string(blob), "evt_") {
+		t.Errorf("relayed invite bundle leaked an evt_ token: %s", blob)
 	}
 }
 
@@ -674,10 +666,28 @@ func TestAdminInviteTokenDurableBeforeBundleReturns(t *testing.T) {
 	}
 }
 
+// recordedInvite is one invite captured by recordingMailer.
+type recordedInvite struct {
+	to, toName string
+	bundle     invites.ClearBundle
+	conn       InviteConnInfo
+}
+
+// recordingMailer captures invite relays in memory, standing in for the cloud
+// relay so tests can assert what was sent without a live cloud.
+type recordingMailer struct {
+	sent []recordedInvite
+}
+
+func (m *recordingMailer) SendInvite(_ context.Context, to, toName string, b invites.ClearBundle, conn InviteConnInfo) error {
+	m.sent = append(m.sent, recordedInvite{to: to, toName: toName, bundle: b, conn: conn})
+	return nil
+}
+
 // errMailer always fails delivery, exercising the best-effort mail contract.
 type errMailer struct{}
 
-func (errMailer) SendInvite(_ context.Context, _ string, _ invites.ClearBundle, _ InviteConnInfo) error {
+func (errMailer) SendInvite(_ context.Context, _, _ string, _ invites.ClearBundle, _ InviteConnInfo) error {
 	return fmt.Errorf("smtp unavailable")
 }
 

@@ -162,7 +162,6 @@ type MembersConfig struct {
 	ConsoleEndpoint  string `yaml:"console_endpoint"`   // ridden in the invite mail (conn info)
 	CAPemURL         string `yaml:"ca_pem_url"`
 	CAPemSHA256      string `yaml:"ca_pem_sha256"`
-	MailLogFile      string `yaml:"mail_log_file"` // LogMailer output; default: invite-mail.log
 }
 
 // InviteTTL returns the wrap TTL, defaulting to 24 hours when unset — the
@@ -175,15 +174,6 @@ func (c *Config) InviteTTL() time.Duration {
 		m = 1440
 	}
 	return time.Duration(m) * time.Minute
-}
-
-// MailLogFile returns the LogMailer output path, defaulting into the data
-// directory.
-func (c *Config) MailLogFile() string {
-	if c.Members.MailLogFile != "" {
-		return c.Members.MailLogFile
-	}
-	return filepath.Join(c.Storage.DataDir, "invite-mail.log")
 }
 
 // AuditConfig.Mode is one of: "", "file", "stdout", "file+stdout".

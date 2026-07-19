@@ -45,6 +45,27 @@ func actorFromContext(ctx context.Context) string {
 	return s
 }
 
+// cloudCookieCtxKey carries the operator's runespace-cloud session cookie
+// ("name=value") into the admin/domain handlers so the cloud-relay invite mailer
+// can authenticate the send as the logged-in operator. The console BFF sets it
+// via WithCloudCookie after requireSession; server cannot import console, so the
+// key and its accessors live here alongside the actor plumbing.
+type cloudCookieCtxKey struct{}
+
+// WithCloudCookie returns ctx carrying the operator's cloud session cookie. The
+// console BFF calls this after validating rc_session so the invite mailer relays
+// through the cloud public API as the operator.
+func WithCloudCookie(ctx context.Context, cookie string) context.Context {
+	return context.WithValue(ctx, cloudCookieCtxKey{}, cookie)
+}
+
+// cloudCookieFromContext returns the cloud session cookie set by WithCloudCookie,
+// or "" when the request was not tagged (the cloud mailer then refuses to send).
+func cloudCookieFromContext(ctx context.Context) string {
+	s, _ := ctx.Value(cloudCookieCtxKey{}).(string)
+	return s
+}
+
 // consoleAPI holds the collaborators the /api/v1 domain handlers share. It
 // reuses the same stores as the /admin surface (v.Groups()/v.Tokens() and the
 // member subsystem) so both surfaces converge on one set of RBAC state.

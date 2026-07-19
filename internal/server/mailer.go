@@ -2,12 +2,10 @@ package server
 
 import (
 	"context"
-	"encoding/json"
-	"os"
-	"sync"
-	"time"
+	"fmt"
 
 	"github.com/CryptoLabInc/rune-console/internal/invites"
+	"github.com/CryptoLabInc/rune-console/pkg/regstr"
 )
 
 // InviteConnInfo is the console connection detail an invitee needs to redeem
@@ -19,45 +17,53 @@ type InviteConnInfo struct {
 	CAPemSHA256     string `json:"ca_pem_sha256"`
 }
 
-// Mailer delivers an invite to its recipient. The clear bundle is secret-free
-// (no token), so a Mailer implementation may log or transmit it verbatim.
+// Mailer delivers an invite to its recipient by relaying the registration string
+// to the runespace-cloud public API, which renders the email and sends it via
+// OCI Email Delivery. Implementations must not log the registration string: it
+// encodes the wrapping token, a credential.
 type Mailer interface {
-	SendInvite(ctx context.Context, to string, b invites.ClearBundle, conn InviteConnInfo) error
+	SendInvite(ctx context.Context, to, toName string, b invites.ClearBundle, conn InviteConnInfo) error
 }
 
-// LogMailer is a stub Mailer that appends one JSON line per invite to a file
-// (O_APPEND, 0600). It stands in for real SMTP delivery, which is on the
-// roadmap; the append log lets operators/tests confirm an invite was "sent".
-type LogMailer struct {
-	mu   sync.Mutex
-	path string
+// cloudInviteSender is the slice of the runespace-cloud client the mailer needs.
+// It is declared here (not imported from internal/cloud) so package server keeps
+// no dependency on the cloud client — the daemon injects a *cloud.Client, which
+// satisfies this, and tests inject a fake.
+type cloudInviteSender interface {
+	SendInvite(ctx context.Context, sessionCookie, toEmail, toName, registrationString, inviterName, expiry string) error
 }
 
-// NewLogMailer returns a LogMailer writing to path.
-func NewLogMailer(path string) *LogMailer { return &LogMailer{path: path} }
+// cloudMailer relays invites through the runespace-cloud public API
+// (POST /api/v1/invites). The operator's cloud session cookie is read from the
+// request context (the console BFF injects it via WithCloudCookie after
+// requireSession); without it the relay cannot authenticate.
+type cloudMailer struct {
+	cloud cloudInviteSender
+}
 
-// SendInvite appends a single JSON record for the invite. It is safe for
-// concurrent use.
-func (m *LogMailer) SendInvite(_ context.Context, to string, b invites.ClearBundle, conn InviteConnInfo) error {
-	rec := map[string]any{
-		"ts":     time.Now().UTC().Format(time.RFC3339),
-		"to":     to,
-		"bundle": b,
-		"conn":   conn,
-	}
-	line, err := json.Marshal(rec)
-	if err != nil {
-		return err
-	}
-	line = append(line, '\n')
+// NewCloudMailer returns a Mailer that relays invites through the cloud public API.
+func NewCloudMailer(c cloudInviteSender) Mailer { return &cloudMailer{cloud: c} }
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	f, err := os.OpenFile(m.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
+// SendInvite encodes the wrap handle + connection info into a registration string
+// and posts it to the cloud relay as the logged-in operator. The inviter name is
+// left blank so the cloud fills it from the authenticated session user; toName
+// falls back to the email when the member has no display name (the cloud requires
+// a non-empty recipient name).
+func (m *cloudMailer) SendInvite(ctx context.Context, to, toName string, b invites.ClearBundle, conn InviteConnInfo) error {
+	cookie := cloudCookieFromContext(ctx)
+	if cookie == "" {
+		return fmt.Errorf("no operator cloud session on the request; cannot relay invite")
 	}
-	defer f.Close()
-	_, err = f.Write(line)
-	return err
+	reg, err := regstr.Encode(regstr.Registration{
+		Endpoint: conn.ConsoleEndpoint,
+		Token:    b.Handle,
+		CASHA256: conn.CAPemSHA256,
+	})
+	if err != nil {
+		return fmt.Errorf("encode registration string: %w", err)
+	}
+	if toName == "" {
+		toName = to
+	}
+	return m.cloud.SendInvite(ctx, cookie, to, toName, reg, "", b.ExpiresAt)
 }

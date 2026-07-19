@@ -70,7 +70,7 @@ func TestAdminListRolesIncludesDefaults(t *testing.T) {
 }
 
 // TestAdminActorPrefersSessionPrincipal pins the anti-forgery contract on the
-// /admin surface: withActor tags each request with the authenticated session
+// /admin surface: withOperator tags each request with the authenticated session
 // principal, and adminActor must prefer it over any client-supplied actor so the
 // audit/grant identity cannot be forged. The declared value is used only as a
 // fallback when no session principal is present.

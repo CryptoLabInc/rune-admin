@@ -233,7 +233,7 @@ func buildAdminMux(v *Console, ms *memberSubsystem) http.Handler {
 	// Plan §6-D8 layer 1: the /admin surface is an operator surface — full power
 	// plus audit. The §5 grant judge (groups.CanGrant) is NOT enforced here
 	// because this surface is reached only by the authenticated console owner
-	// (cookie-gated, loopback; withActor tags the request), so the session itself
+	// (cookie-gated, loopback; withOperator tags the request), so the session itself
 	// is the grant authority; every mutation records that session principal as
 	// "local-admin:<actor>" (resolved by adminActor). The judge is enforced where
 	// a non-owner identity could act (the authenticated RPC layer).
@@ -424,7 +424,7 @@ func memberPersonKey(ms *memberSubsystem, email string) (string, bool) {
 
 // adminActor resolves the actor recorded for an /admin mutation. The console
 // tags every request on this surface with the authenticated session principal
-// (withActor middleware), which is authoritative: a client-supplied actor field
+// (withOperator middleware), which is authoritative: a client-supplied actor field
 // or ?actor= query can no longer forge the audited (or grant-recorded) identity
 // on the highest-power surface. The declared value is honored only as a fallback
 // for a transport that carries no session principal (there is none today; the

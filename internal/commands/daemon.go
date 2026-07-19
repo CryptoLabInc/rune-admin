@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/CryptoLabInc/rune-console/internal/cloud"
 	"github.com/CryptoLabInc/rune-console/internal/console"
 	"github.com/CryptoLabInc/rune-console/internal/crypto"
 	"github.com/CryptoLabInc/rune-console/internal/db"
@@ -105,7 +106,11 @@ func runDaemonStart(ctx context.Context) error {
 	if err := inviteStore.LoadFromDB(storeDB); err != nil {
 		return fmt.Errorf("daemon: load invites: %w", err)
 	}
-	mailer := server.NewLogMailer(cfg.MailLogFile())
+	// Invites are delivered by relaying the registration string to the
+	// runespace-cloud public API (POST /api/v1/invites), which renders the email
+	// and sends it via OCI Email Delivery. The per-request operator cloud session
+	// cookie (injected by the console BFF) authenticates each send.
+	mailer := server.NewCloudMailer(cloud.New(cfg.Cloud.APIBaseURL))
 	// The invite endpoint is what a remote rune-mcp dials, so it must be a
 	// reachable address, not a loopback/bind host. When unset (or "auto") the
 	// console advertises its auto-detected public IP (the TLS cert's SAN already

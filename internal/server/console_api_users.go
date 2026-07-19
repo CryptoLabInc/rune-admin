@@ -1052,7 +1052,7 @@ func (h *consoleAPI) issueCode(r *http.Request, m *members.Member) error {
 		}
 		return fmt.Errorf("advance member status: %w", terr)
 	}
-	if err := h.ms.mailer.SendInvite(r.Context(), m.Email, *bundle, h.ms.conn); err != nil {
+	if err := h.ms.mailer.SendInvite(r.Context(), m.Email, m.DisplayName, *bundle, h.ms.conn); err != nil {
 		_ = h.ms.invites.RevokePending(bundle.Handle)
 		return fmt.Errorf("send invite mail: %w", err)
 	}

@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -42,7 +41,7 @@ func newConsoleAPIFixture(t *testing.T) *consoleAPIFixture {
 
 	memStore := members.NewStore()
 	invStore := invites.NewStore()
-	mailer := NewLogMailer(filepath.Join(t.TempDir(), "mail.log"))
+	mailer := &recordingMailer{}
 	h := NewConsoleAPIHandler(v, memStore, invStore, mailer, InviteConnInfo{ConsoleEndpoint: "c.example:8443"}, 30*time.Minute)
 	ts := httptest.NewServer(h)
 	t.Cleanup(ts.Close)
@@ -712,7 +711,7 @@ func TestConsoleNeedsCode(t *testing.T) {
 	f := newConsoleAPIFixture(t)
 	h := &consoleAPI{v: f.v, ms: &memberSubsystem{
 		members: f.members, invites: f.invites,
-		mailer: NewLogMailer(filepath.Join(t.TempDir(), "mail.log")), ttl: 30 * time.Minute,
+		mailer: &recordingMailer{}, ttl: 30 * time.Minute,
 	}}
 
 	// registered (brand-new, no code yet) → send.
