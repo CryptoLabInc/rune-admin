@@ -30,6 +30,11 @@ type DataplaneConnector interface {
 // accessRefreshWindow re-dials before the ~20m cloud access token expires.
 const accessRefreshWindow = 15 * time.Minute
 
+const (
+	connectRetryBase = 15 * time.Second
+	connectRetryMax  = 2 * time.Minute
+)
+
 // runespacePhaseReady is the runespace-cloud phase that signals the engine pod
 // has passed its readiness probe and can accept the key-registration handshake.
 // The cloud assigns a deterministic host (<id>.<domain>) and reports
@@ -92,6 +97,13 @@ type Dataplane struct {
 	// SC-03 badge feed) until a session-driven Connect exchanges successfully.
 	// Guarded by mu.
 	authExpired bool
+
+	lastConnectErr string
+	lastConnectAt  time.Time
+
+	attachTarget string // attached runespace id
+
+	retryBase, retryMax time.Duration
 }
 
 const dataplaneSchema = `
@@ -107,7 +119,11 @@ func newDataplane(db *sql.DB, cl *cloud.Client, conn DataplaneConnector, log *sl
 	if _, err := db.Exec(dataplaneSchema); err != nil {
 		return nil, err
 	}
-	return &Dataplane{cloud: cl, connector: conn, db: db, log: log, teamHash: teamHash, base: context.Background()}, nil
+	return &Dataplane{
+		cloud: cl, connector: conn, db: db, log: log, teamHash: teamHash,
+		base:      context.Background(),
+		retryBase: connectRetryBase, retryMax: connectRetryMax,
+	}, nil
 }
 
 // Start sets the refresh loop's parent context (the daemon lifetime) and, if a
@@ -119,15 +135,17 @@ func (d *Dataplane) Start(ctx context.Context) {
 	d.mu.Lock()
 	d.base = ctx
 	d.mu.Unlock()
+
 	cred := d.loadCred()
 	if cred == nil {
 		return
 	}
-	go func() {
-		if err := d.reconnect(ctx, cred); err != nil {
-			d.log.Warn("console: data-plane reconnect on boot failed; awaiting login", "err", err.Error())
-		}
-	}()
+
+	if !d.acquireAttachSlot(ctx, cred.RunespaceID) {
+		return
+	}
+
+	d.startConnectLoop(cred)
 }
 
 // Connect runs the full provision+bootstrap flow for the logged-in session:
@@ -152,12 +170,8 @@ func (d *Dataplane) Connect(ctx context.Context, sessionCookie string) (*cloud.W
 			return nil, err
 		}
 	}
-	if ws.Phase != runespacePhaseReady || ws.Host == "" {
-		// Not ready to serve yet. The cloud assigns the (deterministic) host and
-		// reports phase=provisioning/starting well before the runespace pod passes
-		// its readiness probe, so dialing now would hit the gateway with no live
-		// upstream and fail key registration with EOF. The caller polls
-		// GET /api/v1/workspace and retries connect once phase=running.
+
+	if !connectable(ws) {
 		return ws, nil
 	}
 	// Already connected to THIS workspace: return without re-bootstrapping
@@ -178,8 +192,28 @@ func (d *Dataplane) Connect(ctx context.Context, sessionCookie string) (*cloud.W
 	if d.connector.EngineReady() && attached == ws.ID && !expired {
 		return ws, nil
 	}
-	// A registration is already in flight: coalesce instead of racing it.
-	if !d.connecting.CompareAndSwap(false, true) {
+
+	if !d.acquireAttachSlot(ctx, ws.ID) {
+		return ws, nil
+	}
+
+	// Re-read workspace
+	if cur, gerr := d.cloud.GetWorkspace(ctx, sessionCookie); gerr == nil && cur != nil {
+		ws = cur
+	}
+	if !connectable(ws) {
+		d.releaseAttachSlot()
+		return ws, nil
+	}
+
+	d.mu.Lock()
+	d.attachTarget = ws.ID
+	attached = d.attachedID
+	expired = d.authExpired
+	d.mu.Unlock()
+
+	if d.connector.EngineReady() && attached == ws.ID && !expired {
+		d.releaseAttachSlot()
 		return ws, nil
 	}
 	// The engine is attached to a different (stale/deleted) runespace — detach it
@@ -196,29 +230,120 @@ func (d *Dataplane) Connect(ctx context.Context, sessionCookie string) (*cloud.W
 
 	bs, err := d.cloud.BootstrapAccess(ctx, sessionCookie)
 	if err != nil {
-		d.connecting.Store(false)
+		d.releaseAttachSlot()
 		return nil, err
 	}
 	cred := &dataplaneCred{RefreshToken: bs.RefreshToken, RunespaceID: ws.ID, Addr: addr}
 	if err := d.saveCred(cred); err != nil {
-		d.connecting.Store(false)
+		d.releaseAttachSlot()
 		return nil, err
 	}
+
 	// Dial + register the keys in the background on the daemon context, NOT the
 	// request context: the eval key is hundreds of MB and takes minutes to
 	// upload, and a browser refresh/abort (or an overlapping click) must not
 	// cancel the stream mid-flight (which the engine rejects as an integrity
 	// failure). The single-flight guard above coalesces concurrent Connects.
-	d.mu.Lock()
-	base := d.base
-	d.mu.Unlock()
-	go func() {
-		defer d.connecting.Store(false)
-		if err := d.reconnect(base, cred); err != nil {
-			d.log.Warn("console: data-plane connect (background) failed; retry from the UI", "err", err.Error())
-		}
-	}()
+	d.startConnectLoop(cred)
 	return ws, nil
+}
+
+func connectable(ws *cloud.Workspace) bool {
+	switch ws.Phase {
+	case runespacePhaseReady, "provisioning", "starting":
+		return ws.Host != ""
+	}
+
+	return false
+}
+
+func (d *Dataplane) acquireAttachSlot(ctx context.Context, wsID string) bool {
+	const tick = 50 * time.Millisecond
+
+	for i := 0; i < 50; i++ { // ~2.5s
+		d.mu.Lock()
+		if !d.connecting.Load() {
+			d.connecting.Store(true)
+			d.attachTarget = wsID
+			d.mu.Unlock()
+
+			return true
+		}
+		target := d.attachTarget
+		d.mu.Unlock()
+
+		if target == wsID {
+			return false // live attach
+		}
+
+		d.Stop() // stale
+
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(tick):
+		}
+	}
+
+	return false
+}
+
+func (d *Dataplane) releaseAttachSlot() {
+	d.mu.Lock()
+	d.attachTarget = ""
+	d.connecting.Store(false)
+	d.mu.Unlock()
+}
+
+func (d *Dataplane) startConnectLoop(cred *dataplaneCred) {
+	d.mu.Lock()
+	if d.cancel != nil {
+		d.cancel()
+	}
+
+	loopCtx, cancel := context.WithCancel(d.base)
+	d.cancel = cancel
+	d.mu.Unlock()
+
+	go func() {
+		defer d.releaseAttachSlot()
+		d.connectLoop(loopCtx, cred)
+	}()
+}
+
+func (d *Dataplane) connectLoop(ctx context.Context, cred *dataplaneCred) {
+	delay := d.retryBase
+
+	for {
+		err := d.reconnect(ctx, cred)
+		if err == nil {
+			return
+		}
+		if ctx.Err() != nil {
+			return // cancelled (Stop/Pause/Disconncet)
+		}
+
+		if cloud.IsUnauthorized(err) {
+			d.log.Warn("console: data-plane credential rejected; reconnect from the UI", "err", err.Error())
+			return
+		}
+		d.log.Warn("console: data-plane attach failed; retrying", "err", err.Error(), "retry_in", delay.String())
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(delay):
+		}
+
+		if delay *= 2; delay > d.retryMax {
+			delay = d.retryMax
+		}
+
+		// Credential is deleted or replaced
+		if cur := d.loadCred(); cur == nil || cur.RefreshToken != cred.RefreshToken {
+			return
+		}
+	}
 }
 
 // reconnect exchanges the refresh credential for a fresh access JWT, dials the
@@ -226,17 +351,42 @@ func (d *Dataplane) Connect(ctx context.Context, sessionCookie string) (*cloud.W
 func (d *Dataplane) reconnect(ctx context.Context, cred *dataplaneCred) error {
 	tok, err := d.exchange(ctx, cred.RefreshToken)
 	if err != nil {
+		if ctx.Err() == nil {
+			d.setLastConnectErr(err)
+		}
 		return err
 	}
 	if err := d.connector.ConnectRunespace(ctx, cred.Addr, tok.AccessToken); err != nil {
+		if ctx.Err() == nil {
+			d.setLastConnectErr(err)
+		}
 		return err
 	}
+	d.setLastConnectErr(nil)
 	d.mu.Lock()
 	d.attachedID = cred.RunespaceID
 	d.mu.Unlock()
 	d.log.Info("console: data-plane engine connected", "addr", cred.Addr, "runespace_id", cred.RunespaceID)
 	d.startRefreshLoop()
 	return nil
+}
+
+func (d *Dataplane) setLastConnectErr(err error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if err == nil { // success
+		d.lastConnectErr, d.lastConnectAt = "", time.Time{}
+		return
+	}
+
+	d.lastConnectErr, d.lastConnectAt = err.Error(), time.Now().UTC()
+}
+
+func (d *Dataplane) LastConnectError() (string, time.Time) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.lastConnectErr, d.lastConnectAt
 }
 
 // exchange wraps ExchangeAccessToken with credential-expiry bookkeeping. A 401
@@ -315,6 +465,8 @@ func (d *Dataplane) Disconnect() {
 	// Teardown leaves nothing to reconnect; a lingering expired badge would be
 	// stale noise over the (deleted) workspace's 404.
 	d.authExpired = false
+	d.lastConnectErr, d.lastConnectAt = "", time.Time{}
+	d.attachTarget = ""
 	d.mu.Unlock()
 }
 
@@ -333,6 +485,8 @@ func (d *Dataplane) Pause() {
 	// stale id — the same invariant Disconnect maintains.
 	d.mu.Lock()
 	d.attachedID = ""
+	d.attachTarget = ""
+	d.lastConnectErr, d.lastConnectAt = "", time.Time{}
 	d.mu.Unlock()
 }
 
@@ -348,9 +502,23 @@ func (d *Dataplane) Resume() {
 	base := d.base
 	d.mu.Unlock()
 	go func() {
-		if err := d.reconnect(base, cred); err != nil {
-			d.log.Warn("console: data-plane resume after start failed; retry from the UI", "err", err.Error())
+		if !d.acquireAttachSlot(base, cred.RunespaceID) {
+			return // a live attach of this workspace is already running
 		}
+
+		// Re-validate credential
+		if cur := d.loadCred(); cur == nil || cur.RefreshToken != cred.RefreshToken {
+			d.releaseAttachSlot()
+			return
+		}
+		d.mu.Lock()
+		attached := d.attachedID
+		d.mu.Unlock()
+		if d.connector.EngineReady() && attached == cred.RunespaceID {
+			d.releaseAttachSlot()
+			return
+		}
+		d.startConnectLoop(cred)
 	}()
 }
 
