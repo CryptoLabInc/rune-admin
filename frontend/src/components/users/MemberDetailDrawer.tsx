@@ -48,6 +48,8 @@ const subtitleFor = (user: TUserListItem): string => {
   switch (user.status) {
     case "online":
       return `최근 접속 ${formatDate(user.lastAccessAt)}`;
+    case "invite_redeemed":
+      return "초대코드 사용됨 · 연결 대기 중";
     case "invite_pending":
     case "invite_expired":
       return `최근 초대 코드 발송 ${formatDateTime(user.lastInvitedAt)}`;

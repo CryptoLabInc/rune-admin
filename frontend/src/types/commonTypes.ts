@@ -12,9 +12,9 @@ export type TDropdownOption = {
   disabled?: boolean;
 };
 
-/** Member connection status (wireframe v0.4 token model, 4 badges). */
+/** Member connection status (wireframe v0.4 token model, 5 badges). */
 export type TMemberStatus =
-  "online" | "pending" | "invite-expired" | "session-expired";
+  "online" | "redeemed" | "pending" | "invite-expired" | "session-expired";
 
 /**
  * rune workspace lifecycle phase (wireframe SC-03 badge; console API

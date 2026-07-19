@@ -197,17 +197,28 @@ func (h *consoleAPI) fillGroupAccess(idx *userIndex) {
 
 // status derives the console member status enum from the member lifecycle, its
 // latest invite, and whether a session token exists (wireframe SC-11 defs):
-//   - online          = active member with a valid console session token
+//   - online          = active member whose agent has authenticated at least once
+//   - invite_redeemed = active member whose token is released but never used yet
 //   - session_expired = active/disabled member whose token was destroyed
 //   - invite_pending  = invited, latest code sent and not past expiry
 //   - invite_expired  = invited, latest code expired (24h) or voided
 func (idx *userIndex) status(m members.Member) string {
 	switch m.Status {
 	case members.StatusActive:
-		if tl, ok := idx.tokenByEmail[m.Email]; ok && !tl.expired {
+		tl, ok := idx.tokenByEmail[m.Email]
+		if !ok || tl.expired {
+			return "session_expired"
+		}
+		// A live token means the invite was redeemed (Unwrap released it), but
+		// redemption alone is not "online": the agent may still be mid-configure
+		// or have failed right after Unwrap. Unwrap never Validates the session
+		// token, so LastUsed stays empty until the agent's first authenticated
+		// RPC (GetAgentManifest) — an empty stamp means "redeemed, not connected
+		// yet", the intermediate invite_redeemed (사용됨) state.
+		if tl.lastUsed != "" {
 			return "online"
 		}
-		return "session_expired"
+		return "invite_redeemed"
 	case members.StatusDisabled:
 		return "session_expired"
 	default: // registered, invited
@@ -419,7 +430,7 @@ func hasTeam(ms []membershipDTO, teamID string) bool {
 // values (the set idx.status can emit). Kept in lockstep with status().
 func validUserStatus(s string) bool {
 	switch s {
-	case "online", "invite_pending", "invite_expired", "session_expired":
+	case "online", "invite_redeemed", "invite_pending", "invite_expired", "session_expired":
 		return true
 	}
 	return false
@@ -516,12 +527,13 @@ func (h *consoleAPI) userSessionDeactivate(w http.ResponseWriter, r *http.Reques
 		apiErr(w, http.StatusNotFound, "USER_NOT_FOUND", "no such user")
 		return
 	}
-	// Only an online member has an ACTIVE session (doc §users: 409
-	// SESSION_NOT_ACTIVE otherwise). Gating on the derived status — not mere
-	// token-row presence — matters because an invite_pending member's wrapped
-	// invite token would otherwise be destroyed by the revoke below, silently
-	// invalidating the invitation code that was just mailed.
-	if h.newIndex().status(*m) != "online" {
+	// Both online and invite_redeemed hold a real, released session token
+	// (Unwrap put it in the token store); either can be deactivated. Gating on
+	// the derived status — not mere token-row presence — matters because an
+	// invite_pending member's wrapped invite token would otherwise be destroyed
+	// by the revoke below, silently invalidating the invitation code that was
+	// just mailed.
+	if st := h.newIndex().status(*m); st != "online" && st != "invite_redeemed" {
 		apiErr(w, http.StatusConflict, "SESSION_NOT_ACTIVE", "user has no active session")
 		return
 	}

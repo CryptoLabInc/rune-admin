@@ -643,6 +643,47 @@ func TestConsoleUserLiveness(t *testing.T) {
 	}
 }
 
+// TestConsoleUserRedeemedNotOnline pins the intermediate invite_redeemed
+// (사용됨) state: right after Unwrap the member is active and holds the
+// released session token, but the agent has not authenticated yet (no
+// GetAgentManifest), so it must NOT read as online. Its session is still
+// deactivatable, since the token is real.
+func TestConsoleUserRedeemedNotOnline(t *testing.T) {
+	f := newConsoleAPIFixture(t)
+	m, err := f.members.Add("redeemed@corp.com", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.members.MarkInvited(m.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.members.Activate(m.ID); err != nil {
+		t.Fatal(err)
+	}
+	// Mint the released session token but NEVER Validate it — this is the state
+	// immediately after Unwrap: the agent holds the token but has not made an
+	// authenticated call, so LastUsed is empty.
+	if _, err := f.v.Tokens().AddToken("redeemed@corp.com", "member", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// active + live token + never used => invite_redeemed, not online.
+	_, body := f.do(t, http.MethodGet, "/users/"+m.ID, "")
+	var u map[string]any
+	_ = json.Unmarshal(body, &u)
+	if u["status"] != "invite_redeemed" {
+		t.Fatalf("status = %v, want invite_redeemed (body=%s)", u["status"], body)
+	}
+	if u["lastAccessAt"] != nil {
+		t.Errorf("lastAccessAt = %v, want null for a redeemed member (body=%s)", u["lastAccessAt"], body)
+	}
+
+	// The released token is real, so deactivating the session is allowed.
+	if status, b := f.do(t, http.MethodDelete, "/users/"+m.ID+"/session", ""); status != http.StatusOK {
+		t.Fatalf("deactivate redeemed session = %d %s, want 200", status, b)
+	}
+}
+
 func TestInvitePendingLive(t *testing.T) {
 	now := time.Date(2026, 7, 16, 9, 0, 0, 0, time.UTC)
 	live := invites.InviteView{Status: invites.StatusPending, ExpiresAt: now.Add(time.Hour).Format(time.RFC3339)}

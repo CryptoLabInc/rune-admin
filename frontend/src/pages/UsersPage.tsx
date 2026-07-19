@@ -60,6 +60,7 @@ const styles = {
 const STATUS_OPTIONS: TDropdownOption[] = [
   { value: "all", label: "전체" },
   { value: "online", label: "온라인" },
+  { value: "invite_redeemed", label: "초대코드 사용됨" },
   { value: "invite_pending", label: "초대 수락 대기" },
   { value: "invite_expired", label: "초대 코드 만료" },
   { value: "session_expired", label: "세션 만료" },

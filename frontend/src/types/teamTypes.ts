@@ -14,7 +14,7 @@ export type TTeamMemberRole = "edit" | "write" | "read";
 
 /** Member status on the wire (common contract). */
 export type TTeamMemberStatus =
-  "online" | "invite_pending" | "invite_expired" | "session_expired";
+  "online" | "invite_redeemed" | "invite_pending" | "invite_expired" | "session_expired";
 
 /** GET /teams/{id} detail. */
 export type TTeamDetail = {

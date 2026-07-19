@@ -81,6 +81,7 @@ export const BADGE_TONE_VAR = {
 /* Status chips — semantic colors are state, not decoration. */
 export const MEMBER_STATUS_VAR = {
   online: { label: "온라인", color: "text-mint" },
+  redeemed: { label: "초대코드 사용됨", color: "text-accent-blue" },
   pending: { label: "초대 수락 대기", color: "text-warning" },
   "invite-expired": { label: "초대 코드 만료", color: "text-faint" },
   "session-expired": { label: "세션 만료", color: "text-negative" },
