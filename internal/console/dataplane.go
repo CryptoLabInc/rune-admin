@@ -33,10 +33,10 @@ const accessRefreshWindow = 15 * time.Minute
 // runespacePhaseReady is the runespace-cloud phase that signals the engine pod
 // has passed its readiness probe and can accept the key-registration handshake.
 // The cloud assigns a deterministic host (<id>.<domain>) and reports
-// phase=provisioning long before the pod is up, so the host alone is not a
-// readiness signal — dialing at any other phase hits the gateway with no live
-// upstream and fails RegisterKeys with EOF. Mirrors provisioner phaseReady.
-const runespacePhaseReady = "ready"
+// phase=provisioning/starting long before the pod is up, so the host alone is not
+// a readiness signal — dialing at any other phase hits the gateway with no live
+// upstream and fails RegisterKeys with EOF. Mirrors provisioner phaseRunning.
+const runespacePhaseReady = "running"
 
 // errWorkspaceExists tags a CreateWorkspace 409: the runespace already exists,
 // meaning Connect's get-or-create raced another creator (or the cloud's read
@@ -154,10 +154,10 @@ func (d *Dataplane) Connect(ctx context.Context, sessionCookie string) (*cloud.W
 	}
 	if ws.Phase != runespacePhaseReady || ws.Host == "" {
 		// Not ready to serve yet. The cloud assigns the (deterministic) host and
-		// reports phase=provisioning well before the runespace pod passes its
-		// readiness probe, so dialing now would hit the gateway with no live
+		// reports phase=provisioning/starting well before the runespace pod passes
+		// its readiness probe, so dialing now would hit the gateway with no live
 		// upstream and fail key registration with EOF. The caller polls
-		// GET /api/v1/workspace and retries connect once phase=ready.
+		// GET /api/v1/workspace and retries connect once phase=running.
 		return ws, nil
 	}
 	// Already connected to THIS workspace: return without re-bootstrapping

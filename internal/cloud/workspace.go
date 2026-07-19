@@ -89,7 +89,7 @@ func (c *Client) StopWorkspace(ctx context.Context, sessionCookie string) error 
 
 // StartWorkspace requests the cloud to start a stopped runespace: the pod is
 // re-created on the retained volume. Asynchronous (desired_state=running, 202
-// Accepted); the observed phase converges to "ready" via GetWorkspace polling.
+// Accepted); the observed phase moves starting -> running via GetWorkspace polling.
 func (c *Client) StartWorkspace(ctx context.Context, sessionCookie string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/api/v1/runespace/start", nil)
 	if err != nil {

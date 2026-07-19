@@ -78,14 +78,14 @@ func TestWorkspaceStatusCloudAuthExpired(t *testing.T) {
 		t.Fatalf("status after recovery = %d, want 200", rr.Code)
 	}
 	// The healthy 200 body must be projected into the console contract the SPA
-	// reads: the raw cloud phase "ready" mapped to "running", and the bare cloud
-	// host rendered as a full endpoint URL under `endpointUrl` (not `host`).
+	// reads: the cloud phase "running" carried through, and the bare cloud host
+	// rendered as a full endpoint URL under `endpointUrl` (not `host`).
 	var view map[string]any
 	if err := json.Unmarshal(rr.Body.Bytes(), &view); err != nil {
 		t.Fatalf("workspace body is not JSON: %v (%s)", err, rr.Body.String())
 	}
 	if view["phase"] != "running" {
-		t.Errorf("phase = %v, want running (cloud 'ready' must be mapped)", view["phase"])
+		t.Errorf("phase = %v, want running", view["phase"])
 	}
 	if view["endpointUrl"] != "https://rs1.runespace.example:443" {
 		t.Errorf("endpointUrl = %v, want https://rs1.runespace.example:443", view["endpointUrl"])
@@ -106,7 +106,7 @@ func TestWorkspaceStatusOrphaned(t *testing.T) {
 		mux := http.NewServeMux()
 		mux.HandleFunc("GET /api/v1/runespace", func(w http.ResponseWriter, _ *http.Request) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id": "rs_1", "host": "rs1.runespace.example", "phase": "ready",
+				"id": "rs_1", "host": "rs1.runespace.example", "phase": "running",
 				"tier": "free", "team_hash": teamHash,
 			})
 		})

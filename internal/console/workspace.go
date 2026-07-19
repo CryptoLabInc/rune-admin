@@ -44,10 +44,11 @@ func (s *Service) handleWorkspaceDelete(w http.ResponseWriter, r *http.Request) 
 		s.writeCloudError(w, sess, err)
 		return
 	}
-	// Async delete: 202 with the GET /workspace shape and the synthesized
-	// deleting phase (doc contract), not a bespoke {deleted:true} body. The
-	// data-plane teardown is deferred above so it runs regardless of outcome.
-	s.writeWorkspaceTransient(w, r, sess, "deleting")
+	// Async delete: 202 with the GET /workspace shape (doc contract), whose phase
+	// is now deleting (the cloud recorded it on the delete), not a bespoke
+	// {deleted:true} body. The data-plane teardown is deferred above so it runs
+	// regardless of outcome.
+	s.writeWorkspaceAccepted(w, r, sess)
 }
 
 // handleWorkspaceStatus (GET /api/v1/workspace) reports the runespace status.
@@ -96,21 +97,15 @@ func (s *Service) handleWorkspaceStatus(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, workspaceView(ws))
 }
 
-// consolePhase maps a runespace-cloud observed phase to the console phase
-// vocabulary the SPA renders. The cloud reports one of
-// provisioning|ready|stopped|deprovisioning|failed; the console surface uses
-// provisioning|running|stopping|stopped|starting|deleting|error. Mapping the
-// cloud phase to the console vocabulary is the server's responsibility (console
-// API design §Workspace), so the SPA never sees a raw cloud phase like "ready".
+// consolePhase validates the runespace-cloud observed phase against the phase
+// vocabulary the SPA renders: provisioning|starting|running|stopping|stopped|
+// deleting|error. The cloud reports these verbatim — the two vocabularies are
+// identical by design, so there is nothing to translate — and this guards the
+// contract: an unexpected value is surfaced as error rather than leaked raw to
+// the SPA.
 func consolePhase(cloudPhase string) string {
 	switch cloudPhase {
-	case "ready":
-		return "running"
-	case "deprovisioning":
-		return "deleting"
-	case "failed":
-		return "error"
-	case "provisioning", "running", "stopping", "stopped", "starting", "deleting", "error":
+	case "provisioning", "starting", "running", "stopping", "stopped", "deleting", "error":
 		return cloudPhase
 	default:
 		return "error"
@@ -153,16 +148,16 @@ func (s *Service) orphaned(ws *cloud.Workspace) bool {
 	return s.teamHash != "" && ws.TeamHash != "" && ws.TeamHash != s.teamHash
 }
 
-// writeWorkspaceTransient responds to an async stop/start/delete with 202 and
-// the GET /workspace shape, overriding phase with the synthesized transient
-// (stopping/starting/deleting) since the cloud does not report it. If the status
-// read fails, it still returns the full shape (transient phase, null fields) so
-// the SPA can begin polling without tripping over a missing key.
-func (s *Service) writeWorkspaceTransient(w http.ResponseWriter, r *http.Request, sess *Session, phase string) {
-	view := map[string]any{"phase": phase, "endpointUrl": nil, "rows": nil}
+// writeWorkspaceAccepted responds to an async stop/start/delete with 202 and the
+// GET /workspace shape read back from the cloud. The cloud records the in-flight
+// transition (stopping/starting/deleting) optimistically on the action itself, so
+// the phase already reflects it — no synthesis on the console side. If the status
+// read fails, it still returns the full shape (null fields) so the SPA can begin
+// polling without tripping over a missing key.
+func (s *Service) writeWorkspaceAccepted(w http.ResponseWriter, r *http.Request, sess *Session) {
+	view := map[string]any{"phase": nil, "endpointUrl": nil, "rows": nil}
 	if ws, err := s.cloud.GetWorkspace(r.Context(), sess.CloudCookie()); err == nil && ws != nil {
 		view = workspaceView(ws)
-		view["phase"] = phase
 	}
 	writeJSON(w, http.StatusAccepted, view)
 }
@@ -185,7 +180,7 @@ func (s *Service) handleWorkspaceStop(w http.ResponseWriter, r *http.Request) {
 	if s.dp != nil {
 		s.dp.Pause()
 	}
-	s.writeWorkspaceTransient(w, r, sess, "stopping")
+	s.writeWorkspaceAccepted(w, r, sess)
 }
 
 // handleWorkspaceStart (POST /api/v1/workspace/start) asks the cloud to start a
@@ -205,7 +200,7 @@ func (s *Service) handleWorkspaceStart(w http.ResponseWriter, r *http.Request) {
 	if s.dp != nil {
 		s.dp.Resume()
 	}
-	s.writeWorkspaceTransient(w, r, sess, "starting")
+	s.writeWorkspaceAccepted(w, r, sess)
 }
 
 // sessionFrom re-reads the live session from the request cookie (the

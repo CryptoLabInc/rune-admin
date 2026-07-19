@@ -46,7 +46,7 @@ func mockCloud(t *testing.T, host string) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/runespace", func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"id": "rs_1", "host": host, "phase": "ready", "tier": "free"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "rs_1", "host": host, "phase": "running", "tier": "free"})
 	})
 	mux.HandleFunc("POST /api/v1/runespace/access/bootstrap", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"refresh_token": "refresh_abc", "runespace_id": "rs_1"})
@@ -72,7 +72,7 @@ func TestDataplaneConnectDialsEngineAndPersists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ws.ID != "rs_1" || ws.Phase != "ready" {
+	if ws.ID != "rs_1" || ws.Phase != "running" {
 		t.Errorf("workspace = %+v", ws)
 	}
 	// Connect dials in the background (the multi-minute key upload must not block
@@ -155,7 +155,7 @@ func TestDataplaneConnectSwitchesWorkspaceOnChange(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/runespace", func(w http.ResponseWriter, _ *http.Request) {
 		i, h := getWS()
-		_ = json.NewEncoder(w).Encode(map[string]any{"id": i, "host": h, "phase": "ready", "tier": "free"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": i, "host": h, "phase": "running", "tier": "free"})
 	})
 	mux.HandleFunc("POST /api/v1/runespace/access/bootstrap", func(w http.ResponseWriter, _ *http.Request) {
 		i, _ := getWS()
@@ -266,7 +266,7 @@ func TestDataplaneAuthExpiredLifecycle(t *testing.T) {
 	reject.Store(true)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/runespace", func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"id": "rs_1", "host": "rs1.runespace.example", "phase": "ready", "tier": "free"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "rs_1", "host": "rs1.runespace.example", "phase": "running", "tier": "free"})
 	})
 	mux.HandleFunc("POST /api/v1/runespace/access/bootstrap", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"refresh_token": "refresh_new", "runespace_id": "rs_1"})
@@ -329,7 +329,7 @@ func TestDataplaneConnectRebootstrapsWhenAuthExpired(t *testing.T) {
 	var bootstraps atomic.Int32
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/runespace", func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"id": "rs_1", "host": "rs1.runespace.example", "phase": "ready", "tier": "free"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "rs_1", "host": "rs1.runespace.example", "phase": "running", "tier": "free"})
 	})
 	mux.HandleFunc("POST /api/v1/runespace/access/bootstrap", func(w http.ResponseWriter, _ *http.Request) {
 		bootstraps.Add(1)
