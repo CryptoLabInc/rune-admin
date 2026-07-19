@@ -171,12 +171,11 @@ func (v *Console) ConnectEngine(engine consoleEngine) {
 // engine). It is the data-plane layer's entry point: the credential flow calls
 // it once an access JWT has been minted (and again to re-dial before the JWT
 // expires).
-func (v *Console) ConnectRunespace(ctx context.Context, addr, token string, insecure bool) error {
+func (v *Console) ConnectRunespace(ctx context.Context, addr, token string) error {
 	eng, err := crypto.OpenEngine(ctx, crypto.EngineParams{
 		Keys:     v.bundleParams,
 		Endpoint: addr,
 		Token:    token,
-		Insecure: insecure,
 	})
 	if err != nil {
 		return err

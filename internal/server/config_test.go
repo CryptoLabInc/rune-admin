@@ -115,34 +115,6 @@ func TestLoadConfigUnknownFieldsRejected(t *testing.T) {
 	}
 }
 
-func TestLoadConfigOrgAdminsRemovedGuidance(t *testing.T) {
-	// groups.org_admins shipped in v1.0.0-alpha and is no longer honored: the
-	// org admin is derived from the first-login console owner. A config still
-	// carrying the field must be REFUSED (silently ignoring it would change who
-	// holds admin authority without saying so) and the refusal must name the
-	// replacement, not just the field.
-	body := minimalValidConfig(t) + `groups:
-  org_admins:
-    - admin@corp.com
-`
-	path := writeConfig(t, body)
-	_, err := LoadConfig(path)
-	if err == nil {
-		t.Fatal("config with org_admins accepted, want migration error")
-	}
-	for _, want := range []string{"groups.org_admins is no longer supported", "first logs in", "remove the org_admins entry"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("err = %v, want it to contain %q", err, want)
-		}
-	}
-	// The guidance must come from the decoded value, not from matching the yaml
-	// library's strict-decode wording — a dependency bump must not silently
-	// downgrade this to a bare "field not found in type server.GroupsConfig".
-	if strings.Contains(err.Error(), "not found in type") {
-		t.Errorf("err came from the strict-decode path, not the value check: %v", err)
-	}
-}
-
 // TestLoadConfigRemovedStorePathsRejected pins only the refusal, not any
 // wording: a config carrying the removed per-store paths must not boot. There
 // is no upgrade path to guide anyone through — the supported move from the
@@ -155,23 +127,6 @@ func TestLoadConfigRemovedStorePathsRejected(t *testing.T) {
 		1)
 	if _, err := LoadConfig(writeConfig(t, body)); err == nil {
 		t.Error("config with removed store paths accepted, want strict-decode refusal")
-	}
-}
-
-func TestLoadConfigOrgAdminsEmptyIsAccepted(t *testing.T) {
-	// The field is declared only to produce the migration error above. A config
-	// that merely has a groups section (or an empty list) must still boot —
-	// the refusal is about a DECLARED admin, not about the key existing.
-	body := minimalValidConfig(t) + `groups:
-  topk_read: 7
-`
-	path := writeConfig(t, body)
-	cfg, err := LoadConfig(path)
-	if err != nil {
-		t.Fatalf("groups section without org_admins refused: %v", err)
-	}
-	if cfg.Groups.TopKRead != 7 {
-		t.Errorf("topk_read = %d, want 7", cfg.Groups.TopKRead)
 	}
 }
 

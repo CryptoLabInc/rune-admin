@@ -20,7 +20,7 @@ import (
 // EngineReady reflects the attach state). Kept as an interface so this package
 // need not import internal/server.
 type DataplaneConnector interface {
-	ConnectRunespace(ctx context.Context, addr, token string, insecure bool) error
+	ConnectRunespace(ctx context.Context, addr, token string) error
 	EngineReady() bool
 	// DisconnectEngine detaches and closes the engine, returning the gRPC
 	// service to "runespace not configured". Called after a runespace delete.
@@ -51,7 +51,6 @@ type dataplaneCred struct {
 	RefreshToken string
 	RunespaceID  string
 	Addr         string
-	Insecure     bool
 }
 
 // Dataplane owns the console's single runespace engine connection: the
@@ -62,7 +61,6 @@ type Dataplane struct {
 	cloud     *cloud.Client
 	connector DataplaneConnector
 	db        *sql.DB
-	insecure  bool // dial the engine plaintext (local dev)
 	log       *slog.Logger
 
 	mu     sync.Mutex
@@ -97,15 +95,14 @@ CREATE TABLE IF NOT EXISTS dataplane_credential (
   refresh_token TEXT NOT NULL,
   runespace_id  TEXT NOT NULL,
   addr          TEXT NOT NULL,
-  insecure      INTEGER NOT NULL,
   created_at    TEXT NOT NULL
 );`
 
-func newDataplane(db *sql.DB, cl *cloud.Client, conn DataplaneConnector, insecure bool, log *slog.Logger) (*Dataplane, error) {
+func newDataplane(db *sql.DB, cl *cloud.Client, conn DataplaneConnector, log *slog.Logger) (*Dataplane, error) {
 	if _, err := db.Exec(dataplaneSchema); err != nil {
 		return nil, err
 	}
-	return &Dataplane{cloud: cl, connector: conn, db: db, insecure: insecure, log: log, base: context.Background()}, nil
+	return &Dataplane{cloud: cl, connector: conn, db: db, log: log, base: context.Background()}, nil
 }
 
 // Start sets the refresh loop's parent context (the daemon lifetime) and, if a
@@ -197,7 +194,7 @@ func (d *Dataplane) Connect(ctx context.Context, sessionCookie string) (*cloud.W
 		d.connecting.Store(false)
 		return nil, err
 	}
-	cred := &dataplaneCred{RefreshToken: bs.RefreshToken, RunespaceID: ws.ID, Addr: addr, Insecure: d.insecure}
+	cred := &dataplaneCred{RefreshToken: bs.RefreshToken, RunespaceID: ws.ID, Addr: addr}
 	if err := d.saveCred(cred); err != nil {
 		d.connecting.Store(false)
 		return nil, err
@@ -226,7 +223,7 @@ func (d *Dataplane) reconnect(ctx context.Context, cred *dataplaneCred) error {
 	if err != nil {
 		return err
 	}
-	if err := d.connector.ConnectRunespace(ctx, cred.Addr, tok.AccessToken, cred.Insecure); err != nil {
+	if err := d.connector.ConnectRunespace(ctx, cred.Addr, tok.AccessToken); err != nil {
 		return err
 	}
 	d.mu.Lock()
@@ -376,7 +373,7 @@ func (d *Dataplane) refreshLoop(ctx context.Context) {
 				d.log.Warn("console: data-plane token refresh failed; will retry", "err", err.Error())
 				continue
 			}
-			if err := d.connector.ConnectRunespace(ctx, cred.Addr, tok.AccessToken, cred.Insecure); err != nil {
+			if err := d.connector.ConnectRunespace(ctx, cred.Addr, tok.AccessToken); err != nil {
 				d.log.Warn("console: data-plane re-dial failed; will retry", "err", err.Error())
 			}
 		}
@@ -386,38 +383,29 @@ func (d *Dataplane) refreshLoop(ctx context.Context) {
 // --- credential persistence (single row, holds the refresh token at rest) ---
 
 func (d *Dataplane) saveCred(c *dataplaneCred) error {
-	ins := 0
-	if c.Insecure {
-		ins = 1
-	}
 	_, err := d.db.Exec(
-		`INSERT INTO dataplane_credential (id, refresh_token, runespace_id, addr, insecure, created_at)
-		 VALUES (1, ?, ?, ?, ?, ?)
+		`INSERT INTO dataplane_credential (id, refresh_token, runespace_id, addr, created_at)
+		 VALUES (1, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   refresh_token = excluded.refresh_token,
 		   runespace_id  = excluded.runespace_id,
 		   addr          = excluded.addr,
-		   insecure      = excluded.insecure,
 		   created_at    = excluded.created_at`,
-		c.RefreshToken, c.RunespaceID, c.Addr, ins, nowRFC3339(),
+		c.RefreshToken, c.RunespaceID, c.Addr, nowRFC3339(),
 	)
 	return err
 }
 
 func (d *Dataplane) loadCred() *dataplaneCred {
-	var (
-		c   dataplaneCred
-		ins int
-	)
-	err := d.db.QueryRow(`SELECT refresh_token, runespace_id, addr, insecure FROM dataplane_credential WHERE id = 1`).
-		Scan(&c.RefreshToken, &c.RunespaceID, &c.Addr, &ins)
+	var c dataplaneCred
+	err := d.db.QueryRow(`SELECT refresh_token, runespace_id, addr FROM dataplane_credential WHERE id = 1`).
+		Scan(&c.RefreshToken, &c.RunespaceID, &c.Addr)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			d.log.Warn("console: read data-plane credential", "err", err.Error())
 		}
 		return nil
 	}
-	c.Insecure = ins != 0
 	return &c
 }
 

@@ -75,10 +75,6 @@ func runDaemonStart(ctx context.Context) error {
 	// unified store database; the judge stays pure in-memory reads. A cyclic
 	// tree in the stored rows still fails startup on purpose.
 	groupStore := groups.NewStore()
-	groupStore.SetLimits(groups.Limits{
-		TopKRead:  cfg.Groups.TopKRead,
-		TopKWrite: cfg.Groups.TopKWrite,
-	})
 	// The organization admin (the Owner identity that gates the org-wide
 	// member-roles listing, plan §5, §6-D8) is NOT set here: it is derived
 	// from the first-login console owner via the OwnerRegistrar hook below —
@@ -228,8 +224,7 @@ func runDaemonStart(ctx context.Context) error {
 				_, aerr := memberStore.Add(email, displayName)
 				return aerr
 			},
-			RunespaceInsecure: cfg.Runespace.Insecure,
-			Logger:            slog.Default(),
+			Logger: slog.Default(),
 		})
 		if err != nil {
 			return fmt.Errorf("daemon: build console handler: %w", err)

@@ -1120,9 +1120,6 @@ collect_and_write_config() {
       "  path: ${INSTALL_PREFIX}/rune-console-keys" \
       "  embedding_dim: 1024" \
       "" \
-      "# runespace: the data-plane engine is connected from the console after" \
-      "# login (provision -> bootstrap -> access token -> dial); leave unset." \
-      "" \
       "tokens:" \
       "  team_secret: ${team_secret}" \
       "" \

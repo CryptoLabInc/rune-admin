@@ -50,9 +50,7 @@ type Deps struct {
 	// memberships (option A: admin reach is granted, not implied). A returned
 	// error is logged and does not block login. nil skips registration.
 	OwnerRegistrar func(email, displayName string) error
-	// RunespaceInsecure dials the engine plaintext (local dev).
-	RunespaceInsecure bool
-	Logger            *slog.Logger
+	Logger         *slog.Logger
 }
 
 // Service holds the wired collaborators shared by the auth handlers.
@@ -127,7 +125,7 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 
 	var dp *Dataplane
 	if d.Connector != nil {
-		dp, err = newDataplane(d.DB, s.cloud, d.Connector, d.RunespaceInsecure, log)
+		dp, err = newDataplane(d.DB, s.cloud, d.Connector, log)
 		if err != nil {
 			return nil, nil, err
 		}

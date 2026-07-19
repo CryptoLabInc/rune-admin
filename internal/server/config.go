@@ -28,15 +28,13 @@ const expectedSecretMode fs.FileMode = 0o640
 // Config is the in-memory shape of runeconsole.conf. Field names follow the
 // YAML schema exactly so the loader can decode without an intermediate type.
 type Config struct {
-	Server    ServerConfig    `yaml:"server"`
-	Cloud     CloudConfig     `yaml:"cloud"`
-	Keys      KeysConfig      `yaml:"keys"`
-	Runespace RunespaceConfig `yaml:"runespace"`
-	Tokens    TokensConfig    `yaml:"tokens"`
-	Groups    GroupsConfig    `yaml:"groups"`
-	Members   MembersConfig   `yaml:"members"`
-	Audit     AuditConfig     `yaml:"audit"`
-	Storage   StorageConfig   `yaml:"storage"`
+	Server  ServerConfig  `yaml:"server"`
+	Cloud   CloudConfig   `yaml:"cloud"`
+	Keys    KeysConfig    `yaml:"keys"`
+	Tokens  TokensConfig  `yaml:"tokens"`
+	Members MembersConfig `yaml:"members"`
+	Audit   AuditConfig   `yaml:"audit"`
+	Storage StorageConfig `yaml:"storage"`
 
 	// Source records where this Config was loaded from (resolved absolute
 	// path), populated by LoadConfig. Empty for in-memory test configs.
@@ -103,33 +101,9 @@ type KeysConfig struct {
 	EmbeddingDim int    `yaml:"embedding_dim"`
 }
 
-// RunespaceConfig tunes how the console dials the data-plane runespace. The
-// connection itself is established per-login by the provisioning flow (session
-// -> bootstrap -> access JWT -> dial); the only remaining knob is whether that
-// dial is plaintext.
-type RunespaceConfig struct {
-	Insecure bool `yaml:"insecure"` // true = plaintext dial (local dev only)
-}
-
 // TokensConfig carries the team secret console tokens are minted from.
 type TokensConfig struct {
 	TeamSecret string `yaml:"team_secret"`
-}
-
-// GroupsConfig configures the group RBAC store: top_k caps default to plan
-// §5 values (read=10, write and above=50). The org admin is NOT configurable:
-// it is derived from the first-login console owner.
-type GroupsConfig struct {
-	TopKRead  int `yaml:"topk_read"`
-	TopKWrite int `yaml:"topk_write"`
-
-	// Deprecated: org_admins is never honored — the org admin is the account
-	// that first logs in to the console. The field is declared solely so a
-	// config that still carries it is refused by LoadConfig with migration
-	// guidance; without the declaration, strict decoding rejects it first and
-	// the operator gets a bare "field not found" naming a Go type. Reading this
-	// value anywhere would reintroduce config-declared admins.
-	OrgAdmins []string `yaml:"org_admins"`
 }
 
 // MembersConfig configures the member registry + invite flow. Every field is
@@ -195,16 +169,6 @@ func LoadConfig(override string) (*Config, error) {
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("parse config %s: %w (searched: %s)", path, err, strings.Join(searched, ", "))
-	}
-	// groups.org_admins no longer selects the org admin (it is the account that
-	// first logs in to the console). Refuse rather than ignore: a config naming
-	// an admin the daemon will not honor is a silent authority change. The check
-	// is on the decoded value, not on the decoder's error text, so it cannot be
-	// broken by a yaml library rewording its strict-decode message.
-	if len(cfg.Groups.OrgAdmins) > 0 {
-		return nil, fmt.Errorf("config %s: groups.org_admins is no longer supported — "+
-			"the org admin is the account that first logs in to the console; "+
-			"remove the org_admins entry from this config and restart", path)
 	}
 	cfg.Source = path
 

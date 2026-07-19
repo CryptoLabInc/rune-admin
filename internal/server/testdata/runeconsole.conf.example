@@ -27,10 +27,6 @@ keys:
   path: /opt/runeconsole/rune-console-keys
   embedding_dim: 1024
 
-runespace:
-  # The dial target is provisioned per-login (no static endpoint/api_key).
-  insecure: false        # true = plaintext dial (local dev only)
-
 tokens:
   team_secret: REPLACE_WITH_RANDOM_HEX_32
 
