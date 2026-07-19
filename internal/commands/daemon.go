@@ -110,7 +110,7 @@ func runDaemonStart(ctx context.Context) error {
 	// runespace-cloud public API (POST /api/v1/invites), which renders the email
 	// and sends it via OCI Email Delivery. The per-request operator cloud session
 	// cookie (injected by the console BFF) authenticates each send.
-	mailer := server.NewCloudMailer(cloud.New(cfg.Cloud.APIBaseURL))
+	mailer := server.NewCloudMailer(cloud.New(cfg.Cloud.APIBaseURL), cfg)
 	// The invite endpoint is what a remote rune-mcp dials, so it must be a
 	// reachable address, not a loopback/bind host. When unset (or "auto") the
 	// console advertises its auto-detected public IP (the TLS cert's SAN already
@@ -127,8 +127,6 @@ func runDaemonStart(ctx context.Context) error {
 	}
 	inviteConn := server.InviteConnInfo{
 		ConsoleEndpoint: consoleEndpoint,
-		CAPemURL:        cfg.Members.CAPemURL,
-		CAPemSHA256:     cfg.Members.CAPemSHA256,
 	}
 
 	keyParams := crypto.KeysParams{
@@ -169,27 +167,11 @@ func runDaemonStart(ctx context.Context) error {
 	const selfInviteRole = "member"
 	selfInviter := server.NewSelfInviteIssuer(v, memberStore, inviteStore, inviteConn, cfg.InviteTTL(), selfInviteRole)
 
-	// Connect the data-plane engine eagerly only when a static runespace
-	// endpoint is configured (dev/integration). Otherwise the connection is
-	// deferred to the access-token-driven flow: open the full key set, dial
-	// the runespace, register the eval key, and attach via ConnectEngine
-	// (which also wires the group-delete sole-tag guard, plan §6-D7).
-	if cfg.Runespace.Endpoint != "" {
-		eng, oerr := crypto.OpenEngine(ctx, crypto.EngineParams{
-			Keys:     keyParams,
-			Endpoint: cfg.Runespace.Endpoint,
-			Token:    cfg.Runespace.APIKey,
-			Insecure: cfg.Runespace.Insecure,
-		})
-		if oerr != nil {
-			return fmt.Errorf("daemon: open runespace engine: %w", oerr)
-		}
-		v.ConnectEngine(eng)
-		slog.Info("console: runespace engine connected",
-			"endpoint", cfg.Runespace.Endpoint, "insecure", cfg.Runespace.Insecure)
-	} else {
-		slog.Warn("console: runespace not configured — data-plane RPCs report 'runespace not configured' until connected")
-	}
+	// The data-plane engine is attached lazily by the access-token-driven flow
+	// (login -> provision -> bootstrap -> dial -> ConnectEngine, which also wires
+	// the group-delete sole-tag guard, plan §6-D7). Until a session provisions
+	// one, the gRPC ConsoleService reports "runespace not configured".
+	slog.Warn("console: runespace not connected — data-plane RPCs report 'runespace not configured' until a session provisions one")
 
 	slog.Info("console: starting daemon",
 		"pid", os.Getpid(),
@@ -197,17 +179,13 @@ func runDaemonStart(ctx context.Context) error {
 		"grpc_addr", fmt.Sprintf("%s:%d", cfg.Server.GRPC.Host, cfg.Server.GRPC.Port),
 		"console_enabled", cfg.Server.Console.Enabled)
 
-	// Admin operations handler (token/role/group + member/invite), mounted
-	// cookie-gated under /admin/ on the console HTTP listener.
-	adminHandler := server.NewAdminHandler(v, memberStore, inviteStore, mailer, inviteConn, cfg.InviteTTL())
-
 	// Domain API handler (teams, users, memberships, invitations) — the design
-	// doc's /api/v1 surface. Same RBAC stores as the admin handler; mounted
+	// doc's /api/v1 surface and the sole cookie-gated management surface; mounted
 	// origin + session gated under /api/v1/ with the operator injected as actor.
 	domainHandler := server.NewConsoleAPIHandler(v, memberStore, inviteStore, mailer, inviteConn, cfg.InviteTTL())
 
-	// Console BFF HTTP handler (loopback auth + SPA + cookie-gated /api/v1 +
-	// admin), built only when the console surface is enabled.
+	// Console BFF HTTP handler (loopback auth + SPA + cookie-gated /api/v1),
+	// built only when the console surface is enabled.
 	var consoleHandler http.Handler
 	if cfg.Server.Console.Enabled {
 		sessDB, derr := db.Open(cfg.ConsoleDBPath())
@@ -220,9 +198,7 @@ func runDaemonStart(ctx context.Context) error {
 			Port:          cfg.ConsolePort(),
 			APIBaseURL:    cfg.Cloud.APIBaseURL,
 			WebBaseURL:    cfg.Cloud.WebBaseURL,
-			FrontendDir:   cfg.Server.Console.FrontendDir,
 			DB:            sessDB,
-			AdminHandler:  adminHandler,
 			DomainHandler: domainHandler,
 			Connector:     v, // *server.Console: dials the runespace + attaches the engine
 			Inviter:       selfInviter,

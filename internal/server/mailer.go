@@ -9,12 +9,16 @@ import (
 )
 
 // InviteConnInfo is the console connection detail an invitee needs to redeem
-// their invite (endpoint + CA pin). It rides in the invite mail alongside the
-// clear bundle; it carries no secret.
+// their invite. It rides in the invite mail alongside the clear bundle; it
+// carries no secret. The CA pin is NOT stored here — it is computed live from
+// the console's serving cert at send time (see cloudMailer.SendInvite and
+// SelfInviteIssuer.IssueSelfInvite), so it can never drift from what GetCACert
+// serves and can never be silently emitted empty.
 type InviteConnInfo struct {
 	ConsoleEndpoint string `json:"console_endpoint"`
-	CAPemURL        string `json:"ca_pem_url"`
-	CAPemSHA256     string `json:"ca_pem_sha256"`
+	// CAPemSHA256 carries the live-computed CA pin from the self-invite path to
+	// its encoder; the cloud-mailer path ignores it and pins independently.
+	CAPemSHA256 string `json:"ca_pem_sha256"`
 }
 
 // Mailer delivers an invite to its recipient by relaying the registration string
@@ -36,13 +40,19 @@ type cloudInviteSender interface {
 // cloudMailer relays invites through the runespace-cloud public API
 // (POST /api/v1/invites). The operator's cloud session cookie is read from the
 // request context (the console BFF injects it via WithCloudCookie after
-// requireSession); without it the relay cannot authenticate.
+// requireSession); without it the relay cannot authenticate. cfg is held so the
+// CA pin baked into every registration string is computed live from the
+// console's serving cert at send time.
 type cloudMailer struct {
 	cloud cloudInviteSender
+	cfg   *Config
 }
 
-// NewCloudMailer returns a Mailer that relays invites through the cloud public API.
-func NewCloudMailer(c cloudInviteSender) Mailer { return &cloudMailer{cloud: c} }
+// NewCloudMailer returns a Mailer that relays invites through the cloud public
+// API. cfg supplies the console TLS material the pin is derived from.
+func NewCloudMailer(c cloudInviteSender, cfg *Config) Mailer {
+	return &cloudMailer{cloud: c, cfg: cfg}
+}
 
 // SendInvite encodes the wrap handle + connection info into a registration string
 // and posts it to the cloud relay as the logged-in operator. The inviter name is
@@ -54,10 +64,19 @@ func (m *cloudMailer) SendInvite(ctx context.Context, to, toName string, b invit
 	if cookie == "" {
 		return fmt.Errorf("no operator cloud session on the request; cannot relay invite")
 	}
+	// Pin the console CA live from the serving cert so the registration string's
+	// ca_sha256 matches exactly what GetCACert serves. A pin-resolution failure
+	// aborts the send — rune-mcp rejects a pinless registration string at
+	// bootstrap, so a silent empty pin would just hand the invitee a token they
+	// can never redeem.
+	_, pin, err := caPEMAndPin(m.cfg)
+	if err != nil {
+		return fmt.Errorf("resolve console CA pin: %w", err)
+	}
 	reg, err := regstr.Encode(regstr.Registration{
 		Endpoint: conn.ConsoleEndpoint,
 		Token:    b.Handle,
-		CASHA256: conn.CAPemSHA256,
+		CASHA256: pin,
 	})
 	if err != nil {
 		return fmt.Errorf("encode registration string: %w", err)

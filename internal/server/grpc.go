@@ -57,9 +57,10 @@ type memberActivator interface {
 	Activate(id string) error
 }
 
-// Console is the runtime container shared by all RPC handlers and the admin UDS
-// server. It owns the token store, the runespace engine (all FHE keys + the
-// sole runespace client), and the audit logger. Construct via NewConsole.
+// Console is the runtime container shared by all gRPC RPC handlers and the
+// console BFF handlers. It owns the token store, the runespace engine (all FHE
+// keys + the sole runespace client), and the audit logger. Construct via
+// NewConsole.
 type Console struct {
 	cfg    *Config
 	tokens *tokens.Store
@@ -184,7 +185,7 @@ func (v *Console) ConnectRunespace(ctx context.Context, addr, token string, inse
 	return nil
 }
 
-// Tokens exposes the token store for the admin UDS server.
+// Tokens exposes the token store for the console BFF handlers.
 func (v *Console) Tokens() *tokens.Store { return v.tokens }
 
 // Groups exposes the group RBAC store (tree + memberships + judge).
@@ -371,7 +372,7 @@ func (v *Console) auditTagCleanup(actor, status, detail, target string) {
 		UserID:    localAdminActor(actor),
 		Method:    "admin.group.tag_cleanup",
 		Status:    status,
-		SourceIP:  "admin-uds",
+		SourceIP:  "console-bff",
 		Target:    target,
 	}
 	if status != "success" {

@@ -20,10 +20,6 @@ func minimalValidConfig(t *testing.T) string {
 keys:
   path: /tmp/rune-console-keys
   embedding_dim: 1024
-runespace:
-  endpoint: https://example.com
-  api_key: inline-api-key
-  insecure: true
 tokens:
   team_secret: inline-team-secret-deadbeef
 audit:
@@ -179,53 +175,6 @@ func TestLoadConfigOrgAdminsEmptyIsAccepted(t *testing.T) {
 	}
 }
 
-func TestLoadConfigAPIKeyFileIndirection(t *testing.T) {
-	dir := t.TempDir()
-	keyFile := filepath.Join(dir, "runespace.key")
-	if err := os.WriteFile(keyFile, []byte("file-api-key\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	body := strings.Replace(
-		minimalValidConfig(t),
-		"  api_key: inline-api-key",
-		"  api_key_file: "+keyFile,
-		1,
-	)
-	path := writeConfig(t, body)
-	cfg, err := LoadConfig(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Runespace.APIKey != "file-api-key" {
-		t.Errorf("api_key = %q, want file-api-key", cfg.Runespace.APIKey)
-	}
-	if cfg.Runespace.APIKeyFile != "" {
-		t.Errorf("api_key_file should be cleared after Resolve, got %q", cfg.Runespace.APIKeyFile)
-	}
-}
-
-func TestLoadConfigTeamSecretFileIndirection(t *testing.T) {
-	dir := t.TempDir()
-	secretFile := filepath.Join(dir, "team.secret")
-	if err := os.WriteFile(secretFile, []byte("file-team-secret"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	body := strings.Replace(
-		minimalValidConfig(t),
-		"  team_secret: inline-team-secret-deadbeef",
-		"  team_secret_file: "+secretFile,
-		1,
-	)
-	path := writeConfig(t, body)
-	cfg, err := LoadConfig(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Tokens.TeamSecret != "file-team-secret" {
-		t.Errorf("team_secret = %q, want file-team-secret", cfg.Tokens.TeamSecret)
-	}
-}
-
 func TestLoadConfigRejectsWorldReadableConfig(t *testing.T) {
 	path := writeConfig(t, minimalValidConfig(t))
 	if err := os.Chmod(path, 0o644); err != nil {
@@ -240,65 +189,16 @@ func TestLoadConfigRejectsWorldReadableConfig(t *testing.T) {
 	}
 }
 
-func TestLoadConfigRejectsWorldReadableSecretFile(t *testing.T) {
-	dir := t.TempDir()
-	secretFile := filepath.Join(dir, "team.secret")
-	if err := os.WriteFile(secretFile, []byte("file-team-secret"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	body := strings.Replace(
-		minimalValidConfig(t),
-		"  team_secret: inline-team-secret-deadbeef",
-		"  team_secret_file: "+secretFile,
-		1,
-	)
-	path := writeConfig(t, body)
-	_, err := LoadConfig(path)
-	if err == nil {
-		t.Fatal("expected error for world-readable team_secret_file, got nil")
-	}
-	if !strings.Contains(err.Error(), "too permissive") {
-		t.Errorf("err missing 'too permissive': %v", err)
-	}
-}
-
-func TestLoadConfigSecretFileMissing(t *testing.T) {
-	body := strings.Replace(
-		minimalValidConfig(t),
-		"  team_secret: inline-team-secret-deadbeef",
-		"  team_secret_file: /nope/team.secret",
-		1,
-	)
-	path := writeConfig(t, body)
-	_, err := LoadConfig(path)
-	if err == nil {
-		t.Fatal("expected error for missing team_secret_file")
-	}
-	if !strings.Contains(err.Error(), "team_secret_file") {
-		t.Errorf("err missing label: %v", err)
-	}
-}
-
 func TestRedactMasksSecrets(t *testing.T) {
 	cfg := &Config{
-		Runespace: RunespaceConfig{APIKey: "deadbeef", APIKeyFile: "/x"},
-		Tokens:    TokensConfig{TeamSecret: "supersecret", TeamSecretFile: "/y"},
+		Tokens: TokensConfig{TeamSecret: "supersecret"},
 	}
 	r := cfg.Redact()
-	if r.Runespace.APIKey != "[REDACTED]" {
-		t.Errorf("api_key not redacted: %q", r.Runespace.APIKey)
-	}
-	if r.Runespace.APIKeyFile != "[REDACTED]" {
-		t.Errorf("api_key_file not redacted: %q", r.Runespace.APIKeyFile)
-	}
 	if r.Tokens.TeamSecret != "[REDACTED]" {
 		t.Errorf("team_secret not redacted: %q", r.Tokens.TeamSecret)
 	}
-	if r.Tokens.TeamSecretFile != "[REDACTED]" {
-		t.Errorf("team_secret_file not redacted: %q", r.Tokens.TeamSecretFile)
-	}
 	// Original must be untouched.
-	if cfg.Runespace.APIKey != "deadbeef" {
+	if cfg.Tokens.TeamSecret != "supersecret" {
 		t.Errorf("Redact mutated original")
 	}
 }
@@ -379,22 +279,5 @@ func TestStoreDBPathDefaultsIntoDataDir(t *testing.T) {
 	}
 	if got, want := cfg.StoreDBPath(), "/tmp/runeconsole.db"; got != want {
 		t.Errorf("StoreDBPath = %q, want %q", got, want)
-	}
-}
-
-func TestStoreDBPathExplicitOverride(t *testing.T) {
-	// minimalValidConfig ends with the storage block, so an extra indented key
-	// continues that mapping instead of opening a duplicate storage:.
-	body := minimalValidConfig(t) + "  db_path: /var/lib/runeconsole/store.db\n"
-	path := writeConfig(t, body)
-	cfg, err := LoadConfig(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := cfg.StoreDBPath(), "/var/lib/runeconsole/store.db"; got != want {
-		t.Errorf("StoreDBPath = %q, want %q", got, want)
-	}
-	if err := cfg.Validate(); err != nil {
-		t.Errorf("Validate with storage.db_path: %v", err)
 	}
 }

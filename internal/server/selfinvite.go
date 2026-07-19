@@ -98,10 +98,16 @@ func (s *SelfInviteIssuer) IssueSelfInvite(email, displayName string) (invites.C
 		return invites.ClearBundle{}, InviteConnInfo{}, fmt.Errorf("mark invited: %w", err)
 	}
 
-	conn := s.conn
-	if _, pin, perr := caPEMAndPin(s.console.Config()); perr == nil {
-		conn.CAPemSHA256 = pin
+	// Pin the console CA live from the serving cert. A resolution failure aborts
+	// the issue rather than returning a pinless conn: a registration string with
+	// an empty ca_sha256 fails rune-mcp's bootstrap, so emitting one would only
+	// hand back a token that can never be redeemed.
+	_, pin, perr := caPEMAndPin(s.console.Config())
+	if perr != nil {
+		return invites.ClearBundle{}, InviteConnInfo{}, fmt.Errorf("resolve CA pin: %w", perr)
 	}
+	conn := s.conn
+	conn.CAPemSHA256 = pin
 	return *bundle, conn, nil
 }
 

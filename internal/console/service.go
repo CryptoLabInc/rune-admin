@@ -1,8 +1,8 @@
 // Package console implements the local console BFF: the loopback PKCE auth
 // endpoints against runespace-cloud, a persisted cookie-session store, the
 // origin/cookie middleware, and the HTTP handler that composes them with the
-// embedded SPA, the cookie-gated /api/v1 surface (skeleton), and the admin
-// operations. It binds 127.0.0.1 only and is served by internal/server.
+// embedded SPA and the cookie-gated /api/v1 surface. It binds 127.0.0.1 only
+// and is served by internal/server.
 package console
 
 import (
@@ -13,8 +13,6 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -24,15 +22,12 @@ import (
 )
 
 // Deps are the primitives internal/server and the daemon inject to build the
-// console handler. AdminHandler is mounted (cookie-gated) under /admin/;
-// passing nil omits the admin surface.
+// console handler.
 type Deps struct {
-	Port         int
-	APIBaseURL   string
-	WebBaseURL   string
-	FrontendDir  string // empty => placeholder page (embed wired separately)
-	DB           *sql.DB
-	AdminHandler http.Handler
+	Port       int
+	APIBaseURL string
+	WebBaseURL string
+	DB         *sql.DB
 	// DomainHandler is the /api/v1 domain surface (teams, users, memberships,
 	// invitations) built by internal/server with direct RBAC-store access. It is
 	// mounted origin + session gated, with the /api/v1 prefix stripped and the
@@ -143,7 +138,7 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 	mux := http.NewServeMux()
 
 	// Catch-all: SPA + static assets + deep-link fallback to index.html.
-	mux.Handle("/", s.spaHandler(d.FrontendDir))
+	mux.Handle("/", s.spaHandler())
 
 	// API namespaces must 404 (JSON) rather than fall back to the SPA. The
 	// specific routes below take precedence over these subtree guards.
@@ -196,16 +191,6 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 		mux.Handle("/api/v1/", s.origin(s.requireSession(s.withOperator(http.StripPrefix("/api/v1", d.DomainHandler)))))
 	} else {
 		mux.Handle("/api/v1/", s.origin(s.requireSession(http.HandlerFunc(apiNotImplemented))))
-	}
-
-	// Admin operations (origin + cookie gated), mounted under /admin/. withOperator
-	// tags the request with the authenticated session principal so admin mutations
-	// audit (and grant as) the real operator instead of a client-supplied actor
-	// field — this surface is the highest-power one, so its audit trail must not be
-	// forgeable — and injects the operator's cloud session cookie so the invite
-	// relay can send. Matches the /api/v1 domain mount above.
-	if d.AdminHandler != nil {
-		mux.Handle("/admin/", s.origin(s.requireSession(s.withOperator(http.StripPrefix("/admin", d.AdminHandler)))))
 	}
 
 	return mux, dp, nil
@@ -373,28 +358,13 @@ func (s *Service) requireSession(next http.Handler) http.Handler {
 // embedded build baked into the binary, else a placeholder page (frontend not
 // yet built). All variants fall back to index.html for client-side routes so
 // deep links and refreshes work.
-func (s *Service) spaHandler(dir string) http.Handler {
-	if dir != "" {
-		return diskSPA(dir)
-	}
+func (s *Service) spaHandler() http.Handler {
 	if fsys, ok := spaFS(); ok {
 		return fsSPA(fsys)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = io.WriteString(w, placeholderHTML)
-	})
-}
-
-// diskSPA serves the SPA from a directory (deep-link fallback to index.html).
-func diskSPA(dir string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p := filepath.Join(dir, filepath.Clean("/"+r.URL.Path))
-		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
-			http.ServeFile(w, r, p)
-			return
-		}
-		http.ServeFile(w, r, filepath.Join(dir, "index.html"))
 	})
 }
 

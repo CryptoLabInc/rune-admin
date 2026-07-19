@@ -16,10 +16,8 @@ server:
       cert: /opt/runeconsole/certs/server.pem
       key: /opt/runeconsole/certs/server.key
   console:
-    enabled: true           # loopback HTTP console (auth + SPA + admin); 127.0.0.1 only
+    enabled: true           # loopback HTTP console (auth + SPA); 127.0.0.1 only
     port: 8787
-    frontend_dir: ""        # empty serves the embedded SPA build
-    # db_path defaults into storage.data_dir (console-session.db)
 
 cloud:
   api_base_url: https://api.runespace.click   # runespace-cloud API (server-to-server)
@@ -30,25 +28,18 @@ keys:
   embedding_dim: 1024
 
 runespace:
-  endpoint: https://runespace.example.com
-  api_key: REPLACE_WITH_API_KEY
-  # Alternative: api_key_file: /run/secrets/runespace_api_key
+  # The dial target is provisioned per-login (no static endpoint/api_key).
   insecure: false        # true = plaintext dial (local dev only)
 
 tokens:
   team_secret: REPLACE_WITH_RANDOM_HEX_32
-  # Alternative: team_secret_file: /run/secrets/team_secret
 
 audit:
   mode: file+stdout         # one of: "", file, stdout, file+stdout
   path: /opt/runeconsole/logs/audit.log
 
 storage:
-  # Data directory (required). The unified store database (runeconsole.db),
-  # the console session database (console-session.db) and the invite mail log
-  # all default into it, and the daemon must be able to write here.
+  # Data directory (required). The unified store database (runeconsole.db) and
+  # the console session database (console-session.db) default into it, and the
+  # daemon must be able to write here.
   data_dir: /opt/runeconsole/configs
-  # Optional — move only the store database elsewhere. Whatever you pick must
-  # already exist and be writable by the service user; the systemd unit only
-  # grants write access under /opt/runeconsole (ReadWritePaths).
-  # db_path: /opt/runeconsole/configs/runeconsole.db

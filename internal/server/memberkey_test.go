@@ -1,11 +1,8 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"net/http"
-	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -204,100 +201,6 @@ func TestDataplaneRejectsMemberIDAsTokenIdentity(t *testing.T) {
 	_, err = srv.Insert(ctx, &pb.InsertRequest{Token: tok.Token, RmpItem: []byte{0x01}, MmItem: []byte{0x01}})
 	if status.Code(err) != codes.PermissionDenied {
 		t.Errorf("Insert with member-UUID token identity code = %v, want PermissionDenied", status.Code(err))
-	}
-}
-
-// grantJSON posts to the group grant route and returns the response.
-func grantJSON(t *testing.T, ts *httptest.Server, groupRef, body string) *http.Response {
-	t.Helper()
-	resp, err := http.Post(ts.URL+"/groups/"+groupRef+"/grant", "application/json", bytes.NewReader([]byte(body)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return resp
-}
-
-// TestAdminGrantRevokeResolveEmailToMemberUUID — the admin surface speaks
-// emails; the handler resolves them to member UUIDs. An unregistered email
-// is refused outright (the branch-only invariant: grants exist only for
-// registered members), a registered one lands the membership under the UUID,
-// and revoke resolves the same way.
-func TestAdminGrantRevokeResolveEmailToMemberUUID(t *testing.T) {
-	v := newAdminTestConsole(t)
-	ts, _ := memberAdminServer(t, v)
-	g, err := v.Groups().CreateGroup("eng", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Unregistered email → 404, nothing written.
-	resp := grantJSON(t, ts, g.ID, `{"user":"ghost@corp.com","role":"read","actor":"heeyeon"}`)
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("grant to unregistered email status = %d, want 404", resp.StatusCode)
-	}
-	if ms := v.Groups().ListMemberships(); len(ms) != 0 {
-		t.Fatalf("memberships after refused grant = %+v, want none", ms)
-	}
-
-	// Registered email → 201, membership stored under the member UUID.
-	id := createMember(t, ts, "reg2@corp.com")
-	resp2 := grantJSON(t, ts, g.ID, `{"user":"reg2@corp.com","role":"write","actor":"heeyeon"}`)
-	defer resp2.Body.Close()
-	if resp2.StatusCode != http.StatusCreated {
-		t.Fatalf("grant to registered email status = %d, want 201", resp2.StatusCode)
-	}
-	if scope := v.Groups().RecallScope(id); len(scope) != 1 || scope[0] != g.ID {
-		t.Errorf("RecallScope(%s) = %v, want [%s]", id, scope, g.ID)
-	}
-	if scope := v.Groups().RecallScope("reg2@corp.com"); len(scope) != 0 {
-		t.Errorf("RecallScope(email) = %v, want empty (email must hold no membership)", scope)
-	}
-
-	// Revoke via the same email resolution.
-	respR, err := http.Post(ts.URL+"/groups/"+g.ID+"/revoke", "application/json",
-		bytes.NewReader([]byte(`{"user":"reg2@corp.com","actor":"heeyeon"}`)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer respR.Body.Close()
-	if respR.StatusCode != http.StatusOK {
-		t.Fatalf("revoke status = %d, want 200", respR.StatusCode)
-	}
-	if scope := v.Groups().RecallScope(id); len(scope) != 0 {
-		t.Errorf("RecallScope(%s) after revoke = %v, want empty", id, scope)
-	}
-}
-
-// TestAdminDeleteTokenCascadesToMemberUUIDMemberships — DELETE /tokens/{user}
-// takes the token email, resolves it to the member UUID, and drops the
-// UUID-keyed memberships in the same flow (plan §6-D2 no-drift rule).
-func TestAdminDeleteTokenCascadesToMemberUUIDMemberships(t *testing.T) {
-	v := newAdminTestConsole(t)
-	ts, _ := memberAdminServer(t, v)
-	g, err := v.Groups().CreateGroup("eng", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	id := createMember(t, ts, "del@corp.com")
-	if _, err := v.Groups().Grant(id, g.ID, groups.RoleWrite, "local-admin:test"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := v.Tokens().AddToken("del@corp.com", "member", nil); err != nil {
-		t.Fatal(err)
-	}
-
-	req, _ := http.NewRequest("DELETE", ts.URL+"/tokens/del@corp.com", nil)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("delete token status = %d, want 200", resp.StatusCode)
-	}
-	if scope := v.Groups().RecallScope(id); len(scope) != 0 {
-		t.Errorf("RecallScope(%s) after token delete = %v, want empty (cascade must remove UUID-keyed memberships)", id, scope)
 	}
 }
 

@@ -1,6 +1,6 @@
-// Package server hosts the daemon transports (gRPC, admin UDS), audit log,
-// and runtime configuration. Pure crypto/token logic lives in internal/crypto
-// and internal/tokens respectively.
+// Package server hosts the daemon transports (gRPC data plane + loopback console
+// HTTP), audit log, and runtime configuration. Pure crypto/token logic lives in
+// internal/crypto and internal/tokens respectively.
 package server
 
 import (
@@ -61,27 +61,19 @@ type TLSConfig struct {
 }
 
 // ConsoleConfig configures the local console HTTP listener that hosts the
-// BFF auth endpoints, the embedded SPA, and the cookie-gated admin/API
-// surface. It binds 127.0.0.1 only (loopback OAuth redirect + security
-// invariant); the bind host is not configurable. TLS is never used (plain
-// loopback HTTP). Disabled by default so a headless daemon stays gRPC-only —
-// but note that ALL identity/RBAC bootstrap (the org admin, groups, grants,
-// member invites) is reachable ONLY through this console surface: there is no
-// gRPC admin RPC, no admin unix socket, and no CLI mutation. A console-disabled
-// node therefore cannot establish an org admin (the admin is the first console
-// login) and can only serve a data plane provisioned by a console elsewhere, so
-// this mode is for tests and pre-provisioned replicas — every real config sets
-// enabled: true.
+// BFF auth endpoints, the embedded SPA, and the cookie-gated /api/v1 surface.
+// It binds 127.0.0.1 only (loopback OAuth redirect + security invariant); the
+// bind host is not configurable. TLS is never used (plain loopback HTTP).
+// Disabled by default so a headless daemon stays gRPC-only — but note that ALL
+// identity/RBAC bootstrap (the org admin, groups, grants, member invites) is
+// reachable ONLY through this console surface: there is no gRPC admin RPC, no
+// admin socket, and no CLI mutation. A console-disabled node therefore cannot
+// establish an org admin (the admin is the first console login) and can only
+// serve a data plane provisioned by a console elsewhere, so this mode is for
+// tests and pre-provisioned replicas — every real config sets enabled: true.
 type ConsoleConfig struct {
 	Enabled bool `yaml:"enabled"`
 	Port    int  `yaml:"port"` // default 8787
-	// FrontendDir, when set, serves the SPA from that directory; empty serves
-	// the binary's embedded build.
-	FrontendDir string `yaml:"frontend_dir"`
-	// DBPath is the SQLite file backing the console session store; it holds
-	// the runespace-cloud session token at rest (kept 0600). Defaults into
-	// storage.data_dir.
-	DBPath string `yaml:"db_path"`
 }
 
 // CloudConfig points the BFF at the runespace-cloud control plane: APIBaseURL
@@ -103,9 +95,6 @@ func (c *Config) ConsolePort() int {
 // ConsoleDBPath returns the session-store path, defaulting into the data
 // directory.
 func (c *Config) ConsoleDBPath() string {
-	if c.Server.Console.DBPath != "" {
-		return c.Server.Console.DBPath
-	}
 	return filepath.Join(c.Storage.DataDir, "console-session.db")
 }
 
@@ -114,27 +103,17 @@ type KeysConfig struct {
 	EmbeddingDim int    `yaml:"embedding_dim"`
 }
 
-// RunespaceConfig points the data-plane engine at the runespace it talks to:
-// the gRPC endpoint plus an optional access token (inline api_key or an
-// api_key_file at 0600; if both are set, api_key_file wins and Resolve()
-// materialises it into APIKey). Insecure dials plaintext (local dev only).
-//
-// This is a static endpoint today; the per-user, provisioned runespace
-// connection (session -> bootstrap -> access JWT -> dial) is the pending
-// data-plane layer.
+// RunespaceConfig tunes how the console dials the data-plane runespace. The
+// connection itself is established per-login by the provisioning flow (session
+// -> bootstrap -> access JWT -> dial); the only remaining knob is whether that
+// dial is plaintext.
 type RunespaceConfig struct {
-	Endpoint   string `yaml:"endpoint"`
-	APIKey     string `yaml:"api_key"`
-	APIKeyFile string `yaml:"api_key_file"`
-	Insecure   bool   `yaml:"insecure"` // true = plaintext dial (local dev)
+	Insecure bool `yaml:"insecure"` // true = plaintext dial (local dev only)
 }
 
-// TokensConfig carries the team secret console tokens are minted from,
-// either inline or through a 0640-or-tighter file that Resolve()
-// materialises into TeamSecret.
+// TokensConfig carries the team secret console tokens are minted from.
 type TokensConfig struct {
-	TeamSecret     string `yaml:"team_secret"`
-	TeamSecretFile string `yaml:"team_secret_file"`
+	TeamSecret string `yaml:"team_secret"`
 }
 
 // GroupsConfig configures the group RBAC store: top_k caps default to plan
@@ -159,8 +138,6 @@ type GroupsConfig struct {
 type MembersConfig struct {
 	InviteTTLMinutes int    `yaml:"invite_ttl_minutes"` // default: 1440 = 24h (§8.3 wrap TTL as revised 2026-07-13: console UX policy adopted, residual risk offset by revoke/rotate)
 	ConsoleEndpoint  string `yaml:"console_endpoint"`   // ridden in the invite mail (conn info)
-	CAPemURL         string `yaml:"ca_pem_url"`
-	CAPemSHA256      string `yaml:"ca_pem_sha256"`
 }
 
 // InviteTTL returns the wrap TTL, defaulting to 24 hours when unset — the
@@ -184,27 +161,21 @@ type AuditConfig struct {
 
 // StorageConfig says where the console keeps its state on disk. data_dir is
 // required: it is the directory every runtime artifact defaults into — the
-// unified store database (runeconsole.db), the console session database
-// (console-session.db) and the invite mail log. db_path optionally moves the
-// store database elsewhere; the other artifacts have their own overrides.
+// unified store database (runeconsole.db) and the console session database
+// (console-session.db).
 type StorageConfig struct {
 	DataDir string `yaml:"data_dir"`
-	DBPath  string `yaml:"db_path"`
 }
 
 // StoreDBPath returns the unified store database path, defaulting to
 // runeconsole.db inside the data directory.
 func (c *Config) StoreDBPath() string {
-	if c.Storage.DBPath != "" {
-		return c.Storage.DBPath
-	}
 	return filepath.Join(c.Storage.DataDir, "runeconsole.db")
 }
 
 // LoadConfig resolves the config path (caller override → ConfigLookupPaths)
-// and decodes the YAML at that location. The returned Config has
-// *_file indirection materialised into the corresponding inline fields
-// and Source set to the resolved absolute path.
+// and decodes the YAML at that location. Source is set to the resolved
+// absolute path.
 //
 // Missing config produces an error that names every path probed so the
 // operator can copy the example file into place.
@@ -240,10 +211,6 @@ func LoadConfig(override string) (*Config, error) {
 	if err := checkSecretMode(path, "runeconsole.conf"); err != nil {
 		return nil, err
 	}
-
-	if err := cfg.Resolve(); err != nil {
-		return nil, fmt.Errorf("resolve config %s: %w", path, err)
-	}
 	return &cfg, nil
 }
 
@@ -268,40 +235,6 @@ func resolveConfigPath(override string) (path string, searched []string, err err
 	return "", searched, fmt.Errorf("config file not found (searched: %s)", strings.Join(searched, ", "))
 }
 
-// Resolve materialises *_file indirections into their inline equivalents.
-// Returns an error if any referenced secret file has a permissive mode
-// (anything looser than 0o640). Idempotent.
-func (c *Config) Resolve() error {
-	if c.Runespace.APIKeyFile != "" {
-		val, err := readSecretFile(c.Runespace.APIKeyFile, "runespace.api_key_file")
-		if err != nil {
-			return err
-		}
-		c.Runespace.APIKey = val
-		c.Runespace.APIKeyFile = ""
-	}
-	if c.Tokens.TeamSecretFile != "" {
-		val, err := readSecretFile(c.Tokens.TeamSecretFile, "tokens.team_secret_file")
-		if err != nil {
-			return err
-		}
-		c.Tokens.TeamSecret = val
-		c.Tokens.TeamSecretFile = ""
-	}
-	return nil
-}
-
-func readSecretFile(path, label string) (string, error) {
-	if err := checkSecretMode(path, label); err != nil {
-		return "", err
-	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("read %s %s: %w", label, path, err)
-	}
-	return strings.TrimRight(string(b), "\n"), nil
-}
-
 // checkSecretMode returns an error if the file's mode permits any access
 // beyond owner read/write and group read (i.e., any bit outside 0o640).
 // A missing file is treated as "not our problem" — the caller's subsequent
@@ -323,17 +256,8 @@ func checkSecretMode(path, label string) error {
 // admin endpoints that surface configuration to operators.
 func (c *Config) Redact() Config {
 	out := *c
-	if out.Runespace.APIKey != "" {
-		out.Runespace.APIKey = "[REDACTED]"
-	}
-	if out.Runespace.APIKeyFile != "" {
-		out.Runespace.APIKeyFile = "[REDACTED]"
-	}
 	if out.Tokens.TeamSecret != "" {
 		out.Tokens.TeamSecret = "[REDACTED]"
-	}
-	if out.Tokens.TeamSecretFile != "" {
-		out.Tokens.TeamSecretFile = "[REDACTED]"
 	}
 	return out
 }

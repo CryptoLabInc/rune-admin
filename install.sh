@@ -1131,7 +1131,7 @@ collect_and_write_config() {
       "  path: ${INSTALL_PREFIX}/logs/audit.log" \
       "" \
       "storage:" \
-      "  # runeconsole.db, console-session.db and invite-mail.log live here." \
+      "  # runeconsole.db and console-session.db live here." \
       "  data_dir: ${INSTALL_PREFIX}/configs" \
       > "$conf_file"
     chmod 0640 "$conf_file"
