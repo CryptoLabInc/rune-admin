@@ -449,7 +449,6 @@ dev_csp_render_tfvars() {
     && public_key=$(cat "${INSTALL_DIR_CSP}/ssh_key.pub")
 
   {
-    printf 'tls_mode           = "self-signed"\n'
     printf 'runeconsole_version  = "dev"\n'
     printf 'public_key         = "%s"\n' "$(escape_tf "${public_key}")"
     printf 'region             = "%s"\n' "$(escape_tf "${CSP_REGION}")"

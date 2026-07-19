@@ -42,12 +42,6 @@ locals {
   zone = var.zone != "" ? var.zone : "${var.region}-a"
 }
 
-variable "tls_mode" {
-  description = "TLS mode: self-signed, custom, or none"
-  type        = string
-  default     = "self-signed"
-}
-
 variable "machine_type" {
   description = "Compute Engine machine type"
   type        = string

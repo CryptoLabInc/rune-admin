@@ -38,12 +38,6 @@ variable "team_name" {
   default     = "runeconsole"
 }
 
-variable "tls_mode" {
-  description = "TLS mode: self-signed, custom, or none"
-  type        = string
-  default     = "self-signed"
-}
-
 variable "runeconsole_version" {
   description = "Pinned runeconsole release tag — drives the install.sh URL and binary version on the VM."
   type        = string

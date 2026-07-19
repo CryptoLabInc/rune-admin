@@ -19,8 +19,6 @@
 #                                 optionally remove the install directory.
 #
 # Non-interactive env vars (local install):
-#   RUNECONSOLE_TLS_CERT_PATH          Path to existing TLS cert (skips auto-gen)
-#   RUNECONSOLE_TLS_KEY_PATH           Path to existing TLS key  (skips auto-gen)
 #   RUNECONSOLE_CLOUD_API_BASE_URL     cloud.api_base_url (default: https://api.rune.team)
 #   RUNECONSOLE_CLOUD_WEB_BASE_URL     cloud.web_base_url (default: https://rune.team)
 #
@@ -412,7 +410,6 @@ csp_render_tfvars() {
     && public_key=$(cat "${INSTALL_DIR_CSP}/ssh_key.pub")
 
   {
-    printf 'tls_mode           = "self-signed"\n'
     printf 'runeconsole_version  = "%s"\n' "$(escape_tf "${VERSION}")"
     printf 'public_key         = "%s"\n' "$(escape_tf "${public_key}")"
     printf 'region             = "%s"\n' "$(escape_tf "${CSP_REGION}")"
@@ -762,15 +759,13 @@ preflight() {
 
   [[ "$(id -u)" -eq 0 ]] || die "This installer must be run as root (use sudo)."
 
-  local tools=(curl)
+  # openssl is always needed: the console serves TLS with a self-signed CA
+  # that this installer generates on first run.
+  local tools=(curl openssl)
   if [[ "$OS_SLUG" = linux ]]; then
     tools+=(sha256sum systemctl)
   else
     tools+=(shasum)
-  fi
-  # openssl only needed when auto-generating TLS certs
-  if [[ -z "${RUNECONSOLE_TLS_CERT_PATH:-}" || -z "${RUNECONSOLE_TLS_KEY_PATH:-}" ]]; then
-    tools+=(openssl)
   fi
 
   # Collect missing tools (systemctl is never auto-installable — fail immediately)
@@ -1028,18 +1023,6 @@ setup_system() {
 # ── Phase 5: TLS certificates ──────────────────────────────────────────────────
 generate_tls_certs() {
   local cert_dir="${INSTALL_PREFIX}/certs"
-
-  # BYO cert: copy provided files and skip generation
-  if [[ -n "${RUNECONSOLE_TLS_CERT_PATH:-}" && -n "${RUNECONSOLE_TLS_KEY_PATH:-}" ]]; then
-    cp "${RUNECONSOLE_TLS_CERT_PATH}" "${cert_dir}/server.pem"
-    cp "${RUNECONSOLE_TLS_KEY_PATH}"  "${cert_dir}/server.key"
-    chmod 0644 "${cert_dir}/server.pem"
-    chmod 0600 "${cert_dir}/server.key"
-    [[ "$SKIP_SERVICE" -eq 0 ]] \
-      && chown "$SERVICE_USER" "${cert_dir}/server.pem" "${cert_dir}/server.key"
-    info "Using provided TLS certificates."
-    return 0
-  fi
 
   if [[ -f "${cert_dir}/server.pem" && "$FORCE" -eq 0 ]]; then
     info "TLS certificates already exist (use --force to regenerate)."

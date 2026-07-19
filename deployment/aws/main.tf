@@ -26,12 +26,6 @@ variable "team_name" {
   default     = "runeconsole"
 }
 
-variable "tls_mode" {
-  description = "TLS mode: self-signed or none"
-  type        = string
-  default     = "self-signed"
-}
-
 variable "instance_type" {
   description = "EC2 instance type"
   type        = string
