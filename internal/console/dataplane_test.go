@@ -62,7 +62,7 @@ func mockCloud(t *testing.T, host string) *httptest.Server {
 func TestDataplaneConnectDialsEngineAndPersists(t *testing.T) {
 	ts := mockCloud(t, "rs1.runespace.example")
 	fc := &fakeConnector{}
-	dp, err := newDataplane(openTestDB(t), cloud.New(ts.URL), fc, slog.Default())
+	dp, err := newDataplane(openTestDB(t), cloud.New(ts.URL), fc, slog.Default(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestDataplaneStartReconnectsFromPersistedCred(t *testing.T) {
 
 	// First manager connects and persists the credential.
 	fc1 := &fakeConnector{}
-	dp1, err := newDataplane(db, cloud.New(ts.URL), fc1, slog.Default())
+	dp1, err := newDataplane(db, cloud.New(ts.URL), fc1, slog.Default(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestDataplaneStartReconnectsFromPersistedCred(t *testing.T) {
 
 	// A fresh manager over the same DB reconnects on Start without a session.
 	fc2 := &fakeConnector{}
-	dp2, err := newDataplane(db, cloud.New(ts.URL), fc2, slog.Default())
+	dp2, err := newDataplane(db, cloud.New(ts.URL), fc2, slog.Default(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestDataplaneConnectSwitchesWorkspaceOnChange(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	fc := &fakeConnector{}
-	dp, err := newDataplane(openTestDB(t), cloud.New(ts.URL), fc, slog.Default())
+	dp, err := newDataplane(openTestDB(t), cloud.New(ts.URL), fc, slog.Default(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestDataplaneConnectCreateConflict(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 
-	dp, err := newDataplane(openTestDB(t), cloud.New(ts.URL), &fakeConnector{}, slog.Default())
+	dp, err := newDataplane(openTestDB(t), cloud.New(ts.URL), &fakeConnector{}, slog.Default(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +283,7 @@ func TestDataplaneAuthExpiredLifecycle(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	fc := &fakeConnector{}
-	dp, err := newDataplane(openTestDB(t), cloud.New(ts.URL), fc, slog.Default())
+	dp, err := newDataplane(openTestDB(t), cloud.New(ts.URL), fc, slog.Default(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +342,7 @@ func TestDataplaneConnectRebootstrapsWhenAuthExpired(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	fc := &fakeConnector{}
-	dp, err := newDataplane(openTestDB(t), cloud.New(ts.URL), fc, slog.Default())
+	dp, err := newDataplane(openTestDB(t), cloud.New(ts.URL), fc, slog.Default(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,7 +404,7 @@ func TestDataplaneStaleExchange401DoesNotClobberFreshCred(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 
-	dp, err := newDataplane(openTestDB(t), cloud.New(ts.URL), &fakeConnector{}, slog.Default())
+	dp, err := newDataplane(openTestDB(t), cloud.New(ts.URL), &fakeConnector{}, slog.Default(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -95,6 +95,93 @@ func TestWorkspaceStatusCloudAuthExpired(t *testing.T) {
 	}
 }
 
+// TestWorkspaceStatusOrphaned: when the cloud-held runespace was created under a
+// different team_secret than this console holds (its stored team_hash != the
+// console's fingerprint), GET /api/v1/workspace flags orphaned:true on a 200 so
+// the SPA prompts delete+recreate — the runespace exists and is queryable, so it
+// is a flag, not an error. A matching fingerprint (or an unconfigured one on this
+// console) carries no orphaned flag.
+func TestWorkspaceStatusOrphaned(t *testing.T) {
+	cloudWith := func(teamHash string) *httptest.Server {
+		mux := http.NewServeMux()
+		mux.HandleFunc("GET /api/v1/runespace", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id": "rs_1", "host": "rs1.runespace.example", "phase": "ready",
+				"tier": "free", "team_hash": teamHash,
+			})
+		})
+		ts := httptest.NewServer(mux)
+		t.Cleanup(ts.Close)
+		return ts
+	}
+	build := func(t *testing.T, cloudURL, consoleTeamHash string) (http.Handler, *http.Cookie) {
+		t.Helper()
+		db := openTestDB(t)
+		h, dp, err := NewHandler(Deps{
+			Port: 8787, APIBaseURL: cloudURL, WebBaseURL: cloudURL,
+			DB: db, Connector: &fakeConnector{}, TeamHash: consoleTeamHash,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(dp.Stop)
+		sessions, err := newSessionStore(db, slog.Default())
+		if err != nil {
+			t.Fatal(err)
+		}
+		sess, err := sessions.create("cloud-session-token", "rc_cloud", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h, &http.Cookie{Name: cookieName, Value: sess.ID}
+	}
+	statusView := func(t *testing.T, h http.Handler, cookie *http.Cookie) (int, map[string]any) {
+		t.Helper()
+		req := httptest.NewRequest("GET", "/api/v1/workspace", nil)
+		req.AddCookie(cookie)
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		var view map[string]any
+		if err := json.Unmarshal(rr.Body.Bytes(), &view); err != nil {
+			t.Fatalf("workspace body is not JSON: %v (%s)", err, rr.Body.String())
+		}
+		return rr.Code, view
+	}
+
+	t.Run("mismatch flags orphaned", func(t *testing.T) {
+		h, cookie := build(t, cloudWith("OLD_FINGERPRINT").URL, "NEW_FINGERPRINT")
+		code, view := statusView(t, h, cookie)
+		if code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", code)
+		}
+		if view["orphaned"] != true {
+			t.Errorf("orphaned = %v, want true (%v)", view["orphaned"], view)
+		}
+	})
+
+	t.Run("match carries no orphaned flag", func(t *testing.T) {
+		h, cookie := build(t, cloudWith("SAME_FINGERPRINT").URL, "SAME_FINGERPRINT")
+		code, view := statusView(t, h, cookie)
+		if code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", code)
+		}
+		if _, ok := view["orphaned"]; ok {
+			t.Errorf("orphaned present on a matching workspace: %v", view)
+		}
+	})
+
+	t.Run("unconfigured console team hash never orphans", func(t *testing.T) {
+		h, cookie := build(t, cloudWith("OLD_FINGERPRINT").URL, "")
+		code, view := statusView(t, h, cookie)
+		if code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", code)
+		}
+		if _, ok := view["orphaned"]; ok {
+			t.Errorf("orphaned present with an unconfigured console team hash: %v", view)
+		}
+	})
+}
+
 // TestWorkspaceConnectAlreadyExists: a connect whose create races an existing
 // runespace (GET says none, POST hits the cloud's 409 "already exists") must
 // surface the doc's 409 WORKSPACE_ALREADY_EXISTS — not WORKSPACE_INVALID_PHASE,

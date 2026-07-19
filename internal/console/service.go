@@ -42,6 +42,12 @@ type Deps struct {
 	// Inviter issues a self-invite (registration string) for the connection
 	// test; nil omits the POST /api/v1/invite route.
 	Inviter InviteIssuer
+	// TeamHash is this console's team_secret fingerprint (crypto.TeamHash of the
+	// configured team_secret). It is sent with a workspace create so the cloud
+	// records which install owns the runespace, and compared on status so a
+	// reinstalled console (whose team_secret — and thus fingerprint — changed) can
+	// detect that the cloud-held runespace is orphaned. Empty disables both.
+	TeamHash string
 	// OwnerRegistrar, when set, runs whenever the console owner is established:
 	// once at handler construction when the console is already claimed (a
 	// restarted daemon must re-derive the owner's org-admin authority without
@@ -63,6 +69,7 @@ type Service struct {
 	owner         *ownerStore
 	logins        *loginStore
 	dp            *Dataplane                            // nil when no connector is wired
+	teamHash      string                                // team_secret fingerprint for orphan detection ("" disables)
 	engineReady   func() bool                           // reports data-plane engine connection status
 	inviter       InviteIssuer                          // nil when self-invite issuance is not wired
 	registerOwner func(email, displayName string) error // ensure the owner has a member row (idempotent); nil when unwired
@@ -100,6 +107,7 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 		sessions:      sessions,
 		owner:         owner,
 		logins:        newLoginStore(),
+		teamHash:      d.TeamHash,
 		engineReady:   func() bool { return false },
 		inviter:       d.Inviter,
 		registerOwner: d.OwnerRegistrar,
@@ -125,7 +133,7 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 
 	var dp *Dataplane
 	if d.Connector != nil {
-		dp, err = newDataplane(d.DB, s.cloud, d.Connector, log)
+		dp, err = newDataplane(d.DB, s.cloud, d.Connector, log, d.TeamHash)
 		if err != nil {
 			return nil, nil, err
 		}

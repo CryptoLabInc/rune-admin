@@ -197,6 +197,10 @@ func runDaemonStart(ctx context.Context) error {
 			DB:            sessDB,
 			DomainHandler: domainHandler,
 			Connector:     v, // *server.Console: dials the runespace + attaches the engine
+			// team_secret fingerprint: sent with a workspace create and compared on
+			// status so a reinstalled console (fresh team_secret) can detect that the
+			// cloud-held runespace is orphaned.
+			TeamHash: crypto.TeamHash(cfg.Tokens.TeamSecret),
 			Inviter:       selfInviter,
 			OwnerRegistrar: func(email, displayName string) error {
 				// The console owner IS the single org admin (identity

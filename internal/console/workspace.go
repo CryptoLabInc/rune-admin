@@ -66,6 +66,21 @@ func (s *Service) handleWorkspaceStatus(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusNotFound, "WORKSPACE_NOT_FOUND", "no runespace yet")
 		return
 	}
+	if s.orphaned(ws) {
+		// The cloud-held runespace was created under a different team_secret than
+		// this console now holds — a reinstall mints a fresh secret, so the stored
+		// data is encrypted under a key we no longer have and the runespace cannot
+		// be adopted, only deleted and recreated. It still exists and is queryable,
+		// so surface it as a flag on the 200 view (not an error) for the SPA to
+		// prompt "delete & recreate?". This outranks the reconnect-oriented
+		// CLOUD_AUTH_EXPIRED badge below: recreating supersedes reconnecting, and a
+		// reinstall often has no persisted credential to expire in the first place.
+		// Not logged — the SPA polls this every few seconds.
+		view := workspaceView(ws)
+		view["orphaned"] = true
+		writeJSON(w, http.StatusOK, view)
+		return
+	}
 	if s.dp.AuthExpired() {
 		// The cloud rejected the data-plane refresh credential and background
 		// reconnects have no session to re-bootstrap with — retrying is
@@ -125,6 +140,17 @@ func workspaceView(ws *cloud.Workspace) map[string]any {
 		"endpointUrl": endpointURL,
 		"rows":        rows,
 	}
+}
+
+// orphaned reports whether the cloud-held runespace belongs to a different
+// team_secret than this console currently holds. Both fingerprints must be
+// present to compare: an unconfigured team_secret (s.teamHash == "") or a
+// runespace the cloud recorded no fingerprint for (ws.TeamHash == "") yields no
+// orphan signal — there is nothing to contradict a match. A reinstall mints a
+// fresh team_secret (changing s.teamHash) while the cloud keeps the fingerprint
+// recorded at create time, so the two diverge and this reports true.
+func (s *Service) orphaned(ws *cloud.Workspace) bool {
+	return s.teamHash != "" && ws.TeamHash != "" && ws.TeamHash != s.teamHash
 }
 
 // writeWorkspaceTransient responds to an async stop/start/delete with 202 and

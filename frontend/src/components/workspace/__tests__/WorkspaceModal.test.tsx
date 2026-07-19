@@ -12,6 +12,7 @@ let queryState: { data: TWorkspace | null | undefined; isError: boolean };
 let stopState: { isPending: boolean; isError: boolean };
 let startState: { isPending: boolean; isError: boolean };
 let deleteState: { isPending: boolean; isError: boolean };
+let recreateState: { isPending: boolean; isError: boolean };
 const mutate = vi.fn();
 
 vi.mock("@/hooks/queries/useWorkspaceQuery", () => ({
@@ -23,6 +24,7 @@ vi.mock("@/hooks/mutations/useWorkspaceMutations", () => ({
   useStopWorkspaceMutation: () => ({ ...stopState, mutate }),
   useStartWorkspaceMutation: () => ({ ...startState, mutate }),
   useDeleteWorkspaceMutation: () => ({ ...deleteState, mutate }),
+  useRecreateWorkspaceMutation: () => ({ ...recreateState, mutate }),
   useCreateWorkspaceMutation: () => ({
     isPending: false,
     isError: false,
@@ -35,6 +37,7 @@ const RUNNING: TWorkspace = {
   status: "running",
   endpoint: "https://a1b2c3d4.rune.example.com",
   rowCount: 12431,
+  orphaned: false,
 };
 
 const setStatus = (status: TStorageStatus) => {
@@ -46,6 +49,7 @@ beforeEach(() => {
   stopState = { isPending: false, isError: false };
   startState = { isPending: false, isError: false };
   deleteState = { isPending: false, isError: false };
+  recreateState = { isPending: false, isError: false };
   useWorkspaceStore.setState({ modalOpen: true, deleteConfirmOpen: false });
   document.body.innerHTML = "";
 });
@@ -109,6 +113,55 @@ describe("WorkspaceModal", () => {
       screen.getByText("워크스페이스 삭제에 실패했습니다. 다시 시도해 주세요."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: BTN_TEXT.delete })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: BTN_TEXT.close }),
+    ).toBeInTheDocument();
+  });
+
+  it("orphaned workspace shows the 재생성 prompt instead of the detail body", () => {
+    queryState = { data: { ...RUNNING, orphaned: true }, isError: false };
+    render(<WorkspaceModal />);
+    expect(
+      screen.getByText(/콘솔이 재설치되어 이 워크스페이스와 연결할 수 없습니다/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: BTN_TEXT.recreate }),
+    ).toBeEnabled();
+    // The normal lifecycle actions are gone — an orphaned workspace is unusable.
+    expect(screen.queryByRole("button", { name: BTN_TEXT.stop })).toBeNull();
+  });
+
+  it("recreate in flight shows the 재생성 중 body with no action buttons", () => {
+    queryState = { data: { ...RUNNING, orphaned: true }, isError: false };
+    recreateState = { isPending: true, isError: false };
+    render(<WorkspaceModal />);
+    expect(
+      screen.getByText(/워크스페이스를 재생성하는 중입니다/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: BTN_TEXT.recreate })).toBeNull();
+  });
+
+  it("keeps the 재생성 중 body even after the workspace 404s mid-teardown", () => {
+    // Recreate deletes then creates; between the two the workspace vanishes
+    // (query → null, orphaned flag gone). The pending body must survive that.
+    queryState = { data: null, isError: false };
+    recreateState = { isPending: true, isError: false };
+    render(<WorkspaceModal />);
+    expect(
+      screen.getByText(/워크스페이스를 재생성하는 중입니다/),
+    ).toBeInTheDocument();
+  });
+
+  it("recreate failure swaps to the fail copy with only [닫기]", () => {
+    queryState = { data: { ...RUNNING, orphaned: true }, isError: false };
+    recreateState = { isPending: false, isError: true };
+    render(<WorkspaceModal />);
+    expect(
+      screen.getByText("워크스페이스 재생성에 실패했습니다. 다시 시도해 주세요."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: BTN_TEXT.recreate }),
+    ).toBeNull();
     expect(
       screen.getByRole("button", { name: BTN_TEXT.close }),
     ).toBeInTheDocument();

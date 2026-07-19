@@ -4,6 +4,7 @@ import StorageStatus from "@/components/elements/StorageStatus";
 import ModalLayout from "@/components/layout/ModalLayout";
 import {
   useDeleteWorkspaceMutation,
+  useRecreateWorkspaceMutation,
   useStartWorkspaceMutation,
   useStopWorkspaceMutation,
 } from "@/hooks/mutations/useWorkspaceMutations";
@@ -44,6 +45,7 @@ const WorkspaceModal = () => {
   const stopMutation = useStopWorkspaceMutation();
   const startMutation = useStartWorkspaceMutation();
   const deleteMutation = useDeleteWorkspaceMutation();
+  const recreateMutation = useRecreateWorkspaceMutation();
 
   const status = workspace?.status ?? "error";
   /* Transitional phases (+ any request in flight) lock the actions. */
@@ -57,6 +59,33 @@ const WorkspaceModal = () => {
       handleClick={closeModal}
     />
   );
+
+  /* Recreate (orphan remediation) in flight or failed. Checked before the live
+     query is read: recreate deletes then creates, so mid-flight the workspace
+     404s (→ query null) and the orphaned flag drops — this keeps the 재생성 중 /
+     실패 body on screen regardless. Mount is fresh per open, so a failure clears
+     on reopen. */
+  if (recreateMutation.isPending) {
+    return (
+      <ModalLayout title={MODAL_TITLES.workspaceOrphaned} isOpen>
+        <p className="text-center text-base">
+          워크스페이스를 재생성하는 중입니다…
+          <br />
+          생성까지 약 3~5분 정도 소요됩니다.
+        </p>
+      </ModalLayout>
+    );
+  }
+  if (recreateMutation.isError) {
+    return (
+      <ModalLayout title={MODAL_TITLES.workspaceOrphaned} isOpen>
+        <p className="text-negative text-center text-base">
+          워크스페이스 재생성에 실패했습니다. 다시 시도해 주세요.
+        </p>
+        {closeButton}
+      </ModalLayout>
+    );
+  }
 
   /* D-1 / D-1 실패 — the 삭제 confirm dialog (replaces the detail body). */
   if (deleteConfirmOpen) {
@@ -91,6 +120,41 @@ const WorkspaceModal = () => {
             disabled={deleteMutation.isPending}
             handleClick={() =>
               deleteMutation.mutate(undefined, { onSuccess: closeModal })
+            }
+          />
+        </div>
+      </ModalLayout>
+    );
+  }
+
+  /* Orphaned — the cloud-held workspace no longer matches this console (a
+     reinstall minted a fresh team_secret), so its stored data is encrypted under
+     a key we no longer have. It cannot be adopted, only deleted + recreated.
+     Derived from the query data (like D-2), not a store flag. Takes precedence
+     over the detail body: an orphaned workspace is not usable. */
+  if (workspace?.orphaned) {
+    return (
+      <ModalLayout title={MODAL_TITLES.workspaceOrphaned} isOpen>
+        <p className="text-center text-base">
+          콘솔이 재설치되어 이 워크스페이스와 연결할 수 없습니다.
+          <br />
+          기존에 저장된 기억(memory)은 이전 보안 키로 암호화되어 복구할 수 없습니다.
+          <br />
+          삭제 후 재생성하면 빈 워크스페이스로 다시 시작합니다.
+        </p>
+        <div className="flex w-full gap-2">
+          <Button
+            btnText={BTN_TEXT.close}
+            btnSize="md"
+            btnColor="grayOutline"
+            handleClick={closeModal}
+          />
+          <Button
+            btnText={BTN_TEXT.recreate}
+            btnSize="md"
+            btnColor="redFilled"
+            handleClick={() =>
+              recreateMutation.mutate(undefined, { onSuccess: closeModal })
             }
           />
         </div>

@@ -59,6 +59,22 @@ func AgentIDFromToken(token string) string {
 	return hex.EncodeToString(sum[:])[:32]
 }
 
+// TeamHash returns a stable public fingerprint of the team-wide secret: the hex
+// SHA-256 of team_secret. It is safe to store and transmit — team_secret has
+// 256 bits of entropy, so the digest is not a practical preimage target — and
+// lets a peer (the cloud) recognize whether a later console install still holds
+// the same team_secret without ever seeing it. A reinstall mints a fresh
+// team_secret, so its fingerprint changes; that mismatch is what marks a
+// cloud-held runespace as orphaned. Returns "" for an empty secret (no
+// fingerprint to compare).
+func TeamHash(teamSecret string) string {
+	if teamSecret == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(teamSecret))
+	return hex.EncodeToString(sum[:])
+}
+
 // EncryptMetadata produces a base64-encoded AES-256-CTR ciphertext with a
 // random 16-byte IV prefixed to the ciphertext.
 func EncryptMetadata(plaintext, key []byte) (string, error) {

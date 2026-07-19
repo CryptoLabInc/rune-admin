@@ -66,7 +66,16 @@ const Navbar = () => {
           >
             <span className="text-foreground font-mono text-sm">Workspace</span>
             {workspace ? (
-              <StorageStatus status={workspace.status} />
+              workspace.orphaned ? (
+                /* Reinstall detected: the workspace no longer matches this
+                   console. Flag it so the badge doesn't read as healthy;
+                   clicking opens the modal's 재생성 prompt. */
+                <span className="border-negative text-negative rounded border px-2 py-1 text-xs">
+                  재생성 필요
+                </span>
+              ) : (
+                <StorageStatus status={workspace.status} />
+              )
             ) : workspace === null ? (
               <button
                 type="button"

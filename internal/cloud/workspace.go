@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 )
 
@@ -14,14 +15,28 @@ type Workspace struct {
 	Tier  string `json:"tier"`
 	Phase string `json:"phase"`
 	Rows  int    `json:"rows,omitempty"`
+	// TeamHash is the team_secret fingerprint the cloud recorded at create time
+	// (empty when none was stored). The console compares it against its current
+	// team_secret hash to detect an orphaned runespace after a reinstall.
+	TeamHash string `json:"team_hash,omitempty"`
 }
 
-// CreateWorkspace provisions the caller's (1:1) runespace. It sends no body: the
-// cloud mints a random id server-side. A repeat returns the cloud's 409 as an error.
-func (c *Client) CreateWorkspace(ctx context.Context, sessionCookie string) (*Workspace, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/api/v1/runespace", nil)
+// CreateWorkspace provisions the caller's (1:1) runespace. The cloud mints a
+// random id server-side; the only body is the console's team_secret fingerprint,
+// stored so a later reinstall can detect the mismatch. An empty teamHash sends an
+// empty body (records no fingerprint). A repeat returns the cloud's 409 as an error.
+func (c *Client) CreateWorkspace(ctx context.Context, sessionCookie, teamHash string) (*Workspace, error) {
+	var body io.Reader
+	if teamHash != "" {
+		payload, _ := json.Marshal(map[string]string{"team_secret_hash": teamHash})
+		body = bytes.NewReader(payload)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/api/v1/runespace", body)
 	if err != nil {
 		return nil, err
+	}
+	if teamHash != "" {
+		req.Header.Set("Content-Type", "application/json")
 	}
 	var out Workspace
 	if err := c.do(req, sessionCookie, &out); err != nil {

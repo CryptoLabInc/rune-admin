@@ -63,6 +63,11 @@ type Dataplane struct {
 	db        *sql.DB
 	log       *slog.Logger
 
+	// teamHash is this console's team_secret fingerprint, sent with a workspace
+	// create so the cloud records which install owns the runespace. Empty when no
+	// team_secret is configured (no fingerprint to send). See crypto.TeamHash.
+	teamHash string
+
 	mu     sync.Mutex
 	base   context.Context    // refresh-loop parent (daemon lifetime)
 	cancel context.CancelFunc // stops the current refresh loop
@@ -98,11 +103,11 @@ CREATE TABLE IF NOT EXISTS dataplane_credential (
   created_at    TEXT NOT NULL
 );`
 
-func newDataplane(db *sql.DB, cl *cloud.Client, conn DataplaneConnector, log *slog.Logger) (*Dataplane, error) {
+func newDataplane(db *sql.DB, cl *cloud.Client, conn DataplaneConnector, log *slog.Logger, teamHash string) (*Dataplane, error) {
 	if _, err := db.Exec(dataplaneSchema); err != nil {
 		return nil, err
 	}
-	return &Dataplane{cloud: cl, connector: conn, db: db, log: log, base: context.Background()}, nil
+	return &Dataplane{cloud: cl, connector: conn, db: db, log: log, teamHash: teamHash, base: context.Background()}, nil
 }
 
 // Start sets the refresh loop's parent context (the daemon lifetime) and, if a
@@ -136,7 +141,7 @@ func (d *Dataplane) Connect(ctx context.Context, sessionCookie string) (*cloud.W
 		return nil, err
 	}
 	if ws == nil {
-		if ws, err = d.cloud.CreateWorkspace(ctx, sessionCookie); err != nil {
+		if ws, err = d.cloud.CreateWorkspace(ctx, sessionCookie, d.teamHash); err != nil {
 			var ae *cloud.APIError
 			if errors.As(err, &ae) && ae.Status == http.StatusConflict {
 				// GetWorkspace saw nothing but the create hit the cloud's 409:

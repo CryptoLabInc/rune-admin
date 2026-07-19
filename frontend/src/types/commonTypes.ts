@@ -40,6 +40,13 @@ export type TWorkspace = {
   status: TStorageStatus;
   endpoint: string | null;
   rowCount: number | null;
+  /**
+   * The workspace exists in the cloud but was created by a different console
+   * install than this one (a reinstall minted a fresh team_secret), so its
+   * stored data is encrypted under a key we no longer hold and it can only be
+   * deleted + recreated. Absent/false on a healthy workspace.
+   */
+  orphaned: boolean;
 };
 
 /** Wire shape of `GET /workspace` (console API design 2026-07-13, §Workspace). */
@@ -47,6 +54,8 @@ export type TWorkspaceWire = {
   phase: TStorageStatus;
   endpointUrl: string | null;
   rows: number | null;
+  /** true when the workspace no longer matches this console (reinstall). */
+  orphaned?: boolean;
 };
 
 /** Recursive team-tree node (UIKIT AdminTeamNode, wireframe SC-06). */
