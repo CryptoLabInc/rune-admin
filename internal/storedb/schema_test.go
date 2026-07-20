@@ -74,46 +74,45 @@ func TestEnsureSchemaIdempotent(t *testing.T) {
 	}
 }
 
-// baselineRow reads the single schema_migrations row.
-func baselineRow(t *testing.T, database *sql.DB) (version int, appliedAt, description string) {
+// ledgerRow reads the single schema_migrations row.
+func ledgerRow(t *testing.T, database *sql.DB) (version int, appliedAt, description string) {
 	t.Helper()
 	if err := database.QueryRow(
 		`SELECT version, applied_at, description FROM schema_migrations`,
 	).Scan(&version, &appliedAt, &description); err != nil {
-		t.Fatalf("read baseline row: %v", err)
+		t.Fatalf("read ledger row: %v", err)
 	}
 	return version, appliedAt, description
 }
 
-// TestEnsureSchemaStampsBaselineOnce pins the schema_migrations baseline: a
-// freshly ensured database records exactly one row for SchemaVersion, and a
-// second boot neither duplicates nor rewrites it. Without the stamp a fresh
-// install would leave the ledger empty, so the first real migration runner
-// would read "no rows" instead of a recorded starting version.
-func TestEnsureSchemaStampsBaselineOnce(t *testing.T) {
+// TestEnsureSchemaRecordsMigrationOnce pins the runner's ledger bookkeeping: a
+// freshly ensured database records exactly one row for the one migration (001),
+// and a second boot finds nothing pending — it neither duplicates nor rewrites
+// that row.
+func TestEnsureSchemaRecordsMigrationOnce(t *testing.T) {
 	database := ensureTestSchema(t)
 
 	if n := countRows(t, database, "schema_migrations"); n != 1 {
-		t.Fatalf("schema_migrations rows = %d, want exactly 1 baseline row", n)
+		t.Fatalf("schema_migrations rows = %d, want exactly 1 (the applied migration)", n)
 	}
-	version, appliedAt, description := baselineRow(t, database)
-	if version != SchemaVersion {
-		t.Errorf("baseline version = %d, want %d", version, SchemaVersion)
+	version, appliedAt, description := ledgerRow(t, database)
+	if version != 1 {
+		t.Errorf("recorded version = %d, want 1", version)
 	}
-	if description != schemaBaselineDescription {
-		t.Errorf("baseline description = %q, want %q", description, schemaBaselineDescription)
+	if description != "init" {
+		t.Errorf("recorded description = %q, want %q (the migration label)", description, "init")
 	}
 	if _, err := time.Parse(TimeFormat, appliedAt); err != nil {
-		t.Errorf("baseline applied_at %q is not canonical TimeFormat: %v", appliedAt, err)
+		t.Errorf("applied_at %q is not canonical TimeFormat: %v", appliedAt, err)
 	}
 
-	// Re-stamping must be a no-op, not an upsert. Two EnsureSchema calls can
-	// land in the same millisecond, which would make a plain before/after
-	// applied_at comparison vacuous — so park a sentinel that any DO UPDATE
-	// would visibly overwrite.
+	// A re-applied migration would be an INSERT (duplicate or rewrite). Two
+	// EnsureSchema calls can land in the same millisecond, which would make a
+	// plain before/after applied_at comparison vacuous — so park a sentinel
+	// that any re-record would visibly overwrite.
 	const sentinel = "2000-01-01T00:00:00.000Z"
 	if _, err := database.Exec(
-		`UPDATE schema_migrations SET applied_at = ? WHERE version = ?`, sentinel, SchemaVersion); err != nil {
+		`UPDATE schema_migrations SET applied_at = ? WHERE version = 1`, sentinel); err != nil {
 		t.Fatal(err)
 	}
 	if err := EnsureSchema(database); err != nil {
@@ -123,48 +122,37 @@ func TestEnsureSchemaStampsBaselineOnce(t *testing.T) {
 	if n := countRows(t, database, "schema_migrations"); n != 1 {
 		t.Errorf("schema_migrations rows after second EnsureSchema = %d, want 1", n)
 	}
-	version2, appliedAt2, description2 := baselineRow(t, database)
-	if appliedAt2 != sentinel {
-		t.Errorf("applied_at = %q, want the untouched %q — second EnsureSchema rewrote the baseline",
+	if _, appliedAt2, _ := ledgerRow(t, database); appliedAt2 != sentinel {
+		t.Errorf("applied_at = %q, want the untouched %q — the runner re-recorded an applied migration",
 			appliedAt2, sentinel)
-	}
-	if version2 != version || description2 != description {
-		t.Errorf("baseline changed: (%d, %q) -> (%d, %q)", version, description, version2, description2)
 	}
 }
 
-// TestEnsureSchemaSkipsBaselineOnNonEmptyLedger pins the reason the stamp is
-// guarded on the ledger being empty rather than on its own version. A
-// baseline records which version an install STARTED at, so the moment the
-// ledger carries anything the stamp must add nothing. The state that makes
-// this matter is a future SchemaVersion bump meeting a database that started
-// earlier: guarding on version would insert a fresh "baseline" for the NEW
-// version onto an un-migrated database, which is exactly the lie the
-// migration runner this row exists to serve would act on.
-func TestEnsureSchemaSkipsBaselineOnNonEmptyLedger(t *testing.T) {
-	database := ensureTestSchema(t)
+// TestEnsureSchemaLeavesAppliedRowUntouched models an install shipped before
+// this runner existed: its schema_migrations already carries a version=1 row
+// whose description is the old schema-baseline text rather than a migration
+// label. The runner must read version 1 as applied and leave the row
+// byte-for-byte — never re-run 001 nor restamp it. This is the whole reason
+// 001's version matches the baseline it replaces.
+func TestEnsureSchemaLeavesAppliedRowUntouched(t *testing.T) {
+	database := ensureTestSchema(t) // installs 001, records version 1
 
-	// Stand in for a ledger written by some other version of this package:
-	// clear the baseline this boot wrote and record a different version.
-	if _, err := database.Exec(`DELETE FROM schema_migrations`); err != nil {
-		t.Fatal(err)
-	}
-	const otherVersion = SchemaVersion + 1
+	const oldBaseline = "initial schema baseline (not an applied migration)"
 	if _, err := database.Exec(
-		`INSERT INTO schema_migrations (version, applied_at, description) VALUES (?, ?, ?)`,
-		otherVersion, "2030-01-01T00:00:00.000Z", "some later migration"); err != nil {
+		`UPDATE schema_migrations SET description = ? WHERE version = 1`, oldBaseline); err != nil {
 		t.Fatal(err)
 	}
 
 	if err := EnsureSchema(database); err != nil {
-		t.Fatalf("EnsureSchema over an existing ledger: %v", err)
+		t.Fatalf("EnsureSchema over an applied ledger: %v", err)
 	}
 
 	if n := countRows(t, database, "schema_migrations"); n != 1 {
-		t.Fatalf("schema_migrations rows = %d, want 1 — a non-empty ledger must not gain a baseline", n)
+		t.Fatalf("schema_migrations rows = %d, want 1 — an applied version must not be re-recorded", n)
 	}
-	if version, _, _ := baselineRow(t, database); version != otherVersion {
-		t.Errorf("ledger version = %d, want the pre-existing %d", version, otherVersion)
+	if _, _, description := ledgerRow(t, database); description != oldBaseline {
+		t.Errorf("description = %q, want the untouched %q — the runner restamped an applied version",
+			description, oldBaseline)
 	}
 }
 

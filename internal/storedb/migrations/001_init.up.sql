@@ -1,46 +1,3 @@
-// Package storedb owns the unified store database (runeconsole.db): the
-// schema v1 DDL and the idempotent schema bootstrap. It is deliberately a
-// LEAF package (imports no store packages) so every store package, and its
-// own tests, can depend on the schema without an import cycle. The schema
-// carries the branch-decision amendments (invite status 'revoked', relaxed
-// groups.id check, persisted tokens.last_used).
-package storedb
-
-import (
-	"database/sql"
-	"fmt"
-	"time"
-)
-
-// SchemaVersion is the schema version this package installs and EnsureSchema
-// stamps into schema_migrations as the baseline.
-const SchemaVersion = 1
-
-// schemaBaselineDescription is the description stamped alongside
-// SchemaVersion. It names the row for what it is: the version a fresh install
-// STARTS at, not a migration that ran.
-const schemaBaselineDescription = "initial schema baseline (not an applied migration)"
-
-// SchemaV1 is the complete schema v1 DDL. Every statement is idempotent
-// (IF NOT EXISTS) so EnsureSchema can run on every boot. All timestamps are
-// TEXT in the canonical form TimeFormat (RFC3339 UTC, fixed three-digit
-// milliseconds) unless noted; the fixed width is what keeps lexicographic
-// order == time order (see TimeFormat).
-const SchemaV1 = `
-CREATE TABLE IF NOT EXISTS schema_migrations (
-  version     INTEGER PRIMARY KEY,
-  applied_at  TEXT NOT NULL,
-  description TEXT NOT NULL
-);
--- EnsureSchema stamps the one baseline row (SchemaVersion,
--- schemaBaselineDescription) here right after installing this DDL, but ONLY
--- while this table is empty: the baseline records which version an install
--- STARTED at, so a ledger that already carries a row -- a baseline, or later
--- an applied migration -- must never gain a second one. A fresh install
--- therefore starts from a RECORDED version and the first real migration
--- runner reads a baseline instead of an empty ledger it would have to guess
--- about. Nothing else writes this table — there is no migration to apply yet.
-
 -- members (internal/members/types.go). CreatedAt byte-exact round-trip is
 -- test-pinned (store_test.go) => TEXT, never epoch. disabled_from is NULL
 -- unless the member is disabled (the CHECK below); Go maps NULL to the
@@ -103,8 +60,7 @@ CREATE INDEX IF NOT EXISTS idx_invites_history_order
 -- so it is the only unbounded scan in the system. This partial index keeps
 -- the sweep a near-empty range search regardless of history size (measured:
 -- 5.2ms scan -> 0.007ms at 100k rows); it holds only pending rows, and the
--- sweep itself evicts entries as they flip to expired. EnsureSchema re-runs
--- the DDL each boot, so existing databases pick it up without a migration.
+-- sweep itself evicts entries as they flip to expired.
 CREATE INDEX IF NOT EXISTS idx_invites_pending_expiry
   ON invites (expires_at) WHERE status = 'pending';
 
@@ -201,34 +157,3 @@ CREATE TABLE IF NOT EXISTS read_exclusions (
   PRIMARY KEY (user, group_id)
 );
 CREATE INDEX IF NOT EXISTS idx_read_exclusions_group ON read_exclusions (group_id);
-`
-
-// EnsureSchema installs schema v1 into database and, while the migration
-// ledger is still empty, records the SchemaVersion baseline in
-// schema_migrations. Every DDL statement uses IF NOT EXISTS, and the stamp is
-// guarded on the ledger being EMPTY rather than on its own version — that
-// distinction is the whole point. A baseline states which version an install
-// STARTED at, so once any row exists (a baseline, or later an applied
-// migration) another must never be added. Guarding on version instead would,
-// after a SchemaVersion bump, stamp a brand-new "baseline" onto a database
-// that started at v1 and still needed migrating, telling the migration runner
-// this row exists to serve that it had nothing to do.
-//
-// Re-running is harmless but not free: the DDL and the guarded INSERT both
-// execute, so the database must be writable. The two steps share no
-// transaction — a crash between them leaves the next boot to finish the job.
-func EnsureSchema(database *sql.DB) error {
-	if _, err := database.Exec(SchemaV1); err != nil {
-		return fmt.Errorf("storedb: ensure schema: %w", err)
-	}
-	// The baseline is what a future migration runner reads to learn which
-	// version an install started at; without it a fresh database would hand
-	// that runner an empty ledger, indistinguishable from "version unknown".
-	if _, err := database.Exec(
-		`INSERT INTO schema_migrations (version, applied_at, description)
-		 SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM schema_migrations)`,
-		SchemaVersion, FormatTime(time.Now()), schemaBaselineDescription); err != nil {
-		return fmt.Errorf("storedb: stamp schema baseline: %w", err)
-	}
-	return nil
-}
