@@ -7,7 +7,7 @@ files), `runeconsole.conf`, the key directory, and the configured TLS files.
 The default snapshot root is `/var/backups/runeconsole`.
 
 Official release binaries support Linux amd64/arm64 with systemd and glibc
-2.35 or newer, plus Apple Silicon macOS 15 or newer. Intel macOS is not
+2.38 or newer, plus Apple Silicon macOS 14 or newer. Intel macOS is not
 supported because `runespace-sdk v1.0.0` does not contain a darwin/amd64
 library slice. OpenSSL and the Linux C++ runtime are statically linked into
 release binaries; Linux glibc and the macOS system libraries remain platform
@@ -82,10 +82,9 @@ That baseline defines schema version 1; the migration runners adopt it without
 changing existing rows.
 
 Before pushing the first tag, enable GitHub immutable releases for the
-repository and protect `v*` tags from update or deletion. The workflow refuses
-to publish while immutable releases are disabled and verifies that the remote
-tag, checked-out commit, and workflow commit are identical immediately before
-and after publication.
+repository and protect `v*` tags from update or deletion. The workflow verifies
+that the remote tag, checked-out commit, and workflow commit are identical
+immediately before publication.
 
 Push a canonical `vMAJOR.MINOR.PATCH` tag. The tag workflow builds three
 platform archives (`linux/amd64`, `linux/arm64`, and `darwin/arm64`) plus

@@ -1,12 +1,12 @@
 version: v2
 clean: true
 plugins:
-  - remote: buf.build/protocolbuffers/go:v1.36.11
+  - remote: buf.build/protocolbuffers/go
     out: pkg/consolepb
     opt:
       - module=github.com/CryptoLabInc/rune-console/pkg/consolepb
       - Mconsole_service.proto=github.com/CryptoLabInc/rune-console/pkg/consolepb;consolepb
-  - remote: buf.build/grpc/go:v1.6.2
+  - remote: buf.build/grpc/go
     out: pkg/consolepb
     opt:
       - module=github.com/CryptoLabInc/rune-console/pkg/consolepb

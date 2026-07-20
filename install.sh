@@ -763,12 +763,12 @@ preflight() {
     local libc_version libc_major libc_minor
     libc_version=$(getconf GNU_LIBC_VERSION 2>/dev/null || true)
     if [[ ! "$libc_version" =~ ^glibc[[:space:]]+([0-9]+)\.([0-9]+) ]]; then
-      die "Unsupported Linux C library. Rune-Console requires glibc 2.35 or newer."
+      die "Unsupported Linux C library. Rune-Console requires glibc 2.38 or newer."
     fi
     libc_major=${BASH_REMATCH[1]}
     libc_minor=${BASH_REMATCH[2]}
-    if (( libc_major < 2 || (libc_major == 2 && libc_minor < 35) )); then
-      die "Unsupported ${libc_version}. Rune-Console requires glibc 2.35 or newer."
+    if (( libc_major < 2 || (libc_major == 2 && libc_minor < 38) )); then
+      die "Unsupported ${libc_version}. Rune-Console requires glibc 2.38 or newer."
     fi
   fi
 
@@ -1357,8 +1357,8 @@ if [[ "$OS_SLUG" = darwin && "$ARCH_SLUG" = amd64 ]]; then
 fi
 if [[ "$OS_SLUG" = darwin ]]; then
   MACOS_MAJOR=$(sw_vers -productVersion | cut -d. -f1)
-  if [[ ! "$MACOS_MAJOR" =~ ^[0-9]+$ ]] || (( MACOS_MAJOR < 15 )); then
-    die "Unsupported macOS version. Apple Silicon macOS 15 or newer is required."
+  if [[ ! "$MACOS_MAJOR" =~ ^[0-9]+$ ]] || (( MACOS_MAJOR < 14 )); then
+    die "Unsupported macOS version. Apple Silicon macOS 14 or newer is required."
   fi
 fi
 

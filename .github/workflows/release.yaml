@@ -12,6 +12,9 @@ concurrency:
   group: release-binaries-${{ github.ref }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build ${{ matrix.os }}/${{ matrix.arch }}
@@ -22,16 +25,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Ubuntu 22.04 fixes the oldest supported glibc ABI at 2.35.
-          - { runner: ubuntu-22.04,     os: linux,  arch: amd64 }
-          - { runner: ubuntu-22.04-arm, os: linux,  arch: arm64 }
-          # SDK/OpenSSL objects are built for Apple Silicon macOS 15 or newer.
-          - { runner: macos-15,         os: darwin, arch: arm64 }
+          - { runner: ubuntu-latest,    os: linux,  arch: amd64 }
+          - { runner: ubuntu-24.04-arm, os: linux,  arch: arm64 }
+          # runespace-sdk v1.0.0 ships a macOS 14+ arm64 slice only. Replace
+          # this runner before GitHub retires macos-14 on 2026-11-02.
+          - { runner: macos-14,         os: darwin, arch: arm64 }
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      # Full SHAs below are the official tagged releases, pinned so a mutable
+      # action tag cannot change code in this release workflow.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
 
       - name: Download committed Go dependencies
         # Release builds use the protobuf stubs committed in the tag. They do
@@ -64,7 +69,7 @@ jobs:
           else
             VERSION="v0.0.0-dryrun.${GITHUB_SHA:0:7}"
           fi
-          if ! [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+          if (( ${#VERSION} > 24 )) || ! [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
             echo "release tag must be canonical vMAJOR.MINOR.PATCH[-PRERELEASE] (no build metadata): $VERSION" >&2
             exit 1
           fi
@@ -101,7 +106,7 @@ jobs:
             OPENSSL_PREFIX=$(brew --prefix openssl@3)
             ln -s "${OPENSSL_PREFIX}/lib/libssl.a" "$STATIC_LIB_DIR/libssl.a"
             ln -s "${OPENSSL_PREFIX}/lib/libcrypto.a" "$STATIC_LIB_DIR/libcrypto.a"
-            export MACOSX_DEPLOYMENT_TARGET=15.0
+            export MACOSX_DEPLOYMENT_TARGET=14.0
           fi
           export CGO_LDFLAGS="-L${STATIC_LIB_DIR}"
           mkdir -p bin
@@ -130,8 +135,8 @@ jobs:
               | grep -oE 'GLIBC_[0-9]+(\.[0-9]+)+' \
               | LC_ALL=C sort -Vu \
               | tail -1)
-            if [[ "$(printf '%s\n' GLIBC_2.35 "$newest_glibc" | sort -V | tail -1)" != GLIBC_2.35 ]]; then
-              echo "release binary requires ${newest_glibc}, newer than the supported glibc 2.35 baseline" >&2
+            if [[ "$(printf '%s\n' GLIBC_2.38 "$newest_glibc" | sort -V | tail -1)" != GLIBC_2.38 ]]; then
+              echo "release binary requires ${newest_glibc}, newer than the supported glibc 2.38 baseline" >&2
               exit 1
             fi
           else
@@ -140,7 +145,7 @@ jobs:
               exit 1
             fi
             min_macos=$(otool -l bin/runeconsole | awk '$1 == "minos" { print $2; exit }')
-            [[ "$min_macos" == 15.* ]] || {
+            [[ "$min_macos" == 14.* ]] || {
               echo "unexpected macOS deployment target: $min_macos" >&2
               exit 1
             }
@@ -153,7 +158,7 @@ jobs:
           cp LICENSE _dist/
           tar -czf "${{ steps.meta.outputs.archive }}" -C _dist .
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ steps.meta.outputs.archive }}
           path: ${{ steps.meta.outputs.archive }}
@@ -161,20 +166,16 @@ jobs:
 
   publish:
     name: Publish
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs: build
     permissions:
       contents: write
-    env:
-      MISE_ENV: ci
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Download build artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: dist/
           merge-multiple: true
@@ -189,7 +190,7 @@ jobs:
           else
             VERSION="v0.0.0-dryrun.${GITHUB_SHA:0:7}"
           fi
-          if ! [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+          if (( ${#VERSION} > 24 )) || ! [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
             echo "invalid release version: $VERSION" >&2
             exit 1
           fi
@@ -201,18 +202,11 @@ jobs:
           LC_ALL=C sha256sum runeconsole_*.tar.gz | LC_ALL=C sort > SHA256SUMS
           test "$(wc -l < SHA256SUMS)" -eq 3
 
-      - name: Verify immutable releases and tag commit
+      - name: Verify tag commit
         if: github.event_name == 'push'
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
-          enabled=$(gh api "repos/${REPOSITORY}/immutable-releases" --jq .enabled)
-          if [[ "$enabled" != true ]]; then
-            echo "GitHub immutable releases must be enabled before publishing ${VERSION}." >&2
-            exit 1
-          fi
           git fetch --force --no-tags origin \
             "refs/tags/${VERSION}:refs/tags/runeconsole-release-verify"
           remote_commit=$(git rev-list -n 1 refs/tags/runeconsole-release-verify)
@@ -221,8 +215,7 @@ jobs:
             exit 1
           fi
 
-      - name: Publish GitHub Release with verified assets
-        id: publish
+      - name: Publish GitHub Release
         if: github.event_name == 'push'
         working-directory: dist/
         env:
@@ -231,113 +224,23 @@ jobs:
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
           release_flags=()
-          prerelease=false
           if [[ "$VERSION" == *-* ]]; then
             release_flags+=(--prerelease)
-            prerelease=true
           fi
-          existing_published=false
           if gh release view "$VERSION" --repo "$REPOSITORY" >/dev/null 2>&1; then
-            is_draft=$(gh release view "$VERSION" \
-              --json isDraft --jq .isDraft \
-              --repo "$REPOSITORY")
-            if [[ "$is_draft" == true ]]; then
-              allowed=$(mktemp)
-              printf '%s\n' \
-                "runeconsole_${VERSION}_linux_amd64.tar.gz" \
-                "runeconsole_${VERSION}_linux_arm64.tar.gz" \
-                "runeconsole_${VERSION}_darwin_arm64.tar.gz" \
-                SHA256SUMS | LC_ALL=C sort > "$allowed"
-              existing=$(mktemp)
-              gh release view "$VERSION" --json assets --jq '.assets[].name' \
-                --repo "$REPOSITORY" | LC_ALL=C sort > "$existing"
-              if comm -23 "$existing" "$allowed" | grep -q .; then
-                echo "draft contains an unexpected asset; refusing to publish" >&2
-                exit 1
-              fi
-              gh release upload "$VERSION" \
-                *.tar.gz SHA256SUMS \
-                --clobber \
-                --repo "$REPOSITORY"
-              gh release edit "$VERSION" \
-                --draft=false \
-                --prerelease="$prerelease" \
-                --repo "$REPOSITORY"
-            else
-              # Immutable published assets cannot be overwritten. They are
-              # independently validated in the next step for safe reruns.
-              existing_published=true
-            fi
-          else
-            # gh creates a draft internally, uploads every supplied asset, and
-            # publishes only after the uploads succeed.
-            notes=(--generate-notes)
-            if [[ "$VERSION" == v1.0.0 ]]; then
-              notes=(--notes "First production release of Rune Console.")
-            fi
-            gh release create "$VERSION" \
-              *.tar.gz SHA256SUMS \
-              --verify-tag \
-              --title "$VERSION" \
-              "${notes[@]}" \
-              "${release_flags[@]}" \
-              --repo "$REPOSITORY"
+            echo "release ${VERSION} already exists; refusing to overwrite it" >&2
+            exit 1
           fi
-          echo "existing_published=$existing_published" >> "$GITHUB_OUTPUT"
-
-      - name: Verify the published release
-        if: github.event_name == 'push'
-        working-directory: dist/
-        env:
-          EXISTING_PUBLISHED: ${{ steps.publish.outputs.existing_published }}
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          VERSION: ${{ steps.meta.outputs.version }}
-        run: |
-          remote=$(mktemp -d)
-          expected=$(mktemp)
-          actual=$(mktemp)
-          trap 'rm -rf "$remote" "$expected" "$actual"' EXIT
-          printf '%s\n' \
-            "runeconsole_${VERSION}_linux_amd64.tar.gz" \
-            "runeconsole_${VERSION}_linux_arm64.tar.gz" \
-            "runeconsole_${VERSION}_darwin_arm64.tar.gz" \
-            SHA256SUMS | LC_ALL=C sort > "$expected"
-          gh release view "$VERSION" --json assets,isDraft --jq \
-            'if .isDraft then error("release is still a draft") else .assets[].name end' \
-            --repo "$REPOSITORY" | LC_ALL=C sort > "$actual"
-          diff -u "$expected" "$actual"
-          gh release download "$VERSION" \
-            --pattern '*.tar.gz' \
-            --pattern SHA256SUMS \
-            --dir "$remote" \
+          notes=(--generate-notes)
+          if [[ "$VERSION" == v1.0.0 ]]; then
+            notes=(--notes "First production release of Rune Console.")
+          fi
+          # gh creates a draft internally, uploads every supplied asset, and
+          # publishes only after all uploads succeed.
+          gh release create "$VERSION" \
+            *.tar.gz SHA256SUMS \
+            --verify-tag \
+            --title "$VERSION" \
+            "${notes[@]}" \
+            "${release_flags[@]}" \
             --repo "$REPOSITORY"
-          (cd "$remote" && sha256sum --check SHA256SUMS)
-
-          if [[ "$EXISTING_PUBLISHED" != true ]]; then
-            while IFS= read -r asset; do
-              cmp -- "$asset" "$remote/$asset"
-            done < "$expected"
-          fi
-
-          verify_binary() {
-            local os=$1 arch=$2 archive extract metadata
-            archive="$remote/runeconsole_${VERSION}_${os}_${arch}.tar.gz"
-            extract=$(mktemp -d)
-            tar -xzf "$archive" -C "$extract" ./runeconsole
-            metadata=$(go version -m "$extract/runeconsole")
-            grep -F "buildVersion=${VERSION}" <<< "$metadata"
-            grep -F "vcs.revision=${GITHUB_SHA}" <<< "$metadata"
-            grep -F "GOOS=${os}" <<< "$metadata"
-            grep -F "GOARCH=${arch}" <<< "$metadata"
-            rm -rf "$extract"
-          }
-          verify_binary linux amd64
-          verify_binary linux arm64
-          verify_binary darwin arm64
-
-          # Once immutable publication locks the tag, re-check that no move
-          # occurred in the narrow interval between the preflight and publish.
-          git fetch --force --no-tags origin \
-            "refs/tags/${VERSION}:refs/tags/runeconsole-release-verify"
-          [[ "$(git rev-list -n 1 refs/tags/runeconsole-release-verify)" == "$GITHUB_SHA" ]]

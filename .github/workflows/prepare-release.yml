@@ -38,7 +38,7 @@ jobs:
           git check-ref-format --branch "$TARGET_BRANCH"
 
       - name: Check out release branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ inputs.target_branch }}
           fetch-depth: 0
@@ -52,8 +52,12 @@ jobs:
 
           const rawVersion = (process.env.RELEASE_VERSION || "").trim();
           const version = rawVersion.startsWith("v") ? rawVersion : `v${rawVersion}`;
-          const semver = /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/;
-          if (!semver.test(version) || version.length > 24) {
+          const semver = /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/;
+          const prerelease = version.includes("-") ? version.split("-").slice(1).join("-") : "";
+          const invalidNumericIdentifier = prerelease
+            .split(".")
+            .some((part) => /^\d+$/.test(part) && part.length > 1 && part.startsWith("0"));
+          if (!semver.test(version) || invalidNumericIdentifier || version.length > 24) {
             throw new Error(`Invalid release version: ${rawVersion}`);
           }
 
@@ -123,4 +127,3 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "docs: prepare $NORMALIZED_VERSION release badge"
           git push origin "HEAD:refs/heads/$TARGET_BRANCH"
-
