@@ -511,24 +511,9 @@ func (h *consoleAPI) usersDeleteBatch(w http.ResponseWriter, r *http.Request) {
 			res.fail(id, "USER_NOT_FOUND", "no such user")
 			continue
 		}
-		// The org admin is not auto-seeded a member row (authority is email-keyed
-		// via SetOrgAdmin), so by default they are not in this batch at all. But
-		// if the admin invited their own email, that row carries their
-		// self-granted memberships, keyed by its UUID. Deleting it would drop
-		// those memberships and — since login no longer re-creates the row —
-		// leave no automatic restore. Revoking the admin's access is the
-		// supported operation (their memory reach is pure membership like
-		// anyone's); erasing the identity behind it is not. Refuse per-item so
-		// the rest of the batch still applies.
-		//
-		// The CODE is the contract the console renders from (it maps codes to
-		// its own copy); this message is for logs and direct API callers, so it
-		// states the refusal and nothing more — telling the operator what to do
-		// instead is the console's wording to choose, not ours.
-		if h.v.Groups().IsOrgAdmin(m.Email) {
-			res.fail(id, "CANNOT_DELETE_ADMIN", "the organization admin cannot be deleted")
-			continue
-		}
+		// A self-invited org admin follows the same member lifecycle as everyone
+		// else. Removing their member UUID and data-plane access does not erase
+		// the email-keyed org-admin identity or the separate console session.
 		// Cascade: destroy the session token, drop all group memberships, void
 		// any unused invite codes, then remove the member — in that order so the
 		// gRPC judge never sees a half-deleted identity (mirrors the admin
