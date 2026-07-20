@@ -3,6 +3,7 @@ package groups
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 // findNode returns the console tree node with id, failing the test if absent.
@@ -55,8 +56,75 @@ func TestConsoleTreeCountsAndChildren(t *testing.T) {
 	if rn.ParentID != nil {
 		t.Errorf("root parentId = %v, want nil (null)", *rn.ParentID)
 	}
-	if cn.ChildCount != 0 || cn.MemberCount != 1 {
-		t.Errorf("child childCount=%d memberCount=%d, want 0 and 1", cn.ChildCount, cn.MemberCount)
+	if cn.ChildCount != 0 || cn.MemberCount != 3 {
+		t.Errorf("child childCount=%d memberCount=%d, want 0 and 3 effective members", cn.ChildCount, cn.MemberCount)
+	}
+}
+
+func TestConsoleTeamMembersUseNearestInheritanceSource(t *testing.T) {
+	s := NewStore()
+	root, _ := s.CreateGroup("Root", "")
+	mid, _ := s.CreateGroup("Mid", root.ID)
+	leaf, _ := s.CreateGroup("Leaf", mid.ID)
+
+	t0 := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return t0 }
+	rootOnly, err := s.Grant("root@x.com", root.ID, RoleEdit, "actor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Grant("nearest@x.com", root.ID, RoleRead, "actor"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Grant("excluded@x.com", root.ID, RoleWrite, "actor"); err != nil {
+		t.Fatal(err)
+	}
+
+	s.now = func() time.Time { return t0.Add(24 * time.Hour) }
+	midGrant, err := s.Grant("nearest@x.com", mid.ID, RoleWrite, "actor")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s.now = func() time.Time { return t0.Add(48 * time.Hour) }
+	direct, err := s.Grant("direct@x.com", leaf.ID, RoleEdit, "actor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if excluded, err := s.ExcludeRead("excluded@x.com", leaf.ID, "actor"); err != nil || !excluded {
+		t.Fatalf("ExcludeRead = (%v, %v), want (true, nil)", excluded, err)
+	}
+
+	members := s.ConsoleTeamMembers(leaf.ID)
+	if len(members) != 3 {
+		t.Fatalf("effective members = %+v, want 3", members)
+	}
+	byUser := make(map[string]ConsoleTeamMember, len(members))
+	for _, m := range members {
+		byUser[m.User] = m
+	}
+	if got := byUser["root@x.com"]; !got.Inherited || got.Role != RoleRead || got.SourceGroupID != root.ID || got.GrantedAt != rootOnly.GrantedAt {
+		t.Errorf("root-only inherited member = %+v, want root source at %s", got, rootOnly.GrantedAt)
+	}
+	if got := byUser["nearest@x.com"]; !got.Inherited || got.Role != RoleRead || got.SourceGroupID != mid.ID || got.GrantedAt != midGrant.GrantedAt {
+		t.Errorf("multi-ancestor inherited member = %+v, want nearest mid source at %s", got, midGrant.GrantedAt)
+	}
+	if got := byUser["direct@x.com"]; got.Inherited || got.Role != RoleEdit || got.SourceGroupID != leaf.ID || got.GrantedAt != direct.GrantedAt {
+		t.Errorf("direct member = %+v, want leaf direct source at %s", got, direct.GrantedAt)
+	}
+	if _, found := byUser["excluded@x.com"]; found {
+		t.Error("read-excluded inherited member was listed")
+	}
+
+	detail, err := s.TeamDetail(leaf.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.MemberCount != len(members) {
+		t.Errorf("detail memberCount=%d, list len=%d", detail.MemberCount, len(members))
+	}
+	if node := findNode(t, s.ConsoleTree(), leaf.ID); node.MemberCount != len(members) {
+		t.Errorf("tree memberCount=%d, list len=%d", node.MemberCount, len(members))
 	}
 }
 
