@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 
 import RuneMark from "@/components/elements/RuneMark";
-import StorageStatus from "@/components/elements/StorageStatus";
+import WorkspaceStatus from "@/components/elements/WorkspaceStatus";
 import ProfileMenu from "@/components/navigation/ProfileMenu";
 import WorkspaceModal from "@/components/workspace/WorkspaceModal";
 import { useSessionQuery } from "@/hooks/queries/useSessionQuery";
@@ -21,7 +21,7 @@ import { useWorkspaceStore } from "@/stores/workspaceStore";
  * 1380px content width.
  *
  * The rune slot (SC-03 callout 2) tracks workspace state: a clickable
- * StorageStatus pill that opens the management modal (SC-02 state D)
+ * WorkspaceStatus pill that opens the management modal (SC-02 state D)
  * when a workspace exists, or a [워크스페이스 없음] indicator that routes
  * to the empty-workspace page (SC-02 state A) when none does.
  */
@@ -59,12 +59,12 @@ const Navbar = () => {
               the query is still loading (workspace === undefined) the slot
               stays empty. */}
           <div
-            className={`flex items-center gap-2 rounded px-3 py-1 ${
+            className={`flex items-baseline gap-2 rounded px-3 py-1 ${
               workspace ? "cursor-pointer" : ""
             }`}
             onClick={workspace ? openModal : undefined}
           >
-            <span className="text-foreground font-mono text-sm">Workspace</span>
+            <span className="text-foreground text-sm">워크스페이스</span>
             {workspace ? (
               workspace.orphaned ? (
                 /* Reinstall detected: the workspace no longer matches this
@@ -74,7 +74,7 @@ const Navbar = () => {
                   재생성 필요
                 </span>
               ) : (
-                <StorageStatus status={workspace.status} />
+                <WorkspaceStatus status={workspace.status} />
               )
             ) : workspace === null ? (
               <button

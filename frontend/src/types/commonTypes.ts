@@ -21,7 +21,7 @@ export type TMemberStatus =
  * `phase`). `provisioning` is the transient state right after create,
  * before the endpoint/row count exist.
  */
-export type TStorageStatus =
+export type TWorkspaceStatus =
   | "provisioning"
   | "running"
   | "stopping"
@@ -37,7 +37,7 @@ export type TStorageStatus =
  * rowCount are null until the workspace finishes provisioning.
  */
 export type TWorkspace = {
-  status: TStorageStatus;
+  status: TWorkspaceStatus;
   endpoint: string | null;
   rowCount: number | null;
   /**
@@ -51,7 +51,7 @@ export type TWorkspace = {
 
 /** Wire shape of `GET /workspace` (console API design 2026-07-13, §Workspace). */
 export type TWorkspaceWire = {
-  phase: TStorageStatus;
+  phase: TWorkspaceStatus;
   endpointUrl: string | null;
   rows: number | null;
   /** true when the workspace no longer matches this console (reinstall). */

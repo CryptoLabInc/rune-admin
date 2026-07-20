@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getWorkspace } from "@/api/workspaceAPIs";
 import { QUERY_KEYS } from "@/constants/commonConstants";
 import type {
-  TStorageStatus,
+  TWorkspaceStatus,
   TWorkspace,
   TWorkspaceWire,
 } from "@/types/commonTypes";
@@ -12,7 +12,7 @@ import type {
 const POLL_MS = 10000;
 
 /** Phases mid-transition — the query keeps polling while the workspace sits here. */
-export const isTransitionalStatus = (status: TStorageStatus): boolean =>
+export const isTransitionalStatus = (status: TWorkspaceStatus): boolean =>
   status === "provisioning" ||
   status === "stopping" ||
   status === "starting" ||

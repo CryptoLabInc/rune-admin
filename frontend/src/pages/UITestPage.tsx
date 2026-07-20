@@ -12,7 +12,7 @@ import Notice from "@/components/elements/Notice";
 import Pagination from "@/components/elements/Pagination";
 import Radio from "@/components/elements/Radio";
 import SearchInput from "@/components/elements/SearchInput";
-import StorageStatus from "@/components/elements/StorageStatus";
+import WorkspaceStatus from "@/components/elements/WorkspaceStatus";
 import TextButton from "@/components/elements/TextButton";
 import DrawerLayout from "@/components/layout/DrawerLayout";
 import ModalLayout from "@/components/layout/ModalLayout";
@@ -31,11 +31,11 @@ import { BTN_TEXT } from "@/constants/commonConstants";
 import {
   BTN_HOT_VAR,
   MEMBER_STATUS_VAR,
-  STORAGE_STATUS_VAR,
+  WORKSPACE_STATUS_VAR,
 } from "@/constants/styleConstants";
 import type {
   TMemberStatus,
-  TStorageStatus,
+  TWorkspaceStatus,
   TTeamNode,
 } from "@/types/commonTypes";
 import type { TBTNColor } from "@/types/styleTypes";
@@ -317,7 +317,7 @@ const UITestPage = () => {
 
       <Section
         title="Button"
-        note="폼 컨트롤 — w-full 내장, 부모가 폭 제한. btnColor 6종 / btnSize 3종(높이 32·36·42px) · disabled는 전 테마 공통 gray fill(요청 진행 중에도 disabled 전달 — 별도 loading UI 없음)"
+        note="폼 컨트롤 — w-full 내장, 부모가 폭 제한. btnColor 6종 / btnSize 4종(높이 24·32·36·42px) · disabled는 전 테마 공통 gray fill(요청 진행 중에도 disabled 전달 — 별도 loading UI 없음)"
       >
         <h3 className="text-tag text-faint font-mono tracking-[0.07em]">
           THEME × STATE — btnSize=md 고정 · hover = focus-visible 동일 UI(박제)
@@ -359,6 +359,15 @@ const UITestPage = () => {
           SIZE — btnColor=mintFilled 고정
         </h3>
         <div className={specimenGrid}>
+          <Specimen label="xs — 24px">
+            <div className="w-[100px]">
+              <Button
+                btnText={BTN_TEXT.change}
+                btnSize="xs"
+                btnColor="mintFilled"
+              />
+            </div>
+          </Specimen>
           <Specimen label="sm — 32px">
             <div className="w-[120px]">
               <Button
@@ -525,15 +534,15 @@ const UITestPage = () => {
         </div>
       </Section>
 
-      <Section title="MemberStatus / StorageStatus" note="시맨틱 컬러 = 상태">
+      <Section title="MemberStatus / WorkspaceStatus" note="시맨틱 컬러 = 상태">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
           {(Object.keys(MEMBER_STATUS_VAR) as TMemberStatus[]).map((s) => (
             <MemberStatus key={s} status={s} />
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-          {(Object.keys(STORAGE_STATUS_VAR) as TStorageStatus[]).map((s) => (
-            <StorageStatus key={s} status={s} />
+          {(Object.keys(WORKSPACE_STATUS_VAR) as TWorkspaceStatus[]).map((s) => (
+            <WorkspaceStatus key={s} status={s} />
           ))}
         </div>
       </Section>

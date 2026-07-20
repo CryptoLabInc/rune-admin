@@ -63,12 +63,13 @@ const waitForTeardown = async () => {
 };
 
 /**
- * Recreate an orphaned workspace (console reinstalled → team_secret changed, so
- * the cloud-held runespace can no longer be decrypted). It can only be discarded
- * and rebuilt: delete, wait for the async teardown to finish (poll until 404),
- * then create — the create carries this console's new team_secret fingerprint, so
- * the rebuilt workspace matches. On success the query is invalidated and the new
- * (provisioning) workspace begins polling.
+ * Tear down an orphaned workspace so it can be recreated (console reinstalled →
+ * team_secret changed, so the cloud-held runespace can no longer be decrypted).
+ * It can only be discarded and rebuilt: delete, then wait for the async teardown
+ * to finish (poll until 404) — the cloud 409s a create while the old row still
+ * exists. The create itself is NOT done here: on success the modal hands off to
+ * WorkspacePage (beginRecreateHandoff), which auto-starts a plain create and
+ * owns the 생성 중 / 생성 실패 UI, same as a first-time create.
  */
 export const useRecreateWorkspaceMutation = () => {
   const queryClient = useQueryClient();
@@ -77,8 +78,6 @@ export const useRecreateWorkspaceMutation = () => {
       const del = await deleteWorkspace();
       if (!del.ok) throw del;
       await waitForTeardown();
-      const created = await createWorkspace();
-      if (!created.ok) throw created;
     },
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.workspace] }),

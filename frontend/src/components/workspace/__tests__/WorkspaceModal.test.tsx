@@ -1,9 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import WorkspaceModal from "@/components/workspace/WorkspaceModal";
-import { BTN_TEXT } from "@/constants/commonConstants";
-import type { TStorageStatus, TWorkspace } from "@/types/commonTypes";
+import { BTN_TEXT, PATH_LIST } from "@/constants/commonConstants";
+import type { TWorkspaceStatus, TWorkspace } from "@/types/commonTypes";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 /* The modal's data + mutations are mocked so each render variant (detail,
@@ -14,6 +14,12 @@ let startState: { isPending: boolean; isError: boolean };
 let deleteState: { isPending: boolean; isError: boolean };
 let recreateState: { isPending: boolean; isError: boolean };
 const mutate = vi.fn();
+const navigateMock = vi.fn();
+
+vi.mock("react-router", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-router")>()),
+  useNavigate: () => navigateMock,
+}));
 
 vi.mock("@/hooks/queries/useWorkspaceQuery", () => ({
   useWorkspaceQuery: () => queryState,
@@ -36,11 +42,11 @@ vi.mock("@/hooks/mutations/useWorkspaceMutations", () => ({
 const RUNNING: TWorkspace = {
   status: "running",
   endpoint: "https://a1b2c3d4.rune.example.com",
-  rowCount: 12431,
+  rowCount: 431,
   orphaned: false,
 };
 
-const setStatus = (status: TStorageStatus) => {
+const setStatus = (status: TWorkspaceStatus) => {
   queryState = { data: { ...RUNNING, status }, isError: false };
 };
 
@@ -50,7 +56,13 @@ beforeEach(() => {
   startState = { isPending: false, isError: false };
   deleteState = { isPending: false, isError: false };
   recreateState = { isPending: false, isError: false };
-  useWorkspaceStore.setState({ modalOpen: true, deleteConfirmOpen: false });
+  mutate.mockReset();
+  navigateMock.mockReset();
+  useWorkspaceStore.setState({
+    modalOpen: true,
+    deleteConfirmOpen: false,
+    recreateHandoff: false,
+  });
   document.body.innerHTML = "";
 });
 
@@ -60,9 +72,15 @@ describe("WorkspaceModal", () => {
     expect(screen.getByRole("button", { name: BTN_TEXT.stop })).toBeEnabled();
     expect(screen.getByRole("button", { name: BTN_TEXT.delete })).toBeEnabled();
     expect(screen.queryByRole("button", { name: BTN_TEXT.restart })).toBeNull();
-    expect(screen.getByText(RUNNING.endpoint as string)).toBeInTheDocument();
-    expect(screen.getByText("running")).toBeInTheDocument();
-    expect(screen.getByText("12,431")).toBeInTheDocument();
+    expect(screen.getByText("실행 중")).toBeInTheDocument();
+    // Memory usage is computed against the plan max, not hardcoded.
+    expect(screen.getByText("431 / 1,000 (43%)")).toBeInTheDocument();
+  });
+
+  it("caps the memory usage percent at 100 when the count exceeds the max", () => {
+    queryState = { data: { ...RUNNING, rowCount: 1204 }, isError: false };
+    render(<WorkspaceModal />);
+    expect(screen.getByText("1,204 / 1,000 (100%)")).toBeInTheDocument();
   });
 
   it("detail (stopped) replaces [중지] with [재실행]", () => {
@@ -131,25 +149,46 @@ describe("WorkspaceModal", () => {
     expect(screen.queryByRole("button", { name: BTN_TEXT.stop })).toBeNull();
   });
 
-  it("recreate in flight shows the 재생성 중 body with no action buttons", () => {
+  it("recreate in flight shows the 삭제 중 message with both buttons disabled", () => {
     queryState = { data: { ...RUNNING, orphaned: true }, isError: false };
     recreateState = { isPending: true, isError: false };
     render(<WorkspaceModal />);
     expect(
-      screen.getByText(/워크스페이스를 재생성하는 중입니다/),
+      screen.getByText(/기존 워크스페이스를 삭제하는 중입니다/),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: BTN_TEXT.recreate })).toBeNull();
+    // The progress copy replaces the orphaned explanation.
+    expect(screen.queryByText(/콘솔이 재설치되어/)).toBeNull();
+    // Buttons stay (disabled) so the modal doesn't look emptied out.
+    expect(screen.getByRole("button", { name: BTN_TEXT.close })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: BTN_TEXT.recreate }),
+    ).toBeDisabled();
   });
 
-  it("keeps the 재생성 중 body even after the workspace 404s mid-teardown", () => {
-    // Recreate deletes then creates; between the two the workspace vanishes
-    // (query → null, orphaned flag gone). The pending body must survive that.
+  it("keeps the 삭제 중 body even after the workspace 404s mid-teardown", () => {
+    // Teardown drops the workspace row (query → null, orphaned flag gone).
+    // The pending body must survive that.
     queryState = { data: null, isError: false };
     recreateState = { isPending: true, isError: false };
     render(<WorkspaceModal />);
     expect(
-      screen.getByText(/워크스페이스를 재생성하는 중입니다/),
+      screen.getByText(/기존 워크스페이스를 삭제하는 중입니다/),
     ).toBeInTheDocument();
+  });
+
+  it("recreate success hands off to the 생성 중 page (SC-02 A/B)", () => {
+    queryState = { data: { ...RUNNING, orphaned: true }, isError: false };
+    render(<WorkspaceModal />);
+    fireEvent.click(screen.getByRole("button", { name: BTN_TEXT.recreate }));
+    expect(mutate).toHaveBeenCalledTimes(1);
+
+    // Fire the mutation's onSuccess: the teardown finished (404 confirmed),
+    // so the modal closes, flags the handoff, and routes to the create page.
+    const options = mutate.mock.calls[0][1] as { onSuccess: () => void };
+    act(() => options.onSuccess());
+    expect(useWorkspaceStore.getState().modalOpen).toBe(false);
+    expect(useWorkspaceStore.getState().recreateHandoff).toBe(true);
+    expect(navigateMock).toHaveBeenCalledWith(PATH_LIST.workspace);
   });
 
   it("recreate failure swaps to the fail copy with only [닫기]", () => {

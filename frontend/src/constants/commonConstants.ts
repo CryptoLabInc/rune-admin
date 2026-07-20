@@ -3,6 +3,10 @@
  * single source of truth. */
 export const BRAND_WORDMARK = "RUNE CONSOLE";
 
+/** WORKSPACE_MAX_MEMORIES is the plan cap on stored memories (rows) per
+ * workspace; the SC-02 modal renders usage as rowCount / max (percent). */
+export const WORKSPACE_MAX_MEMORIES = 1000;
+
 /** BTN_TEXT is the single source of truth for visible action-button labels
  * (Button `btnText` / TextButton) across the console screens, so a wording
  * change lands in one place. Icon-button aria-labels are intentionally out of
