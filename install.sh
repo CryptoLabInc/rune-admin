@@ -507,6 +507,36 @@ csp_post_deploy() {
   die "Timed out waiting for VM-side install. SSH in and check /var/log/runeconsole-install.log: ssh -i ${key_path} ${ssh_user}@${public_ip}"
 }
 
+# open_browser points the invoking user's default browser at the console URL.
+# Always attempted (no flag) but strictly best-effort: the installer runs as
+# root, so it drops to $SUDO_USER, and it skips silently when no GUI or opener
+# is present (headless hosts, curl | bash). A failure here never fails install.
+open_browser() {
+  local url=$1 opener
+  if [[ "$OS_SLUG" = darwin ]]; then
+    command -v open >/dev/null 2>&1 || return 0
+    opener=open
+  else
+    command -v xdg-open >/dev/null 2>&1 || return 0
+    # No graphical session -> nothing to open.
+    [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]] || return 0
+    opener=xdg-open
+  fi
+
+  if [[ -n "${SUDO_USER:-}" ]]; then
+    # Drop root and forward the graphical-session vars so the browser lands in
+    # the logged-in user's session rather than root's (empty) one.
+    sudo -u "${SUDO_USER}" env \
+      ${DISPLAY:+DISPLAY="$DISPLAY"} \
+      ${WAYLAND_DISPLAY:+WAYLAND_DISPLAY="$WAYLAND_DISPLAY"} \
+      ${XAUTHORITY:+XAUTHORITY="$XAUTHORITY"} \
+      "$opener" "$url" >/dev/null 2>&1 || return 0
+  else
+    "$opener" "$url" >/dev/null 2>&1 || return 0
+  fi
+  success "Opened ${url} in your browser."
+}
+
 # Open the console SSH tunnel in the background (ssh -f -N) so the loopback
 # console is immediately reachable at http://127.0.0.1:8787. Best-effort:
 # skips if the local port is busy and falls back to the manual command on
@@ -533,6 +563,7 @@ open_console_tunnel() {
        -i "$key_path" -L 8787:127.0.0.1:8787 "${ssh_user}@${public_ip}" 2>/dev/null; then
     success "Console tunnel open → http://127.0.0.1:8787"
     printf '  Stop it later with:  pkill -f "8787:127.0.0.1:8787 ubuntu@%s"\n' "$public_ip"
+    open_browser "http://127.0.0.1:8787"
   else
     warn "Could not open the tunnel automatically — open it manually:"
     printf '  ssh -i %s -L 8787:127.0.0.1:8787 ubuntu@%s\n' "$key_path" "$public_ip"
@@ -1504,9 +1535,10 @@ post_install() {
   # the shell rc so it can't shadow the real runeconsole binary now on PATH.
   remove_connect_shortcut
 
+  local console_up=0
   if [[ "$SKIP_SERVICE" -eq 0 ]]; then
     info "Waiting for the daemon to start (first boot generates FHE keys — this can take a minute)..."
-    local i console_up=0
+    local i
     for i in $(seq 1 30); do
       # -fs (no -S) + stderr discard: stay quiet while the listener is not up yet.
       if curl -fs -o /dev/null "http://127.0.0.1:8787/healthz" 2>/dev/null; then
@@ -1553,6 +1585,10 @@ post_install() {
   warn "  Rune-Console Keys: ${INSTALL_PREFIX}/rune-console-keys/"
   warn "  Config + SQLite:   ${INSTALL_PREFIX}/configs/"
   warn "  TLS material:      ${INSTALL_PREFIX}/certs/"
+
+  # Only after the console answered /healthz — don't pop a browser at a
+  # not-yet-listening port while first-boot key generation is still running.
+  [[ "$console_up" -eq 1 ]] && open_browser "http://127.0.0.1:8787"
 }
 
 # ── Main ───────────────────────────────────────────────────────────────────────
