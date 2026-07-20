@@ -2,6 +2,7 @@ import { useNavigate } from "react-router";
 
 import Button from "@/components/elements/Button";
 import Notice from "@/components/elements/Notice";
+import TextButton from "@/components/elements/TextButton";
 import WorkspaceStatus from "@/components/elements/WorkspaceStatus";
 import ModalLayout from "@/components/layout/ModalLayout";
 import {
@@ -214,48 +215,41 @@ const WorkspaceModal = () => {
   return (
     <ModalLayout title={MODAL_TITLES.workspaceManage} isOpen>
       <div className="flex w-full flex-col gap-4">
+        {/* Lifecycle actions sit at the content's top-right as quiet
+            TextButtons — the info fields carry the primary reading weight. */}
+        <div className="flex justify-end gap-2">
+          {status === "stopped" ? (
+            <TextButton
+              btnText={BTN_TEXT.restart}
+              disabled={busy || startMutation.isPending}
+              handleClick={() =>
+                startMutation.mutate(undefined, { onSuccess: closeModal })
+              }
+            />
+          ) : (
+            <TextButton
+              btnText={BTN_TEXT.stop}
+              disabled={busy || stopMutation.isPending}
+              handleClick={() =>
+                stopMutation.mutate(undefined, { onSuccess: closeModal })
+              }
+            />
+          )}
+          <TextButton
+            btnText={BTN_TEXT.delete}
+            tone="red"
+            disabled={busy}
+            handleClick={openDeleteConfirm}
+          />
+        </div>
+
         <div className={styles.field}>
           <span className={styles.label}>플랜</span>
           <span className={styles.label}>Free</span>
         </div>
         <div className={styles.field}>
           <span className={styles.label}>상태</span>
-          <div className="flex items-center gap-4">
-            <WorkspaceStatus status={status} className="cursor-default" />
-            <div className="flex justify-end gap-3">
-              {status === "stopped" ? (
-                <Button
-                  btnText={BTN_TEXT.restart}
-                  btnSize="xs"
-                  btnColor="grayOutline"
-                  className="w-12"
-                  disabled={busy || startMutation.isPending}
-                  handleClick={() =>
-                    startMutation.mutate(undefined, { onSuccess: closeModal })
-                  }
-                />
-              ) : (
-                <Button
-                  btnText={BTN_TEXT.stop}
-                  btnSize="xs"
-                  btnColor="grayOutline"
-                  className="w-12"
-                  disabled={busy || stopMutation.isPending}
-                  handleClick={() =>
-                    stopMutation.mutate(undefined, { onSuccess: closeModal })
-                  }
-                />
-              )}
-              <Button
-                btnText={BTN_TEXT.delete}
-                btnSize="xs"
-                btnColor="redOutline"
-                className="w-16"
-                disabled={busy}
-                handleClick={openDeleteConfirm}
-              />
-            </div>
-          </div>
+          <WorkspaceStatus status={status} className="cursor-default" />
         </div>
         <div className={styles.field}>
           <span className={styles.label}>저장된 기억 개수</span>
