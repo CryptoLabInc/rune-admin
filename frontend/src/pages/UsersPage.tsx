@@ -394,7 +394,7 @@ const UsersPage = () => {
                 <Button
                   btnText={BTN_TEXT.resendInvitationCode}
                   btnSize="sm"
-                  btnColor="grayOutline"
+                  btnColor="mintFilled"
                   className="w-fit"
                   disabled={selectedIds.size === 0}
                   handleClick={() => resendCodes(selectedUsers)}
@@ -402,7 +402,7 @@ const UsersPage = () => {
                 <Button
                   btnText={BTN_TEXT.delete}
                   btnSize="sm"
-                  btnColor="redFilled"
+                  btnColor="redOutline"
                   className="w-fit"
                   disabled={selectedIds.size === 0}
                   handleClick={() => setBulkDeleteOpen(true)}
@@ -410,7 +410,7 @@ const UsersPage = () => {
                 <Button
                   btnText={BTN_TEXT.inviteMember}
                   btnSize="sm"
-                  btnColor="mintFilled"
+                  btnColor="mintOutline"
                   className="w-fit"
                   handleClick={() => setInviteOpen(true)}
                 />

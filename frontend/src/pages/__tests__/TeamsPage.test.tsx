@@ -116,25 +116,27 @@ describe("TeamsPage empty state (SC-06 B)", () => {
 describe("TeamsPage URL state", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("defaults to the org chart view", async () => {
+  it("defaults to the tree·detail view with the first top-level team focused", async () => {
     mockTreeSuccess();
     renderAt("/teams");
+
+    await waitFor(() =>
+      expect(viewButton("트리·상세")).toHaveAttribute("aria-pressed", "true"),
+    );
+    expect(viewButton("조직도")).toHaveAttribute("aria-pressed", "false");
+    /* 플랫폼 (t_a) — the first top-level team — leads the detail panel per
+       the SC-06 entry rule. */
+    expect(screen.getByRole("heading", { name: /플랫폼/ })).toBeInTheDocument();
+  });
+
+  it("restores the org chart view from ?view=org", async () => {
+    mockTreeSuccess();
+    renderAt("/teams?view=org");
 
     await waitFor(() =>
       expect(viewButton("조직도")).toHaveAttribute("aria-pressed", "true"),
     );
     expect(viewButton("트리·상세")).toHaveAttribute("aria-pressed", "false");
-  });
-
-  it("restores the tree view from ?view=tree", async () => {
-    mockTreeSuccess();
-    renderAt("/teams?view=tree");
-
-    await waitFor(() =>
-      expect(viewButton("트리·상세")).toHaveAttribute("aria-pressed", "true"),
-    );
-    /* 플랫폼 (t_a) leads the detail panel per the SC-06 entry rule. */
-    expect(screen.getByRole("heading", { name: /플랫폼/ })).toBeInTheDocument();
   });
 
   it("restores the selected team from ?team=", async () => {

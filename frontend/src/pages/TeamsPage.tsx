@@ -80,9 +80,9 @@ const TeamsPage = () => {
     );
   };
 
-  /* 조직도 is the entry view; 트리·상세 is reached by toggle or by an
-     org-chart node click handing off a selection. */
-  const view: TTeamsView = searchParams.get("view") === "tree" ? "tree" : "org";
+  /* 트리·상세 is the entry view (its first top-level team auto-selected);
+     조직도 is reached by the view toggle. */
+  const view: TTeamsView = searchParams.get("view") === "org" ? "org" : "tree";
 
   const teamIds = new Set((teams ?? []).map((t) => t.id));
   /* SC-06 entry rule: the first top-level team is auto-selected. Also the
@@ -105,7 +105,7 @@ const TeamsPage = () => {
     });
 
   const setView = (next: TTeamsView) =>
-    updateParams({ view: next === "org" ? null : next });
+    updateParams({ view: next === "tree" ? null : next });
 
   const selectTeam = (teamId: string) =>
     updateParams({ team: teamId === firstRootId ? null : teamId });
@@ -115,7 +115,7 @@ const TeamsPage = () => {
   const handleOrgSelect = (teamId: string) =>
     updateParams({
       team: teamId === firstRootId ? null : teamId,
-      view: "tree",
+      view: null,
     });
 
   if (isPending) {
