@@ -36,6 +36,7 @@ export const BTN_TEXT = {
   stop: "중지",
   deactivate: "비활성화",
   recreate: "삭제 후 재생성",
+  reconnect: "재연결",
   // Teams
   createTeam: "새 팀 만들기",
   createGroup: "팀 생성하기",
@@ -67,6 +68,7 @@ export const MODAL_TITLES = {
   workspaceManage: "워크스페이스 관리",
   workspaceDelete: "워크스페이스 삭제",
   workspaceOrphaned: "워크스페이스 재생성 필요",
+  workspaceReconnect: "워크스페이스 재연결 필요",
   // Teams
   createTeam: "새 팀 만들기",
   renameTeam: "팀 이름 변경",

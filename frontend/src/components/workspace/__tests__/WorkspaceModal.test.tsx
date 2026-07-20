@@ -44,6 +44,7 @@ const RUNNING: TWorkspace = {
   endpoint: "https://a1b2c3d4.rune.example.com",
   rowCount: 431,
   orphaned: false,
+  reconnectRequired: false,
 };
 
 const setStatus = (status: TWorkspaceStatus) => {
