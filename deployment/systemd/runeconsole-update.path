@@ -1,0 +1,10 @@
+[Unit]
+Description=Watch for Rune-Console web update requests
+Documentation=https://github.com/CryptoLabInc/rune-console
+
+[Path]
+PathExists=/var/lib/runeconsole-updater/inbox/request
+Unit=runeconsole-update.service
+
+[Install]
+WantedBy=multi-user.target

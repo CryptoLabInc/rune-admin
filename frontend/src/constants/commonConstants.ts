@@ -23,6 +23,9 @@ export const BTN_TEXT = {
   create: "생성",
   change: "변경하기",
   refresh: "새로고침",
+  retry: "다시 시도",
+  update: "업데이트",
+  later: "나중에",
   // Auth / navigation
   signOut: "로그아웃",
   getStarted: "시작하기",
@@ -105,4 +108,5 @@ export const QUERY_KEYS = {
   workspace: "workspace",
   user: "user",
   invitations: "invitations",
+  systemUpdate: "systemUpdate",
 } as const;

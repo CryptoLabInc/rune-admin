@@ -56,7 +56,11 @@ type Deps struct {
 	// row nor any group membership (admin reach is granted, not implied). A
 	// returned error is logged and does not block login. nil skips registration.
 	OwnerRegistrar func(email, displayName string) error
-	Logger         *slog.Logger
+	// Updates provides the local, privilege-separated update check/request
+	// boundary. The implementation may enqueue work for a root-owned helper,
+	// but it must never perform the update in this HTTP process.
+	Updates UpdateManager
+	Logger  *slog.Logger
 }
 
 // Service holds the wired collaborators shared by the auth handlers.
@@ -73,6 +77,7 @@ type Service struct {
 	engineReady   func() bool                           // reports data-plane engine connection status
 	inviter       InviteIssuer                          // nil when self-invite issuance is not wired
 	registerOwner func(email, displayName string) error // derive the org admin from the owner (idempotent; seeds no member row); nil when unwired
+	updates       UpdateManager                         // nil when the privileged update helper is not installed/wired
 	log           *slog.Logger
 }
 
@@ -111,6 +116,7 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 		engineReady:   func() bool { return false },
 		inviter:       d.Inviter,
 		registerOwner: d.OwnerRegistrar,
+		updates:       d.Updates,
 		log:           log,
 	}
 
@@ -168,6 +174,18 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 	// sit behind requireSession — a stale-session logout must still return 204,
 	// not 401.
 	mux.Handle("POST /console/auth/logout", s.origin(http.HandlerFunc(s.handleLogout)))
+
+	// Self-update endpoints are loopback-only, same-origin, session-gated, and
+	// explicitly owner-gated. Applying an update is only an asynchronous request
+	// to the separately installed root helper; the HTTP daemon never elevates or
+	// stops itself.
+	if s.updates != nil {
+		ownerOnly := func(h http.Handler) http.Handler {
+			return s.origin(s.requireSession(s.requireOwner(h)))
+		}
+		mux.Handle("GET /api/v1/system/update", ownerOnly(http.HandlerFunc(s.handleUpdateStatus)))
+		mux.Handle("POST /api/v1/system/update", ownerOnly(http.HandlerFunc(s.handleUpdateRequest)))
+	}
 
 	// Workspace (data-plane) endpoints: provision + connect the runespace
 	// engine, and report status. Mounted only when a connector is wired.

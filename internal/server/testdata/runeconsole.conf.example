@@ -8,6 +8,8 @@
 # This file should be mode 0600, owned by the console-user.
 # Replace placeholder values before use.
 
+config_version: 1
+
 server:
   grpc:
     host: 0.0.0.0

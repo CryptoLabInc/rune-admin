@@ -2,27 +2,28 @@ name: Pull Request
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, "release/**"]
     paths-ignore:
       - "docs/**"
       - "*.md"
       - "deployment/**"
       - "LICENSE"
       - ".githooks/**"
-      - ".github/workflows/**"
   push:
-    branches: [main]
+    branches: [main, "release/**"]
     paths-ignore:
       - "docs/**"
       - "*.md"
       - "deployment/**"
       - "LICENSE"
       - ".githooks/**"
-      - ".github/workflows/**"
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   check:

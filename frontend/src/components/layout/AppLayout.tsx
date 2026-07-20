@@ -2,6 +2,7 @@ import { Outlet } from "react-router";
 
 import MainNav from "@/components/navigation/MainNav";
 import Navbar from "@/components/navigation/Navbar";
+import UpdateFloatingCard from "@/components/update/UpdateFloatingCard";
 
 /**
  * AppLayout is the console app shell (SC-03): navbar, navigation, and routed
@@ -12,6 +13,7 @@ const AppLayout = () => {
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar />
+      <UpdateFloatingCard />
       <div className="max-w-content mx-auto flex w-full flex-1 flex-row gap-8 px-6 py-6">
         <MainNav />
         <main className="min-w-0 flex-1">

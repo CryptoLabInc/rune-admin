@@ -1,68 +1,85 @@
 name: Release Binaries
 
 on:
-  release:
-    types: [prereleased]
+  push:
+    # A tag starts the build. The release is created only after every archive
+    # and SHA256SUMS are ready, so an asset-less release never becomes latest.
+    tags: ["v*"]
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: 'Dry run — skip GitHub Release upload'
-        required: false
-        default: 'true'
-        type: boolean
+    # Manual runs build and verify artifacts, but never publish a release.
 
 concurrency:
   group: release-binaries-${{ github.ref }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build ${{ matrix.os }}/${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
+    env:
+      MISE_ENV: ci
     strategy:
       fail-fast: false
       matrix:
         include:
           - { runner: ubuntu-latest,    os: linux,  arch: amd64 }
           - { runner: ubuntu-24.04-arm, os: linux,  arch: arm64 }
+          # runespace-sdk v1.0.0 ships a macOS 14+ arm64 slice only. Replace
+          # this runner before GitHub retires macos-14 on 2026-11-02.
           - { runner: macos-14,         os: darwin, arch: arm64 }
-          - { runner: macos-14,         os: darwin, arch: amd64 }
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: jdx/mise-action@v2
 
-      - name: Bootstrap (modules + proto stubs)
-        run: mise run setup
+      - name: Download committed Go dependencies
+        # Release builds use the protobuf stubs committed in the tag. They do
+        # not regenerate code with a possibly newer remote plugin.
+        run: go mod download
 
-      - name: Install OpenSSL (Linux)
+      - name: Build embedded frontend
+        run: |
+          mise run fe:build
+          test -s internal/console/webdist/index.html
+
+      - name: Install native build dependencies (Linux)
         if: matrix.os == 'linux'
-        run: sudo apt-get install -y libssl-dev
+        run: sudo apt-get install -y g++ libssl-dev
 
       - name: Install OpenSSL arm64 (macOS)
         if: matrix.os == 'darwin'
         run: brew install openssl@3
-
-      - name: Install Intel Homebrew + OpenSSL x86_64 (macOS amd64 cross)
-        if: matrix.os == 'darwin' && matrix.arch == 'amd64'
-        run: |
-          if ! [ -x /usr/local/bin/brew ]; then
-            NONINTERACTIVE=1 arch -x86_64 /bin/bash -c \
-              "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          fi
-          arch -x86_64 /usr/local/bin/brew install openssl@3
 
       - name: Check (gofmt + go vet + unit tests)
         run: mise run check
 
       - name: Resolve version
         id: meta
+        env:
+          EVENT_VERSION: ${{ github.ref_name }}
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            VERSION="${{ github.event.release.tag_name }}"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="$EVENT_VERSION"
           else
-            VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+            VERSION="v0.0.0-dryrun.${GITHUB_SHA:0:7}"
+          fi
+          if (( ${#VERSION} > 24 )) || ! [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "release tag must be canonical vMAJOR.MINOR.PATCH[-PRERELEASE] (no build metadata): $VERSION" >&2
+            exit 1
+          fi
+          prerelease=${VERSION#*-}
+          if [[ "$prerelease" != "$VERSION" ]]; then
+            IFS=. read -ra identifiers <<< "$prerelease"
+            for identifier in "${identifiers[@]}"; do
+              if [[ "$identifier" =~ ^[0-9]+$ && ${#identifier} -gt 1 && "$identifier" == 0* ]]; then
+                echo "numeric prerelease identifiers must not have leading zeroes: $VERSION" >&2
+                exit 1
+              fi
+            done
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "archive=runeconsole_${VERSION}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz" >> "$GITHUB_OUTPUT"
@@ -74,26 +91,62 @@ jobs:
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
           PKG="github.com/CryptoLabInc/rune-console/internal/commands"
-          COMMIT=$(git rev-parse --short HEAD)
-          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          if [ "${{ matrix.os }}" = "darwin" ] && [ "${{ matrix.arch }}" = "amd64" ]; then
-            SDKROOT=$(xcrun -sdk macosx --show-sdk-path)
-            export CC="clang -arch x86_64 -isysroot ${SDKROOT}"
-            export CGO_CFLAGS="-arch x86_64 -I/usr/local/opt/openssl@3/include"
-            export CGO_LDFLAGS="-arch x86_64 -L/usr/local/opt/openssl@3/lib"
+          COMMIT=${GITHUB_SHA:0:12}
+          DATE=$(git show -s --format=%cI "$GITHUB_SHA")
+          STATIC_LIB_DIR="$RUNNER_TEMP/runeconsole-static-libs"
+          mkdir -p "$STATIC_LIB_DIR"
+          if [ "${{ matrix.os }}" = "linux" ]; then
+            MULTIARCH=$(gcc -print-multiarch)
+            ln -s "/usr/lib/${MULTIARCH}/libssl.a" "$STATIC_LIB_DIR/libssl.a"
+            ln -s "/usr/lib/${MULTIARCH}/libcrypto.a" "$STATIC_LIB_DIR/libcrypto.a"
+            ln -s "$(g++ -print-file-name=libstdc++.a)" "$STATIC_LIB_DIR/libstdc++.a"
+          else
+            OPENSSL_PREFIX=$(brew --prefix openssl@3)
+            ln -s "${OPENSSL_PREFIX}/lib/libssl.a" "$STATIC_LIB_DIR/libssl.a"
+            ln -s "${OPENSSL_PREFIX}/lib/libcrypto.a" "$STATIC_LIB_DIR/libcrypto.a"
+            export MACOSX_DEPLOYMENT_TARGET=14.0
           fi
+          export CGO_LDFLAGS="-L${STATIC_LIB_DIR}"
+          mkdir -p bin
           go build \
             -trimpath \
             -ldflags "-s -w -X '${PKG}.buildVersion=${VERSION}' -X '${PKG}.buildCommit=${COMMIT}' -X '${PKG}.buildDate=${DATE}'" \
             -o bin/runeconsole \
             ./cmd
 
-      - name: Smoke test
+      - name: Verify binary metadata and runtime dependencies
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
         run: |
-          if [ "${{ matrix.os }}" = "darwin" ] && [ "${{ matrix.arch }}" = "amd64" ]; then
-            arch -x86_64 ./bin/runeconsole version
+          expected="runeconsole ${VERSION} (commit ${GITHUB_SHA:0:12},"
+          actual=$(./bin/runeconsole version)
+          [[ "$actual" == "$expected"* ]] || {
+            echo "unexpected version output: $actual" >&2
+            exit 1
+          }
+          if [ "${{ matrix.os }}" = "linux" ]; then
+            if ldd bin/runeconsole | grep -E 'lib(ssl|crypto|stdc\+\+)\.so'; then
+              echo "release binary must not depend on dynamic OpenSSL or libstdc++" >&2
+              exit 1
+            fi
+            newest_glibc=$(objdump -T bin/runeconsole \
+              | grep -oE 'GLIBC_[0-9]+(\.[0-9]+)+' \
+              | LC_ALL=C sort -Vu \
+              | tail -1)
+            if [[ "$(printf '%s\n' GLIBC_2.38 "$newest_glibc" | sort -V | tail -1)" != GLIBC_2.38 ]]; then
+              echo "release binary requires ${newest_glibc}, newer than the supported glibc 2.38 baseline" >&2
+              exit 1
+            fi
           else
-            ./bin/runeconsole version
+            if otool -L bin/runeconsole | grep -E '(homebrew|/usr/local/).*/lib(ssl|crypto)'; then
+              echo "release binary must not depend on Homebrew OpenSSL at runtime" >&2
+              exit 1
+            fi
+            min_macos=$(otool -l bin/runeconsole | awk '$1 == "minos" { print $2; exit }')
+            [[ "$min_macos" == 14.* ]] || {
+              echo "unexpected macOS deployment target: $min_macos" >&2
+              exit 1
+            }
           fi
 
       - name: Package
@@ -127,24 +180,65 @@ jobs:
 
       - name: Resolve version
         id: meta
+        env:
+          EVENT_VERSION: ${{ github.ref_name }}
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            echo "version=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="$EVENT_VERSION"
           else
-            echo "version=$(git describe --tags --always 2>/dev/null || echo dev)" >> "$GITHUB_OUTPUT"
+            VERSION="v0.0.0-dryrun.${GITHUB_SHA:0:7}"
           fi
+          if (( ${#VERSION} > 24 )) || ! [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "invalid release version: $VERSION" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Generate SHA256SUMS
         working-directory: dist/
-        run: sha256sum *.tar.gz > SHA256SUMS
+        run: |
+          LC_ALL=C sha256sum runeconsole_*.tar.gz | LC_ALL=C sort > SHA256SUMS
+          test "$(wc -l < SHA256SUMS)" -eq 3
 
-      - name: Upload to GitHub Release
-        if: github.event_name == 'release'
+      - name: Verify tag commit
+        if: github.event_name == 'push'
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          git fetch --force --no-tags origin \
+            "refs/tags/${VERSION}:refs/tags/runeconsole-release-verify"
+          remote_commit=$(git rev-list -n 1 refs/tags/runeconsole-release-verify)
+          if [[ "$remote_commit" != "$GITHUB_SHA" || "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]]; then
+            echo "remote tag, checked-out commit, and workflow commit must be identical" >&2
+            exit 1
+          fi
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'push'
         working-directory: dist/
         env:
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ steps.meta.outputs.version }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
-            *.tar.gz \
-            SHA256SUMS \
-            --repo "${{ github.repository }}"
+          release_flags=()
+          if [[ "$VERSION" == *-* ]]; then
+            release_flags+=(--prerelease)
+          fi
+          if gh release view "$VERSION" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            echo "release ${VERSION} already exists; refusing to overwrite it" >&2
+            exit 1
+          fi
+          notes=(--generate-notes)
+          if [[ "$VERSION" == v1.0.0 ]]; then
+            notes=(--notes "First production release of Rune Console.")
+          fi
+          # gh creates a draft internally, uploads every supplied asset, and
+          # publishes only after all uploads succeed.
+          gh release create "$VERSION" \
+            *.tar.gz SHA256SUMS \
+            --verify-tag \
+            --title "$VERSION" \
+            "${notes[@]}" \
+            "${release_flags[@]}" \
+            --repo "$REPOSITORY"

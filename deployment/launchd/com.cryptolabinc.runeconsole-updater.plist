@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.cryptolabinc.runeconsole-updater</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/runeconsole</string>
+    <string>update-agent</string>
+    <string>--config</string>
+    <string>/opt/runeconsole/configs/runeconsole.conf</string>
+    <string>--request-path</string>
+    <string>/var/lib/runeconsole-updater/inbox/request</string>
+    <string>--status-path</string>
+    <string>/var/lib/runeconsole-updater/status.json</string>
+  </array>
+
+  <key>UserName</key>
+  <string>root</string>
+
+  <key>GroupName</key>
+  <string>runeconsole</string>
+
+  <key>QueueDirectories</key>
+  <array>
+    <string>/var/lib/runeconsole-updater/inbox</string>
+  </array>
+
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>/opt/runeconsole/logs/runeconsole-updater.stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/opt/runeconsole/logs/runeconsole-updater.stderr.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>

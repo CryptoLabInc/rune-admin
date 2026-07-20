@@ -75,6 +75,7 @@ VERSION="${VERSION:-dev}"
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 PKG="github.com/CryptoLabInc/rune-console/internal/commands"
+mkdir -p bin
 go build \
   -o bin/runeconsole \
   -ldflags "-X '${PKG}.buildVersion=${VERSION}' -X '${PKG}.buildCommit=${COMMIT}' -X '${PKG}.buildDate=${DATE}'" \
@@ -137,7 +138,7 @@ run = "bash scripts/generate-certs.sh"
 [tasks."fe:setup"]
 description = "Install frontend dependencies"
 dir = "frontend"
-run = "pnpm install"
+run = "pnpm install --frozen-lockfile"
 
 [tasks."fe:dev"]
 description = "Run frontend dev server"
@@ -146,6 +147,7 @@ run = "pnpm dev"
 
 [tasks."fe:build"]
 description = "Type-check and build frontend for production"
+depends = ["fe:setup"]
 dir = "frontend"
 run = """
 pnpm build

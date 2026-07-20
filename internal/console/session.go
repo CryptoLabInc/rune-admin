@@ -35,20 +35,10 @@ type sessionStore struct {
 	log *slog.Logger
 }
 
-const sessionSchema = `
-CREATE TABLE IF NOT EXISTS console_session (
-  session_id      TEXT PRIMARY KEY,
-  runespace_token TEXT NOT NULL,
-  cookie_name     TEXT NOT NULL,
-  me              BLOB,
-  created_at      TEXT NOT NULL,
-  expires_at      TEXT NOT NULL
-);`
-
 // newSessionStore ensures the schema and prunes any already-expired rows so a
 // restart never resurrects a lapsed login.
 func newSessionStore(db *sql.DB, log *slog.Logger) (*sessionStore, error) {
-	if _, err := db.Exec(sessionSchema); err != nil {
+	if err := EnsureDBSchema(db); err != nil {
 		return nil, err
 	}
 	st := &sessionStore{db: db, log: log}
