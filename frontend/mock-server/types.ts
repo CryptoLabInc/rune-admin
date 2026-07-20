@@ -76,3 +76,21 @@ export type Session = {
   plan: string;
   me: Principal | null;
 };
+
+export type SystemUpdateState =
+  | "idle"
+  | "queued"
+  | "running"
+  | "failed"
+  | "succeeded";
+
+// Owner-facing update view (GET /api/v1/system/update). Mirrors the backend
+// UpdateStatus: updateAvailable = targetVersion strictly newer; capable = the
+// privileged helper is installed.
+export type SystemUpdate = {
+  currentVersion: string;
+  targetVersion?: string;
+  updateAvailable: boolean;
+  capable: boolean;
+  state: SystemUpdateState;
+};
