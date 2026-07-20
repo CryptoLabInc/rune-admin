@@ -31,6 +31,19 @@ type ConsoleTeamDetail struct {
 	CreatedAt   string   `json:"createdAt"`
 }
 
+// ConsoleTeamMember is one row source for GET /teams/{id}/members. Direct
+// members retain their explicit role and source team. Inherited members are
+// projected as read, with SourceGroupID and GrantedAt taken from the nearest
+// direct ancestor membership. Keeping this projection in the store lets the
+// whole member list come from one consistent read snapshot.
+type ConsoleTeamMember struct {
+	User          string
+	Role          Role
+	SourceGroupID string
+	GrantedAt     string
+	Inherited     bool
+}
+
 // parentPtr maps an empty parent id (a root team) to nil so it serializes as
 // JSON null, per the design doc; a non-empty parent serializes as the string.
 func parentPtr(id string) *string {
@@ -40,15 +53,74 @@ func parentPtr(id string) *string {
 	return &id
 }
 
-// memberCountLocked counts direct memberships on group id. Caller holds s.mu.
-func (s *Store) memberCountLocked(id string) int {
+// effectiveMemberCountLocked counts the same people exposed by the team-member
+// list: direct members plus users who inherit read from a proper ancestor.
+// Direct+inherited overlap is counted once, and read exclusions are honored.
+// Caller holds s.mu.
+func (s *Store) effectiveMemberCountLocked(id string) int {
 	n := 0
-	for _, byGroup := range s.memberships {
+	for user, byGroup := range s.memberships {
 		if _, ok := byGroup[id]; ok {
+			n++
+			continue
+		}
+		if _, inherited := s.inheritedSourceLocked(user, id); inherited {
 			n++
 		}
 	}
 	return n
+}
+
+// effectiveMemberCountsLocked computes effective counts for every team in one
+// membership snapshot. groupAccessLocked already produces disjoint direct and
+// inherited sets with de-duplication and per-target exclusions applied.
+func (s *Store) effectiveMemberCountsLocked() map[string]int {
+	counts := make(map[string]int, len(s.groups))
+	for user, byGroup := range s.memberships {
+		access := s.groupAccessLocked(user, byGroup)
+		for _, m := range access.Direct {
+			counts[m.GroupID]++
+		}
+		for _, id := range access.Inherited {
+			counts[id]++
+		}
+	}
+	return counts
+}
+
+// ConsoleTeamMembers returns all people displayed for groupID — direct plus
+// recursively inherited — under one read lock. Unknown groups return nil.
+func (s *Store) ConsoleTeamMembers(groupID string) []ConsoleTeamMember {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if _, ok := s.groups[groupID]; !ok {
+		return nil
+	}
+	out := make([]ConsoleTeamMember, 0)
+	for user, byGroup := range s.memberships {
+		if direct, ok := byGroup[groupID]; ok {
+			out = append(out, ConsoleTeamMember{
+				User:          user,
+				Role:          direct.Role,
+				SourceGroupID: groupID,
+				GrantedAt:     direct.GrantedAt,
+			})
+			continue
+		}
+		source, inherited := s.inheritedSourceLocked(user, groupID)
+		if !inherited {
+			continue
+		}
+		out = append(out, ConsoleTeamMember{
+			User:          user,
+			Role:          RoleRead,
+			SourceGroupID: source.GroupID,
+			GrantedAt:     source.GrantedAt,
+			Inherited:     true,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].User < out[j].User })
+	return out
 }
 
 // sortedChildrenLocked returns id's child ids sorted by name — always non-nil
@@ -73,6 +145,7 @@ func (s *Store) ConsoleTree() []ConsoleTreeNode {
 		}
 	}
 	s.sortByNameLocked(roots)
+	memberCounts := s.effectiveMemberCountsLocked()
 
 	out := make([]ConsoleTreeNode, 0, len(s.groups))
 	var walk func(id string)
@@ -85,7 +158,7 @@ func (s *Store) ConsoleTree() []ConsoleTreeNode {
 			ParentID:    parentPtr(g.ParentID),
 			ChildrenIDs: kids,
 			ChildCount:  len(kids),
-			MemberCount: s.memberCountLocked(id),
+			MemberCount: memberCounts[id],
 		})
 		for _, c := range kids {
 			walk(c)
@@ -110,7 +183,7 @@ func (s *Store) TeamDetail(ref string) (ConsoleTeamDetail, error) {
 		Name:        g.Name,
 		ParentID:    parentPtr(g.ParentID),
 		Children:    s.sortedChildrenLocked(g.ID),
-		MemberCount: s.memberCountLocked(g.ID),
+		MemberCount: s.effectiveMemberCountLocked(g.ID),
 		CreatedAt:   g.CreatedAt,
 	}, nil
 }

@@ -728,13 +728,44 @@ func (s *Store) ExcludeRead(user, groupRef, removedBy string) (bool, error) {
 // downward inheritance — i.e. it is a descendant of one of their direct groups
 // and not already excluded. Caller must hold s.mu.
 func (s *Store) inheritsReadLocked(user, groupID string) bool {
-	if _, direct := s.memberships[user][groupID]; direct {
-		return false
+	_, ok := s.inheritedSourceLocked(user, groupID)
+	return ok
+}
+
+// inheritedSourceLocked returns the direct membership from which user inherits
+// read on groupID. A direct membership on groupID is not inheritance, and a
+// read exclusion removes the derived access. The proper ancestor chain is
+// walked from parent to root, so multiple qualifying grants resolve to the
+// nearest (most specific) source instead of depending on map iteration order.
+// Caller must hold s.mu.
+func (s *Store) inheritedSourceLocked(user, groupID string) (Membership, bool) {
+	byGroup := s.memberships[user]
+	if len(byGroup) == 0 {
+		return Membership{}, false
+	}
+	if _, direct := byGroup[groupID]; direct {
+		return Membership{}, false
 	}
 	if s.isExcludedLocked(user, groupID) {
-		return false
+		return Membership{}, false
 	}
-	return s.reachesByInheritanceLocked(user, groupID, "")
+	g, ok := s.groups[groupID]
+	if !ok {
+		return Membership{}, false
+	}
+	visited := make(map[string]bool, MaxTreeDepth)
+	for cur := g.ParentID; cur != "" && !visited[cur] && len(visited) < MaxTreeDepth; {
+		visited[cur] = true
+		if m, direct := byGroup[cur]; direct {
+			return *m, true
+		}
+		parent, exists := s.groups[cur]
+		if !exists {
+			break
+		}
+		cur = parent.ParentID
+	}
+	return Membership{}, false
 }
 
 // reachesByInheritanceLocked reports whether one of user's direct groups
@@ -772,48 +803,21 @@ func (s *Store) InheritsRead(user, groupID string) bool {
 	return s.inheritsReadLocked(user, groupID)
 }
 
-// Inheritors returns the sorted person keys that hold READ on groupID purely by
-// downward inheritance: every user with a direct membership on a PROPER ancestor
-// of groupID, minus those already direct on groupID (they are direct members,
-// not inheritors) and those with a read exclusion on it. It is the set
-// counterpart to InheritsRead — same predicate, evaluated for every user — but
-// computed by walking groupID's ancestor chain ONCE, so the cost is proportional
-// to the tree depth and the membership count, not to a per-user subtree collect.
-// Returns nil for an unknown group.
+// Inheritors returns the sorted person keys that reach groupID purely by
+// downward inheritance. ConsoleTeamMembers is the richer projection used by
+// the team endpoint; this compatibility view keeps callers that only need the
+// inherited user set on the same source-selection and exclusion semantics.
 func (s *Store) Inheritors(groupID string) []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	g, ok := s.groups[groupID]
-	if !ok {
+	members := s.ConsoleTeamMembers(groupID)
+	if members == nil {
 		return nil
 	}
-	// Proper ancestors of groupID (walk up the parent chain, depth-capped and
-	// cycle-guarded like every other ancestor walk here).
-	ancestors := make(map[string]bool, MaxTreeDepth)
-	for cur := g.ParentID; cur != "" && !ancestors[cur] && len(ancestors) < MaxTreeDepth; {
-		ancestors[cur] = true
-		p, ok := s.groups[cur]
-		if !ok {
-			break
-		}
-		cur = p.ParentID
-	}
 	out := make([]string, 0)
-	for user, byGroup := range s.memberships {
-		if _, direct := byGroup[groupID]; direct {
-			continue // a direct member of groupID, not an inheritor
-		}
-		if s.isExcludedLocked(user, groupID) {
-			continue
-		}
-		for gid := range byGroup {
-			if ancestors[gid] {
-				out = append(out, user)
-				break
-			}
+	for _, member := range members {
+		if member.Inherited {
+			out = append(out, member.User)
 		}
 	}
-	sort.Strings(out)
 	return out
 }
 
