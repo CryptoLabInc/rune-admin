@@ -2,6 +2,7 @@ package updater
 
 import (
 	"archive/tar"
+	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"syscall"
@@ -316,7 +318,112 @@ func validateManagedRoot(root string) error {
 	}); err != nil {
 		return errors.New("configured managed root contains an unsafe entry")
 	}
+	if err := validateNoMountBoundaries(root); err != nil {
+		return err
+	}
 	return nil
+}
+
+func validateNoMountBoundaries(root string) error {
+	rootInfo, err := os.Stat(root)
+	if err != nil || !rootInfo.IsDir() {
+		return errors.New("managed root is not an inspectable directory")
+	}
+	rootStat, ok := rootInfo.Sys().(*syscall.Stat_t)
+	if !ok {
+		return errors.New("managed root filesystem identity is unavailable")
+	}
+	parent := filepath.Dir(root)
+	if parent == root {
+		return errors.New("managed root must not be a filesystem mount point")
+	}
+	parentInfo, err := os.Stat(parent)
+	if err != nil || !parentInfo.IsDir() {
+		return errors.New("managed root parent is not inspectable")
+	}
+	parentStat, ok := parentInfo.Sys().(*syscall.Stat_t)
+	if !ok || uint64(parentStat.Dev) != uint64(rootStat.Dev) {
+		return errors.New("managed root must not be a filesystem mount point")
+	}
+	if err := filepath.WalkDir(root, func(_ string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || uint64(stat.Dev) != uint64(rootStat.Dev) {
+			return errors.New("managed root contains a nested filesystem boundary")
+		}
+		return nil
+	}); err != nil {
+		return errors.New("managed root contains a nested filesystem boundary")
+	}
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	f, err := os.Open("/proc/self/mountinfo")
+	if err != nil {
+		return errors.New("cannot inspect Linux mount boundaries")
+	}
+	mounts, parseErr := parseLinuxMountInfo(f)
+	closeErr := f.Close()
+	if parseErr != nil || closeErr != nil {
+		return errors.New("cannot parse Linux mount boundaries")
+	}
+	for _, mount := range mounts {
+		if mount == root || isWithin(root, mount) {
+			return errors.New("managed root is or contains a Linux mount point")
+		}
+	}
+	return nil
+}
+
+func parseLinuxMountInfo(r io.Reader) ([]string, error) {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 64<<10), 2<<20)
+	var mounts []string
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) < 6 {
+			return nil, errors.New("invalid mountinfo record")
+		}
+		mount, err := unescapeMountInfoPath(fields[4])
+		if err != nil || !filepath.IsAbs(mount) {
+			return nil, errors.New("invalid mountinfo mount point")
+		}
+		mounts = append(mounts, filepath.Clean(mount))
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return mounts, nil
+}
+
+func unescapeMountInfoPath(input string) (string, error) {
+	var output strings.Builder
+	for i := 0; i < len(input); i++ {
+		if input[i] != '\\' {
+			output.WriteByte(input[i])
+			continue
+		}
+		if i+3 >= len(input) {
+			return "", errors.New("truncated mountinfo escape")
+		}
+		var value byte
+		for j := 1; j <= 3; j++ {
+			digit := input[i+j]
+			if digit < '0' || digit > '7' {
+				return "", errors.New("invalid mountinfo escape")
+			}
+			value = value*8 + (digit - '0')
+		}
+		output.WriteByte(value)
+		i += 3
+	}
+	return output.String(), nil
 }
 
 func validateManagedPath(path string) error {
@@ -423,11 +530,10 @@ func BackupState(backupDir string, statePaths []string) (*Snapshot, error) {
 	entries := make([]manifestEntry, len(paths))
 	for i, path := range paths {
 		entries[i].Target = path
-		_, statErr := os.Lstat(path)
+		info, statErr := os.Lstat(path)
 		switch {
 		case statErr == nil:
 			entries[i].Exists = true
-			info, _ := os.Lstat(path)
 			switch {
 			case info.IsDir():
 				entries[i].Kind = stateKindDirectory
@@ -498,9 +604,21 @@ func BackupState(backupDir string, statePaths []string) (*Snapshot, error) {
 }
 
 func archiveStatePath(tw *tar.Writer, index int, root string) error {
+	rootInfo, err := os.Lstat(root)
+	if err != nil {
+		return sanitizePathError(err)
+	}
+	rootStat, ok := rootInfo.Sys().(*syscall.Stat_t)
+	if !ok {
+		return errors.New("durable-state filesystem identity is unavailable")
+	}
 	return filepath.Walk(root, func(path string, info fs.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return sanitizePathError(walkErr)
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || uint64(stat.Dev) != uint64(rootStat.Dev) {
+			return errors.New("durable state crosses a filesystem boundary")
 		}
 		link := ""
 		if info.Mode()&os.ModeSymlink != 0 {
@@ -523,10 +641,8 @@ func archiveStatePath(tw *tar.Writer, index int, root string) error {
 		}
 		hdr.Name = name
 		hdr.Format = tar.FormatPAX
-		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-			hdr.Uid = int(stat.Uid)
-			hdr.Gid = int(stat.Gid)
-		}
+		hdr.Uid = int(stat.Uid)
+		hdr.Gid = int(stat.Gid)
 		if err := tw.WriteHeader(hdr); err != nil {
 			return err
 		}
@@ -571,7 +687,13 @@ func (s *Snapshot) Restore() error {
 	}
 	cleanupSafe, err := swapStagedEntries(staged)
 	if err == nil || cleanupSafe {
-		cleanupStagedEntries(staged)
+		cleanupErr := cleanupStagedEntries(staged)
+		if err == nil && cleanupErr != nil {
+			return errors.New("restored state but could not remove restore quarantine")
+		}
+		if err != nil && cleanupErr != nil {
+			err = errors.Join(err, errors.New("could not remove restore quarantine"))
+		}
 	}
 	if err != nil && !cleanupSafe {
 		return fmt.Errorf("restore swap failed and quarantine was retained for manual recovery: %w", err)
@@ -600,6 +722,11 @@ func (s *Snapshot) validateLiveTargets() error {
 		case stateKindDirectory:
 			if kind != stateKindDirectory && kind != stateKindMissing {
 				return fmt.Errorf("live durable-state entry %d changed from directory to a non-directory", i)
+			}
+			if kind == stateKindDirectory {
+				if err := validateNoMountBoundaries(entry.Target); err != nil {
+					return fmt.Errorf("live durable-state directory %d has an unsafe mount boundary", i)
+				}
 			}
 		case stateKindFile, stateKindMissing:
 			if kind == stateKindDirectory {
@@ -933,10 +1060,16 @@ func sameRegularFile(a, b string) bool {
 	return string(aHash.Sum(nil)) == string(bHash.Sum(nil))
 }
 
-func cleanupStagedEntries(staged []stagedEntry) {
+func cleanupStagedEntries(staged []stagedEntry) error {
+	var cleanupErrs []error
 	for _, entry := range staged {
-		removePrivateTree(entry.container)
+		if entry.container != "" {
+			if err := os.RemoveAll(entry.container); err != nil {
+				cleanupErrs = append(cleanupErrs, sanitizePathError(err))
+			}
+		}
 	}
+	return errors.Join(cleanupErrs...)
 }
 
 func parseStateArchiveName(name string) (int, string, error) {

@@ -349,6 +349,35 @@ func TestManagedRootRequiresOwnedMarkerAndRejectsNestedSymlink(t *testing.T) {
 	}
 }
 
+func TestParseLinuxMountInfoUnescapesMountPoints(t *testing.T) {
+	t.Parallel()
+	input := strings.Join([]string{
+		`36 25 0:32 / /opt/rune\040console rw,relatime - ext4 /dev/root rw`,
+		`37 25 0:33 / /mnt/backslash\134name rw,relatime - ext4 /dev/root rw`,
+	}, "\n")
+	mounts, err := parseLinuxMountInfo(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"/opt/rune console", `/mnt/backslash\name`}
+	if !reflect.DeepEqual(mounts, want) {
+		t.Fatalf("mounts = %q, want %q", mounts, want)
+	}
+}
+
+func TestParseLinuxMountInfoRejectsInvalidRecords(t *testing.T) {
+	t.Parallel()
+	for _, input := range []string{
+		"36 25 0:32 /",
+		`36 25 0:32 / /opt/rune\04 rw - ext4 /dev/root rw`,
+		`36 25 0:32 / relative rw - ext4 /dev/root rw`,
+	} {
+		if _, err := parseLinuxMountInfo(strings.NewReader(input)); err == nil {
+			t.Fatalf("parseLinuxMountInfo(%q) succeeded", input)
+		}
+	}
+}
+
 func TestResolveServiceBinaryFailsClosedForCopiedCLI(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
