@@ -461,6 +461,42 @@ func (s *ConsoleGRPC) GetAgentManifest(ctx context.Context, req *pb.GetAgentMani
 	return &pb.GetAgentManifestResponse{ManifestJson: string(js)}, nil
 }
 
+// ── ReportActivation (agent self-reports terminal active → member online) ──
+
+// ReportActivation records that the caller's agent reached terminal active
+// (configure/activate fully succeeded: manifest fetched, centroids synced,
+// embedder + pipelines up). It stamps the token's activated_at, which is what
+// advances the member from invite_redeemed to online — one authenticated RPC
+// (e.g. GetAgentManifest) is not enough, since the agent can still be
+// mid-configure. Any valid token may report its own activation; idempotent.
+func (s *ConsoleGRPC) ReportActivation(ctx context.Context, req *pb.ReportActivationRequest) (*pb.ReportActivationResponse, error) {
+	start := time.Now()
+	user := s.v.tokens.GetUsername(req.GetToken())
+	if user == "" {
+		user = "unknown"
+	}
+	statusStr := "success"
+	var errDetail *string
+	defer func() {
+		s.emit(ctx, "report_activation", user, nil, 0, statusStr, errDetail, time.Since(start))
+	}()
+
+	username, _, err := s.v.tokens.Validate(req.GetToken())
+	if err != nil {
+		st, msg := mapTokenError(err)
+		statusStr, errDetail = errStatus(err)
+		return nil, status.Error(st, msg)
+	}
+	user = username
+	if err := s.v.tokens.MarkActivated(user); err != nil {
+		statusStr = "error"
+		ed := err.Error()
+		errDetail = &ed
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return &pb.ReportActivationResponse{}, nil
+}
+
 // buildBundle assembles the per-token agent manifest returned by
 // GetAgentManifest: the PUBLIC EncKey pair (RMP + MM EncKey.json envelopes) and
 // the caller's derived agent_dek so rune-mcp can encrypt + seal locally, plus

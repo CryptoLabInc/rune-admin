@@ -59,7 +59,24 @@ service ConsoleService {
   // (a crash can lose an invite, never double-release a token), and the
   // member is advanced invited→active in the same call.
   rpc Unwrap(UnwrapRequest) returns (UnwrapResponse);
+
+  // ReportActivation lets rune-mcp self-report that it reached the terminal
+  // active state (configure/activate fully succeeded: manifest fetched,
+  // centroids synced, embedder + pipelines up). The console flips the member to
+  // online only on this signal — authenticating a single RPC is not enough,
+  // since the agent can still be mid-configure. Idempotent; re-sent whenever the
+  // agent (re)reaches active.
+  rpc ReportActivation(ReportActivationRequest) returns (ReportActivationResponse);
 }
+
+// ─── ReportActivation ─────────────────────────────────────────────
+
+message ReportActivationRequest {
+  // Auth token. Required, fixed 36 chars (evt_ + 32 hex).
+  string token = 1 [(buf.validate.field).string = {min_len: 36, max_len: 36}];
+}
+
+message ReportActivationResponse {}
 
 // ─── GetAgentManifest ─────────────────────────────────────────────
 

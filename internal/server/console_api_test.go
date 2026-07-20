@@ -606,7 +606,9 @@ func TestConsoleUserLiveness(t *testing.T) {
 	if err := f.members.Activate(m.ID); err != nil {
 		t.Fatal(err)
 	}
-	// Mint a session token and use it once — Validate stamps LastUsed.
+	// Mint a session token and use it once — Validate stamps LastUsed (drives
+	// lastAccessAt). Then report activation — MarkActivated stamps activated_at,
+	// the gate that flips the member from invite_redeemed to online.
 	tok, err := f.v.Tokens().AddToken("live@corp.com", "member", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -614,8 +616,11 @@ func TestConsoleUserLiveness(t *testing.T) {
 	if _, _, err := f.v.Tokens().Validate(tok.Token); err != nil {
 		t.Fatal(err)
 	}
+	if err := f.v.Tokens().MarkActivated("live@corp.com"); err != nil {
+		t.Fatal(err)
+	}
 
-	// Active + valid token + recent use => online with a lastAccessAt.
+	// Active + valid token + reported activation => online with a lastAccessAt.
 	_, body := f.do(t, http.MethodGet, "/users/"+m.ID, "")
 	var u map[string]any
 	_ = json.Unmarshal(body, &u)

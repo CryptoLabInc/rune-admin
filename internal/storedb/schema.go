@@ -147,12 +147,13 @@ CREATE TABLE IF NOT EXISTS roles (
 -- (hashing is a named follow-up) — the DB inherits the 0600 fail-closed
 -- posture instead.
 CREATE TABLE IF NOT EXISTS tokens (
-  user      TEXT PRIMARY KEY,          -- one token per user (hard invariant, tokensByUser)
-  token     TEXT NOT NULL UNIQUE,      -- plaintext 'evt_'+32hex; Validate's lookup key
-  role      TEXT NOT NULL,             -- soft ref -> roles.name
-  issued_at TEXT NOT NULL,             -- date-only 'YYYY-MM-DD' (NOT RFC3339 — day-granularity expiry is a contract)
-  expires   TEXT,                      -- date-only; NULL = never; deliberately NO format CHECK (unparseable == never)
-  last_used TEXT                       -- canonical TimeFormat (RFC3339 UTC ms); newly durable, written async + throttled, never inside Validate's lock
+  user         TEXT PRIMARY KEY,       -- one token per user (hard invariant, tokensByUser)
+  token        TEXT NOT NULL UNIQUE,   -- plaintext 'evt_'+32hex; Validate's lookup key
+  role         TEXT NOT NULL,          -- soft ref -> roles.name
+  issued_at    TEXT NOT NULL,          -- date-only 'YYYY-MM-DD' (NOT RFC3339 — day-granularity expiry is a contract)
+  expires      TEXT,                   -- date-only; NULL = never; deliberately NO format CHECK (unparseable == never)
+  last_used    TEXT,                   -- canonical TimeFormat (RFC3339 UTC ms); newly durable, written async + throttled, never inside Validate's lock
+  activated_at TEXT                    -- canonical TimeFormat; set on ReportActivation (agent reached active) — gates member online vs invite_redeemed; NULL = never fully activated
 );
 
 -- groups + memberships (internal/groups/types.go). parent_id keeps the ''

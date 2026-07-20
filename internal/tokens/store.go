@@ -127,19 +127,20 @@ func (s *Store) LoadFromDB(database *sql.DB) error {
 	byToken := make(map[string]*Token)
 	byUser := make(map[string]*Token)
 	tokRows, err := database.QueryContext(ctx,
-		`SELECT user, token, role, issued_at, expires, last_used FROM tokens`)
+		`SELECT user, token, role, issued_at, expires, last_used, activated_at FROM tokens`)
 	if err != nil {
 		return fmt.Errorf("tokens: load from db: %w", err)
 	}
 	defer func() { _ = tokRows.Close() }()
 	for tokRows.Next() {
 		var t Token
-		var expires, lastUsed sql.NullString
-		if err := tokRows.Scan(&t.User, &t.Token, &t.Role, &t.IssuedAt, &expires, &lastUsed); err != nil {
+		var expires, lastUsed, activatedAt sql.NullString
+		if err := tokRows.Scan(&t.User, &t.Token, &t.Role, &t.IssuedAt, &expires, &lastUsed, &activatedAt); err != nil {
 			return fmt.Errorf("tokens: load from db: %w", err)
 		}
 		t.Expires = expires.String
 		t.LastUsed = lastUsed.String
+		t.ActivatedAt = activatedAt.String
 		// ONE shared *Token per row, same aliasing as AddToken: mutators
 		// update the shared record and both indexes see it.
 		cp := t
@@ -271,6 +272,35 @@ func (s *Store) GetUsername(tokenStr string) string {
 	return ""
 }
 
+// MarkActivated stamps the user's token activated_at to now: the agent has
+// self-reported reaching terminal active (ReportActivation) — fully configured
+// and serving, not merely authenticated. This is the signal that advances a
+// member from invite_redeemed to online. Idempotent (a re-report just rewrites
+// the stamp) and off any hot path (agents report activation rarely), so the row
+// is persisted synchronously before the in-memory copy changes, keeping the
+// store's cache-never-leads-DB invariant. An unknown user is a no-op. The write
+// is keyed on user AND token so a rotation between the agent's report and this
+// write matches zero rows (the fresh, unactivated secret keeps its NULL stamp).
+func (s *Store) MarkActivated(user string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tok, ok := s.tokensByUser[user]
+	if !ok {
+		return nil
+	}
+	now := storedb.FormatTime(s.now())
+	secret := tok.Token
+	if err := s.persist(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx,
+			`UPDATE tokens SET activated_at = ? WHERE user = ? AND token = ?`, now, user, secret)
+		return err
+	}); err != nil {
+		return fmt.Errorf("tokens: mark activated for user %q: %w", user, err)
+	}
+	tok.ActivatedAt = now
+	return nil
+}
+
 func (s *Store) getOrCreateLimiterLocked(user string, role *Role) (*RateLimiter, error) {
 	if l, ok := s.rateLimiters[user]; ok {
 		return l, nil
@@ -311,9 +341,9 @@ func (s *Store) AddToken(user, roleName string, expiresDays *int) (*Token, error
 	}
 	if err := s.persist(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx,
-			`INSERT INTO tokens (user, token, role, issued_at, expires, last_used)
-			 VALUES (?, ?, ?, ?, ?, ?)`,
-			tok.User, tok.Token, tok.Role, tok.IssuedAt, nullIfEmpty(tok.Expires), nullIfEmpty(tok.LastUsed))
+			`INSERT INTO tokens (user, token, role, issued_at, expires, last_used, activated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			tok.User, tok.Token, tok.Role, tok.IssuedAt, nullIfEmpty(tok.Expires), nullIfEmpty(tok.LastUsed), nullIfEmpty(tok.ActivatedAt))
 		return err
 	}); err != nil {
 		return nil, err
@@ -393,7 +423,7 @@ func (s *Store) RotateToken(user string) (*Token, error) {
 	}
 	if err := s.persist(func(ctx context.Context, tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx,
-			`UPDATE tokens SET token = ?, role = ?, issued_at = ?, expires = ?, last_used = NULL
+			`UPDATE tokens SET token = ?, role = ?, issued_at = ?, expires = ?, last_used = NULL, activated_at = NULL
 			 WHERE user = ?`,
 			newTok.Token, newTok.Role, newTok.IssuedAt, nullIfEmpty(newTok.Expires), user)
 		if err != nil {
@@ -454,7 +484,12 @@ type TokenInfo struct {
 	// token is past its expiry as of the read. Both back the console's user
 	// liveness fields (lastAccessAt / session-expired status).
 	LastUsed string `json:"last_used" yaml:"last_used"`
-	Expired  bool   `json:"expired" yaml:"expired"`
+	// ActivatedAt is set once the agent self-reports terminal activation
+	// (ReportActivation), empty until then. It is what advances a member from
+	// invite_redeemed to online: a live token that has authenticated but never
+	// activated is redeemed, not online.
+	ActivatedAt string `json:"activated_at" yaml:"activated_at"`
+	Expired     bool   `json:"expired" yaml:"expired"`
 }
 
 // ListTokens returns a secret-free, user-sorted listing of every token.
@@ -472,7 +507,7 @@ func (s *Store) ListTokens() []TokenInfo {
 	out := make([]TokenInfo, 0, len(users))
 	for _, u := range users {
 		tok := s.tokensByUser[u]
-		info := TokenInfo{User: tok.User, Role: tok.Role, Expires: "never", LastUsed: tok.LastUsed, Expired: tok.IsExpiredAt(s.now())}
+		info := TokenInfo{User: tok.User, Role: tok.Role, Expires: "never", LastUsed: tok.LastUsed, ActivatedAt: tok.ActivatedAt, Expired: tok.IsExpiredAt(s.now())}
 		if tok.Expires != "" {
 			info.Expires = tok.Expires
 		}

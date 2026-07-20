@@ -27,6 +27,7 @@ const (
 	ConsoleService_GetPermissions_FullMethodName   = "/rune.console.v1.ConsoleService/GetPermissions"
 	ConsoleService_LookupWrap_FullMethodName       = "/rune.console.v1.ConsoleService/LookupWrap"
 	ConsoleService_Unwrap_FullMethodName           = "/rune.console.v1.ConsoleService/Unwrap"
+	ConsoleService_ReportActivation_FullMethodName = "/rune.console.v1.ConsoleService/ReportActivation"
 )
 
 // ConsoleServiceClient is the client API for ConsoleService service.
@@ -76,6 +77,13 @@ type ConsoleServiceClient interface {
 	// (a crash can lose an invite, never double-release a token), and the
 	// member is advanced invited→active in the same call.
 	Unwrap(ctx context.Context, in *UnwrapRequest, opts ...grpc.CallOption) (*UnwrapResponse, error)
+	// ReportActivation lets rune-mcp self-report that it reached the terminal
+	// active state (configure/activate fully succeeded: manifest fetched,
+	// centroids synced, embedder + pipelines up). The console flips the member to
+	// online only on this signal — authenticating a single RPC is not enough,
+	// since the agent can still be mid-configure. Idempotent; re-sent whenever the
+	// agent (re)reaches active.
+	ReportActivation(ctx context.Context, in *ReportActivationRequest, opts ...grpc.CallOption) (*ReportActivationResponse, error)
 }
 
 type consoleServiceClient struct {
@@ -175,6 +183,16 @@ func (c *consoleServiceClient) Unwrap(ctx context.Context, in *UnwrapRequest, op
 	return out, nil
 }
 
+func (c *consoleServiceClient) ReportActivation(ctx context.Context, in *ReportActivationRequest, opts ...grpc.CallOption) (*ReportActivationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportActivationResponse)
+	err := c.cc.Invoke(ctx, ConsoleService_ReportActivation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ConsoleServiceServer is the server API for ConsoleService service.
 // All implementations must embed UnimplementedConsoleServiceServer
 // for forward compatibility.
@@ -222,6 +240,13 @@ type ConsoleServiceServer interface {
 	// (a crash can lose an invite, never double-release a token), and the
 	// member is advanced invited→active in the same call.
 	Unwrap(context.Context, *UnwrapRequest) (*UnwrapResponse, error)
+	// ReportActivation lets rune-mcp self-report that it reached the terminal
+	// active state (configure/activate fully succeeded: manifest fetched,
+	// centroids synced, embedder + pipelines up). The console flips the member to
+	// online only on this signal — authenticating a single RPC is not enough,
+	// since the agent can still be mid-configure. Idempotent; re-sent whenever the
+	// agent (re)reaches active.
+	ReportActivation(context.Context, *ReportActivationRequest) (*ReportActivationResponse, error)
 	mustEmbedUnimplementedConsoleServiceServer()
 }
 
@@ -255,6 +280,9 @@ func (UnimplementedConsoleServiceServer) LookupWrap(context.Context, *LookupWrap
 }
 func (UnimplementedConsoleServiceServer) Unwrap(context.Context, *UnwrapRequest) (*UnwrapResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Unwrap not implemented")
+}
+func (UnimplementedConsoleServiceServer) ReportActivation(context.Context, *ReportActivationRequest) (*ReportActivationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportActivation not implemented")
 }
 func (UnimplementedConsoleServiceServer) mustEmbedUnimplementedConsoleServiceServer() {}
 func (UnimplementedConsoleServiceServer) testEmbeddedByValue()                        {}
@@ -414,6 +442,24 @@ func _ConsoleService_Unwrap_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ConsoleService_ReportActivation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportActivationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConsoleServiceServer).ReportActivation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConsoleService_ReportActivation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConsoleServiceServer).ReportActivation(ctx, req.(*ReportActivationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ConsoleService_ServiceDesc is the grpc.ServiceDesc for ConsoleService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -448,6 +494,10 @@ var ConsoleService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Unwrap",
 			Handler:    _ConsoleService_Unwrap_Handler,
+		},
+		{
+			MethodName: "ReportActivation",
+			Handler:    _ConsoleService_ReportActivation_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

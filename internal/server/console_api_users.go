@@ -110,12 +110,15 @@ type userIndex struct {
 }
 
 // tokenLive is the console-relevant view of a member's session token: whether
-// it exists, when it was last used (lastAccessAt), whether it is past expiry,
-// and its expiry (for the session-expired timestamp on natural expiry).
+// it exists, when it was last used (lastAccessAt), whether the agent has
+// self-reported terminal activation (activatedAt — the online gate), whether it
+// is past expiry, and its expiry (for the session-expired timestamp on natural
+// expiry).
 type tokenLive struct {
-	lastUsed string
-	expires  string
-	expired  bool
+	lastUsed    string
+	activatedAt string
+	expires     string
+	expired     bool
 }
 
 func (h *consoleAPI) newIndex() *userIndex {
@@ -135,7 +138,7 @@ func (h *consoleAPI) newIndex() *userIndex {
 		idx.memberByID[m.ID] = m
 	}
 	for _, t := range h.v.Tokens().ListTokens() {
-		idx.tokenByEmail[t.User] = tokenLive{lastUsed: t.LastUsed, expires: t.Expires, expired: t.Expired}
+		idx.tokenByEmail[t.User] = tokenLive{lastUsed: t.LastUsed, activatedAt: t.ActivatedAt, expires: t.Expires, expired: t.Expired}
 	}
 	// membershipsByUser / inheritedByUser are populated lazily by the two
 	// endpoints that project them (user list + detail) via fillGroupAccess,
@@ -197,8 +200,9 @@ func (h *consoleAPI) fillGroupAccess(idx *userIndex) {
 
 // status derives the console member status enum from the member lifecycle, its
 // latest invite, and whether a session token exists (wireframe SC-11 defs):
-//   - online          = active member whose agent has authenticated at least once
-//   - invite_redeemed = active member whose token is released but never used yet
+//   - online          = active member whose agent has self-reported terminal
+//     activation (ReportActivation: fully configured + serving)
+//   - invite_redeemed = active member whose token is released but not yet activated
 //   - session_expired = active/disabled member whose token was destroyed
 //   - invite_pending  = invited, latest code sent and not past expiry
 //   - invite_expired  = invited, latest code expired (24h) or voided
@@ -211,11 +215,13 @@ func (idx *userIndex) status(m members.Member) string {
 		}
 		// A live token means the invite was redeemed (Unwrap released it), but
 		// redemption alone is not "online": the agent may still be mid-configure
-		// or have failed right after Unwrap. Unwrap never Validates the session
-		// token, so LastUsed stays empty until the agent's first authenticated
-		// RPC (GetAgentManifest) — an empty stamp means "redeemed, not connected
-		// yet", the intermediate invite_redeemed (사용됨) state.
-		if tl.lastUsed != "" {
+		// (fetching the manifest, syncing centroids, warming the embedder) or have
+		// failed right after Unwrap. Only the agent's own ReportActivation — sent
+		// once it reaches terminal active — sets activatedAt, so an empty stamp
+		// means "redeemed, not fully up yet", the intermediate invite_redeemed
+		// (사용됨) state. last_used is too weak a gate: GetAgentManifest stamps it
+		// while the agent is still mid-configure.
+		if tl.activatedAt != "" {
 			return "online"
 		}
 		return "invite_redeemed"

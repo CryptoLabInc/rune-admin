@@ -3,12 +3,13 @@ package tokens
 import "time"
 
 type Token struct {
-	User     string `yaml:"user"`
-	Token    string `yaml:"token"`
-	Role     string `yaml:"role"`
-	IssuedAt string `yaml:"issued_at"`           // ISO date
-	Expires  string `yaml:"expires,omitempty"`   // ISO date, empty = never
-	LastUsed string `yaml:"last_used,omitempty"` // RFC3339 UTC; stamped on Validate (throttled), empty = never used
+	User        string `yaml:"user"`
+	Token       string `yaml:"token"`
+	Role        string `yaml:"role"`
+	IssuedAt    string `yaml:"issued_at"`              // ISO date
+	Expires     string `yaml:"expires,omitempty"`      // ISO date, empty = never
+	LastUsed    string `yaml:"last_used,omitempty"`    // RFC3339 UTC; stamped on Validate (throttled), empty = never used
+	ActivatedAt string `yaml:"activated_at,omitempty"` // RFC3339 UTC; set on ReportActivation (agent reached active), empty = never activated
 }
 
 const dateFormat = "2006-01-02"

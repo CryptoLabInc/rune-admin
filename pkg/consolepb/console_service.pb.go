@@ -22,6 +22,87 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ReportActivationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Auth token. Required, fixed 36 chars (evt_ + 32 hex).
+	Token         string `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportActivationRequest) Reset() {
+	*x = ReportActivationRequest{}
+	mi := &file_console_service_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportActivationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportActivationRequest) ProtoMessage() {}
+
+func (x *ReportActivationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_console_service_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportActivationRequest.ProtoReflect.Descriptor instead.
+func (*ReportActivationRequest) Descriptor() ([]byte, []int) {
+	return file_console_service_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ReportActivationRequest) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+type ReportActivationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportActivationResponse) Reset() {
+	*x = ReportActivationResponse{}
+	mi := &file_console_service_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportActivationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportActivationResponse) ProtoMessage() {}
+
+func (x *ReportActivationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_service_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportActivationResponse.ProtoReflect.Descriptor instead.
+func (*ReportActivationResponse) Descriptor() ([]byte, []int) {
+	return file_console_service_proto_rawDescGZIP(), []int{1}
+}
+
 type GetAgentManifestRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Auth token. Required, fixed 36 chars (evt_ + 32 hex).
@@ -32,7 +113,7 @@ type GetAgentManifestRequest struct {
 
 func (x *GetAgentManifestRequest) Reset() {
 	*x = GetAgentManifestRequest{}
-	mi := &file_console_service_proto_msgTypes[0]
+	mi := &file_console_service_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -44,7 +125,7 @@ func (x *GetAgentManifestRequest) String() string {
 func (*GetAgentManifestRequest) ProtoMessage() {}
 
 func (x *GetAgentManifestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[0]
+	mi := &file_console_service_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57,7 +138,7 @@ func (x *GetAgentManifestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAgentManifestRequest.ProtoReflect.Descriptor instead.
 func (*GetAgentManifestRequest) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{0}
+	return file_console_service_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *GetAgentManifestRequest) GetToken() string {
@@ -86,7 +167,7 @@ type GetAgentManifestResponse struct {
 
 func (x *GetAgentManifestResponse) Reset() {
 	*x = GetAgentManifestResponse{}
-	mi := &file_console_service_proto_msgTypes[1]
+	mi := &file_console_service_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -98,7 +179,7 @@ func (x *GetAgentManifestResponse) String() string {
 func (*GetAgentManifestResponse) ProtoMessage() {}
 
 func (x *GetAgentManifestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[1]
+	mi := &file_console_service_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -111,7 +192,7 @@ func (x *GetAgentManifestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAgentManifestResponse.ProtoReflect.Descriptor instead.
 func (*GetAgentManifestResponse) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{1}
+	return file_console_service_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GetAgentManifestResponse) GetManifestJson() string {
@@ -136,7 +217,7 @@ type GetCACertRequest struct {
 
 func (x *GetCACertRequest) Reset() {
 	*x = GetCACertRequest{}
-	mi := &file_console_service_proto_msgTypes[2]
+	mi := &file_console_service_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -148,7 +229,7 @@ func (x *GetCACertRequest) String() string {
 func (*GetCACertRequest) ProtoMessage() {}
 
 func (x *GetCACertRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[2]
+	mi := &file_console_service_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -161,7 +242,7 @@ func (x *GetCACertRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCACertRequest.ProtoReflect.Descriptor instead.
 func (*GetCACertRequest) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{2}
+	return file_console_service_proto_rawDescGZIP(), []int{4}
 }
 
 type GetCACertResponse struct {
@@ -175,7 +256,7 @@ type GetCACertResponse struct {
 
 func (x *GetCACertResponse) Reset() {
 	*x = GetCACertResponse{}
-	mi := &file_console_service_proto_msgTypes[3]
+	mi := &file_console_service_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -187,7 +268,7 @@ func (x *GetCACertResponse) String() string {
 func (*GetCACertResponse) ProtoMessage() {}
 
 func (x *GetCACertResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[3]
+	mi := &file_console_service_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -200,7 +281,7 @@ func (x *GetCACertResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCACertResponse.ProtoReflect.Descriptor instead.
 func (*GetCACertResponse) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{3}
+	return file_console_service_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GetCACertResponse) GetCaPem() []byte {
@@ -249,7 +330,7 @@ type InsertRequest struct {
 
 func (x *InsertRequest) Reset() {
 	*x = InsertRequest{}
-	mi := &file_console_service_proto_msgTypes[4]
+	mi := &file_console_service_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -261,7 +342,7 @@ func (x *InsertRequest) String() string {
 func (*InsertRequest) ProtoMessage() {}
 
 func (x *InsertRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[4]
+	mi := &file_console_service_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -274,7 +355,7 @@ func (x *InsertRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InsertRequest.ProtoReflect.Descriptor instead.
 func (*InsertRequest) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{4}
+	return file_console_service_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *InsertRequest) GetToken() string {
@@ -336,7 +417,7 @@ type InsertResponse struct {
 
 func (x *InsertResponse) Reset() {
 	*x = InsertResponse{}
-	mi := &file_console_service_proto_msgTypes[5]
+	mi := &file_console_service_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -348,7 +429,7 @@ func (x *InsertResponse) String() string {
 func (*InsertResponse) ProtoMessage() {}
 
 func (x *InsertResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[5]
+	mi := &file_console_service_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -361,7 +442,7 @@ func (x *InsertResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InsertResponse.ProtoReflect.Descriptor instead.
 func (*InsertResponse) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{5}
+	return file_console_service_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *InsertResponse) GetId() string {
@@ -388,7 +469,7 @@ type GetCentroidsRequest struct {
 
 func (x *GetCentroidsRequest) Reset() {
 	*x = GetCentroidsRequest{}
-	mi := &file_console_service_proto_msgTypes[6]
+	mi := &file_console_service_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -400,7 +481,7 @@ func (x *GetCentroidsRequest) String() string {
 func (*GetCentroidsRequest) ProtoMessage() {}
 
 func (x *GetCentroidsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[6]
+	mi := &file_console_service_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -413,7 +494,7 @@ func (x *GetCentroidsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCentroidsRequest.ProtoReflect.Descriptor instead.
 func (*GetCentroidsRequest) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{6}
+	return file_console_service_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetCentroidsRequest) GetToken() string {
@@ -438,7 +519,7 @@ type CentroidChunk struct {
 
 func (x *CentroidChunk) Reset() {
 	*x = CentroidChunk{}
-	mi := &file_console_service_proto_msgTypes[7]
+	mi := &file_console_service_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -450,7 +531,7 @@ func (x *CentroidChunk) String() string {
 func (*CentroidChunk) ProtoMessage() {}
 
 func (x *CentroidChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[7]
+	mi := &file_console_service_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -463,7 +544,7 @@ func (x *CentroidChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CentroidChunk.ProtoReflect.Descriptor instead.
 func (*CentroidChunk) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{7}
+	return file_console_service_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CentroidChunk) GetPayload() isCentroidChunk_Payload {
@@ -519,7 +600,7 @@ type CentroidSetHeader struct {
 
 func (x *CentroidSetHeader) Reset() {
 	*x = CentroidSetHeader{}
-	mi := &file_console_service_proto_msgTypes[8]
+	mi := &file_console_service_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -531,7 +612,7 @@ func (x *CentroidSetHeader) String() string {
 func (*CentroidSetHeader) ProtoMessage() {}
 
 func (x *CentroidSetHeader) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[8]
+	mi := &file_console_service_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -544,7 +625,7 @@ func (x *CentroidSetHeader) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CentroidSetHeader.ProtoReflect.Descriptor instead.
 func (*CentroidSetHeader) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{8}
+	return file_console_service_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *CentroidSetHeader) GetVersion() string {
@@ -584,7 +665,7 @@ type CentroidBatch struct {
 
 func (x *CentroidBatch) Reset() {
 	*x = CentroidBatch{}
-	mi := &file_console_service_proto_msgTypes[9]
+	mi := &file_console_service_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -596,7 +677,7 @@ func (x *CentroidBatch) String() string {
 func (*CentroidBatch) ProtoMessage() {}
 
 func (x *CentroidBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[9]
+	mi := &file_console_service_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -609,7 +690,7 @@ func (x *CentroidBatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CentroidBatch.ProtoReflect.Descriptor instead.
 func (*CentroidBatch) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{9}
+	return file_console_service_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CentroidBatch) GetCentroids() []*Centroid {
@@ -629,7 +710,7 @@ type Centroid struct {
 
 func (x *Centroid) Reset() {
 	*x = Centroid{}
-	mi := &file_console_service_proto_msgTypes[10]
+	mi := &file_console_service_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -641,7 +722,7 @@ func (x *Centroid) String() string {
 func (*Centroid) ProtoMessage() {}
 
 func (x *Centroid) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[10]
+	mi := &file_console_service_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -654,7 +735,7 @@ func (x *Centroid) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Centroid.ProtoReflect.Descriptor instead.
 func (*Centroid) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{10}
+	return file_console_service_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *Centroid) GetId() uint32 {
@@ -685,7 +766,7 @@ type SearchRequest struct {
 
 func (x *SearchRequest) Reset() {
 	*x = SearchRequest{}
-	mi := &file_console_service_proto_msgTypes[11]
+	mi := &file_console_service_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -697,7 +778,7 @@ func (x *SearchRequest) String() string {
 func (*SearchRequest) ProtoMessage() {}
 
 func (x *SearchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[11]
+	mi := &file_console_service_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -710,7 +791,7 @@ func (x *SearchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchRequest.ProtoReflect.Descriptor instead.
 func (*SearchRequest) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{11}
+	return file_console_service_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SearchRequest) GetToken() string {
@@ -745,7 +826,7 @@ type SearchHit struct {
 
 func (x *SearchHit) Reset() {
 	*x = SearchHit{}
-	mi := &file_console_service_proto_msgTypes[12]
+	mi := &file_console_service_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -757,7 +838,7 @@ func (x *SearchHit) String() string {
 func (*SearchHit) ProtoMessage() {}
 
 func (x *SearchHit) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[12]
+	mi := &file_console_service_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -770,7 +851,7 @@ func (x *SearchHit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchHit.ProtoReflect.Descriptor instead.
 func (*SearchHit) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{12}
+	return file_console_service_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *SearchHit) GetId() string {
@@ -804,7 +885,7 @@ type SearchResponse struct {
 
 func (x *SearchResponse) Reset() {
 	*x = SearchResponse{}
-	mi := &file_console_service_proto_msgTypes[13]
+	mi := &file_console_service_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -816,7 +897,7 @@ func (x *SearchResponse) String() string {
 func (*SearchResponse) ProtoMessage() {}
 
 func (x *SearchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[13]
+	mi := &file_console_service_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -829,7 +910,7 @@ func (x *SearchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchResponse.ProtoReflect.Descriptor instead.
 func (*SearchResponse) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{13}
+	return file_console_service_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SearchResponse) GetHits() []*SearchHit {
@@ -861,7 +942,7 @@ type GetPermissionsRequest struct {
 
 func (x *GetPermissionsRequest) Reset() {
 	*x = GetPermissionsRequest{}
-	mi := &file_console_service_proto_msgTypes[14]
+	mi := &file_console_service_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -873,7 +954,7 @@ func (x *GetPermissionsRequest) String() string {
 func (*GetPermissionsRequest) ProtoMessage() {}
 
 func (x *GetPermissionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[14]
+	mi := &file_console_service_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -886,7 +967,7 @@ func (x *GetPermissionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPermissionsRequest.ProtoReflect.Descriptor instead.
 func (*GetPermissionsRequest) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{14}
+	return file_console_service_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetPermissionsRequest) GetToken() string {
@@ -922,7 +1003,7 @@ type MembershipEntry struct {
 
 func (x *MembershipEntry) Reset() {
 	*x = MembershipEntry{}
-	mi := &file_console_service_proto_msgTypes[15]
+	mi := &file_console_service_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -934,7 +1015,7 @@ func (x *MembershipEntry) String() string {
 func (*MembershipEntry) ProtoMessage() {}
 
 func (x *MembershipEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[15]
+	mi := &file_console_service_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -947,7 +1028,7 @@ func (x *MembershipEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MembershipEntry.ProtoReflect.Descriptor instead.
 func (*MembershipEntry) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{15}
+	return file_console_service_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *MembershipEntry) GetGroupId() string {
@@ -985,7 +1066,7 @@ type TreeNode struct {
 
 func (x *TreeNode) Reset() {
 	*x = TreeNode{}
-	mi := &file_console_service_proto_msgTypes[16]
+	mi := &file_console_service_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -997,7 +1078,7 @@ func (x *TreeNode) String() string {
 func (*TreeNode) ProtoMessage() {}
 
 func (x *TreeNode) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[16]
+	mi := &file_console_service_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1010,7 +1091,7 @@ func (x *TreeNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TreeNode.ProtoReflect.Descriptor instead.
 func (*TreeNode) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{16}
+	return file_console_service_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *TreeNode) GetGroupId() string {
@@ -1061,7 +1142,7 @@ type MemberRole struct {
 
 func (x *MemberRole) Reset() {
 	*x = MemberRole{}
-	mi := &file_console_service_proto_msgTypes[17]
+	mi := &file_console_service_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1073,7 +1154,7 @@ func (x *MemberRole) String() string {
 func (*MemberRole) ProtoMessage() {}
 
 func (x *MemberRole) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[17]
+	mi := &file_console_service_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1086,7 +1167,7 @@ func (x *MemberRole) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemberRole.ProtoReflect.Descriptor instead.
 func (*MemberRole) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{17}
+	return file_console_service_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *MemberRole) GetUser() string {
@@ -1130,7 +1211,7 @@ type GetPermissionsResponse struct {
 
 func (x *GetPermissionsResponse) Reset() {
 	*x = GetPermissionsResponse{}
-	mi := &file_console_service_proto_msgTypes[18]
+	mi := &file_console_service_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1142,7 +1223,7 @@ func (x *GetPermissionsResponse) String() string {
 func (*GetPermissionsResponse) ProtoMessage() {}
 
 func (x *GetPermissionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[18]
+	mi := &file_console_service_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1155,7 +1236,7 @@ func (x *GetPermissionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPermissionsResponse.ProtoReflect.Descriptor instead.
 func (*GetPermissionsResponse) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{18}
+	return file_console_service_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetPermissionsResponse) GetMe() string {
@@ -1204,7 +1285,7 @@ type LookupWrapRequest struct {
 
 func (x *LookupWrapRequest) Reset() {
 	*x = LookupWrapRequest{}
-	mi := &file_console_service_proto_msgTypes[19]
+	mi := &file_console_service_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1216,7 +1297,7 @@ func (x *LookupWrapRequest) String() string {
 func (*LookupWrapRequest) ProtoMessage() {}
 
 func (x *LookupWrapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[19]
+	mi := &file_console_service_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1229,7 +1310,7 @@ func (x *LookupWrapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LookupWrapRequest.ProtoReflect.Descriptor instead.
 func (*LookupWrapRequest) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{19}
+	return file_console_service_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *LookupWrapRequest) GetHandle() string {
@@ -1255,7 +1336,7 @@ type LookupWrapResponse struct {
 
 func (x *LookupWrapResponse) Reset() {
 	*x = LookupWrapResponse{}
-	mi := &file_console_service_proto_msgTypes[20]
+	mi := &file_console_service_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1267,7 +1348,7 @@ func (x *LookupWrapResponse) String() string {
 func (*LookupWrapResponse) ProtoMessage() {}
 
 func (x *LookupWrapResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[20]
+	mi := &file_console_service_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1280,7 +1361,7 @@ func (x *LookupWrapResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LookupWrapResponse.ProtoReflect.Descriptor instead.
 func (*LookupWrapResponse) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{20}
+	return file_console_service_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *LookupWrapResponse) GetEmail() string {
@@ -1328,7 +1409,7 @@ type UnwrapRequest struct {
 
 func (x *UnwrapRequest) Reset() {
 	*x = UnwrapRequest{}
-	mi := &file_console_service_proto_msgTypes[21]
+	mi := &file_console_service_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1340,7 +1421,7 @@ func (x *UnwrapRequest) String() string {
 func (*UnwrapRequest) ProtoMessage() {}
 
 func (x *UnwrapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[21]
+	mi := &file_console_service_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1353,7 +1434,7 @@ func (x *UnwrapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnwrapRequest.ProtoReflect.Descriptor instead.
 func (*UnwrapRequest) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{21}
+	return file_console_service_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *UnwrapRequest) GetHandle() string {
@@ -1376,7 +1457,7 @@ type UnwrapResponse struct {
 
 func (x *UnwrapResponse) Reset() {
 	*x = UnwrapResponse{}
-	mi := &file_console_service_proto_msgTypes[22]
+	mi := &file_console_service_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1388,7 +1469,7 @@ func (x *UnwrapResponse) String() string {
 func (*UnwrapResponse) ProtoMessage() {}
 
 func (x *UnwrapResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_service_proto_msgTypes[22]
+	mi := &file_console_service_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1401,7 +1482,7 @@ func (x *UnwrapResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnwrapResponse.ProtoReflect.Descriptor instead.
 func (*UnwrapResponse) Descriptor() ([]byte, []int) {
-	return file_console_service_proto_rawDescGZIP(), []int{22}
+	return file_console_service_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *UnwrapResponse) GetToken() string {
@@ -1430,6 +1511,9 @@ var File_console_service_proto protoreflect.FileDescriptor
 const file_console_service_proto_rawDesc = "" +
 	"\n" +
 	"\x15console_service.proto\x12\x0frune.console.v1\x1a\x1bbuf/validate/validate.proto\":\n" +
+	"\x17ReportActivationRequest\x12\x1f\n" +
+	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\"\x1a\n" +
+	"\x18ReportActivationResponse\":\n" +
 	"\x17GetAgentManifestRequest\x12\x1f\n" +
 	"\x05token\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10$\x18$R\x05token\"U\n" +
 	"\x18GetAgentManifestResponse\x12#\n" +
@@ -1523,7 +1607,7 @@ const file_console_service_proto_rawDesc = "" +
 	"\x0eUnwrapResponse\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12\x1b\n" +
 	"\tmember_id\x18\x02 \x01(\tR\bmemberId\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error2\xc0\x05\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error2\xa9\x06\n" +
 	"\x0eConsoleService\x12g\n" +
 	"\x10GetAgentManifest\x12(.rune.console.v1.GetAgentManifestRequest\x1a).rune.console.v1.GetAgentManifestResponse\x12R\n" +
 	"\tGetCACert\x12!.rune.console.v1.GetCACertRequest\x1a\".rune.console.v1.GetCACertResponse\x12I\n" +
@@ -1533,7 +1617,8 @@ const file_console_service_proto_rawDesc = "" +
 	"\x0eGetPermissions\x12&.rune.console.v1.GetPermissionsRequest\x1a'.rune.console.v1.GetPermissionsResponse\x12U\n" +
 	"\n" +
 	"LookupWrap\x12\".rune.console.v1.LookupWrapRequest\x1a#.rune.console.v1.LookupWrapResponse\x12I\n" +
-	"\x06Unwrap\x12\x1e.rune.console.v1.UnwrapRequest\x1a\x1f.rune.console.v1.UnwrapResponseb\x06proto3"
+	"\x06Unwrap\x12\x1e.rune.console.v1.UnwrapRequest\x1a\x1f.rune.console.v1.UnwrapResponse\x12g\n" +
+	"\x10ReportActivation\x12(.rune.console.v1.ReportActivationRequest\x1a).rune.console.v1.ReportActivationResponseb\x06proto3"
 
 var (
 	file_console_service_proto_rawDescOnce sync.Once
@@ -1547,58 +1632,62 @@ func file_console_service_proto_rawDescGZIP() []byte {
 	return file_console_service_proto_rawDescData
 }
 
-var file_console_service_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_console_service_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_console_service_proto_goTypes = []any{
-	(*GetAgentManifestRequest)(nil),  // 0: rune.console.v1.GetAgentManifestRequest
-	(*GetAgentManifestResponse)(nil), // 1: rune.console.v1.GetAgentManifestResponse
-	(*GetCACertRequest)(nil),         // 2: rune.console.v1.GetCACertRequest
-	(*GetCACertResponse)(nil),        // 3: rune.console.v1.GetCACertResponse
-	(*InsertRequest)(nil),            // 4: rune.console.v1.InsertRequest
-	(*InsertResponse)(nil),           // 5: rune.console.v1.InsertResponse
-	(*GetCentroidsRequest)(nil),      // 6: rune.console.v1.GetCentroidsRequest
-	(*CentroidChunk)(nil),            // 7: rune.console.v1.CentroidChunk
-	(*CentroidSetHeader)(nil),        // 8: rune.console.v1.CentroidSetHeader
-	(*CentroidBatch)(nil),            // 9: rune.console.v1.CentroidBatch
-	(*Centroid)(nil),                 // 10: rune.console.v1.Centroid
-	(*SearchRequest)(nil),            // 11: rune.console.v1.SearchRequest
-	(*SearchHit)(nil),                // 12: rune.console.v1.SearchHit
-	(*SearchResponse)(nil),           // 13: rune.console.v1.SearchResponse
-	(*GetPermissionsRequest)(nil),    // 14: rune.console.v1.GetPermissionsRequest
-	(*MembershipEntry)(nil),          // 15: rune.console.v1.MembershipEntry
-	(*TreeNode)(nil),                 // 16: rune.console.v1.TreeNode
-	(*MemberRole)(nil),               // 17: rune.console.v1.MemberRole
-	(*GetPermissionsResponse)(nil),   // 18: rune.console.v1.GetPermissionsResponse
-	(*LookupWrapRequest)(nil),        // 19: rune.console.v1.LookupWrapRequest
-	(*LookupWrapResponse)(nil),       // 20: rune.console.v1.LookupWrapResponse
-	(*UnwrapRequest)(nil),            // 21: rune.console.v1.UnwrapRequest
-	(*UnwrapResponse)(nil),           // 22: rune.console.v1.UnwrapResponse
+	(*ReportActivationRequest)(nil),  // 0: rune.console.v1.ReportActivationRequest
+	(*ReportActivationResponse)(nil), // 1: rune.console.v1.ReportActivationResponse
+	(*GetAgentManifestRequest)(nil),  // 2: rune.console.v1.GetAgentManifestRequest
+	(*GetAgentManifestResponse)(nil), // 3: rune.console.v1.GetAgentManifestResponse
+	(*GetCACertRequest)(nil),         // 4: rune.console.v1.GetCACertRequest
+	(*GetCACertResponse)(nil),        // 5: rune.console.v1.GetCACertResponse
+	(*InsertRequest)(nil),            // 6: rune.console.v1.InsertRequest
+	(*InsertResponse)(nil),           // 7: rune.console.v1.InsertResponse
+	(*GetCentroidsRequest)(nil),      // 8: rune.console.v1.GetCentroidsRequest
+	(*CentroidChunk)(nil),            // 9: rune.console.v1.CentroidChunk
+	(*CentroidSetHeader)(nil),        // 10: rune.console.v1.CentroidSetHeader
+	(*CentroidBatch)(nil),            // 11: rune.console.v1.CentroidBatch
+	(*Centroid)(nil),                 // 12: rune.console.v1.Centroid
+	(*SearchRequest)(nil),            // 13: rune.console.v1.SearchRequest
+	(*SearchHit)(nil),                // 14: rune.console.v1.SearchHit
+	(*SearchResponse)(nil),           // 15: rune.console.v1.SearchResponse
+	(*GetPermissionsRequest)(nil),    // 16: rune.console.v1.GetPermissionsRequest
+	(*MembershipEntry)(nil),          // 17: rune.console.v1.MembershipEntry
+	(*TreeNode)(nil),                 // 18: rune.console.v1.TreeNode
+	(*MemberRole)(nil),               // 19: rune.console.v1.MemberRole
+	(*GetPermissionsResponse)(nil),   // 20: rune.console.v1.GetPermissionsResponse
+	(*LookupWrapRequest)(nil),        // 21: rune.console.v1.LookupWrapRequest
+	(*LookupWrapResponse)(nil),       // 22: rune.console.v1.LookupWrapResponse
+	(*UnwrapRequest)(nil),            // 23: rune.console.v1.UnwrapRequest
+	(*UnwrapResponse)(nil),           // 24: rune.console.v1.UnwrapResponse
 }
 var file_console_service_proto_depIdxs = []int32{
-	8,  // 0: rune.console.v1.CentroidChunk.header:type_name -> rune.console.v1.CentroidSetHeader
-	9,  // 1: rune.console.v1.CentroidChunk.batch:type_name -> rune.console.v1.CentroidBatch
-	10, // 2: rune.console.v1.CentroidBatch.centroids:type_name -> rune.console.v1.Centroid
-	12, // 3: rune.console.v1.SearchResponse.hits:type_name -> rune.console.v1.SearchHit
-	15, // 4: rune.console.v1.GetPermissionsResponse.memberships:type_name -> rune.console.v1.MembershipEntry
-	16, // 5: rune.console.v1.GetPermissionsResponse.tree:type_name -> rune.console.v1.TreeNode
-	17, // 6: rune.console.v1.GetPermissionsResponse.member_roles:type_name -> rune.console.v1.MemberRole
-	0,  // 7: rune.console.v1.ConsoleService.GetAgentManifest:input_type -> rune.console.v1.GetAgentManifestRequest
-	2,  // 8: rune.console.v1.ConsoleService.GetCACert:input_type -> rune.console.v1.GetCACertRequest
-	4,  // 9: rune.console.v1.ConsoleService.Insert:input_type -> rune.console.v1.InsertRequest
-	6,  // 10: rune.console.v1.ConsoleService.GetCentroids:input_type -> rune.console.v1.GetCentroidsRequest
-	11, // 11: rune.console.v1.ConsoleService.Search:input_type -> rune.console.v1.SearchRequest
-	14, // 12: rune.console.v1.ConsoleService.GetPermissions:input_type -> rune.console.v1.GetPermissionsRequest
-	19, // 13: rune.console.v1.ConsoleService.LookupWrap:input_type -> rune.console.v1.LookupWrapRequest
-	21, // 14: rune.console.v1.ConsoleService.Unwrap:input_type -> rune.console.v1.UnwrapRequest
-	1,  // 15: rune.console.v1.ConsoleService.GetAgentManifest:output_type -> rune.console.v1.GetAgentManifestResponse
-	3,  // 16: rune.console.v1.ConsoleService.GetCACert:output_type -> rune.console.v1.GetCACertResponse
-	5,  // 17: rune.console.v1.ConsoleService.Insert:output_type -> rune.console.v1.InsertResponse
-	7,  // 18: rune.console.v1.ConsoleService.GetCentroids:output_type -> rune.console.v1.CentroidChunk
-	13, // 19: rune.console.v1.ConsoleService.Search:output_type -> rune.console.v1.SearchResponse
-	18, // 20: rune.console.v1.ConsoleService.GetPermissions:output_type -> rune.console.v1.GetPermissionsResponse
-	20, // 21: rune.console.v1.ConsoleService.LookupWrap:output_type -> rune.console.v1.LookupWrapResponse
-	22, // 22: rune.console.v1.ConsoleService.Unwrap:output_type -> rune.console.v1.UnwrapResponse
-	15, // [15:23] is the sub-list for method output_type
-	7,  // [7:15] is the sub-list for method input_type
+	10, // 0: rune.console.v1.CentroidChunk.header:type_name -> rune.console.v1.CentroidSetHeader
+	11, // 1: rune.console.v1.CentroidChunk.batch:type_name -> rune.console.v1.CentroidBatch
+	12, // 2: rune.console.v1.CentroidBatch.centroids:type_name -> rune.console.v1.Centroid
+	14, // 3: rune.console.v1.SearchResponse.hits:type_name -> rune.console.v1.SearchHit
+	17, // 4: rune.console.v1.GetPermissionsResponse.memberships:type_name -> rune.console.v1.MembershipEntry
+	18, // 5: rune.console.v1.GetPermissionsResponse.tree:type_name -> rune.console.v1.TreeNode
+	19, // 6: rune.console.v1.GetPermissionsResponse.member_roles:type_name -> rune.console.v1.MemberRole
+	2,  // 7: rune.console.v1.ConsoleService.GetAgentManifest:input_type -> rune.console.v1.GetAgentManifestRequest
+	4,  // 8: rune.console.v1.ConsoleService.GetCACert:input_type -> rune.console.v1.GetCACertRequest
+	6,  // 9: rune.console.v1.ConsoleService.Insert:input_type -> rune.console.v1.InsertRequest
+	8,  // 10: rune.console.v1.ConsoleService.GetCentroids:input_type -> rune.console.v1.GetCentroidsRequest
+	13, // 11: rune.console.v1.ConsoleService.Search:input_type -> rune.console.v1.SearchRequest
+	16, // 12: rune.console.v1.ConsoleService.GetPermissions:input_type -> rune.console.v1.GetPermissionsRequest
+	21, // 13: rune.console.v1.ConsoleService.LookupWrap:input_type -> rune.console.v1.LookupWrapRequest
+	23, // 14: rune.console.v1.ConsoleService.Unwrap:input_type -> rune.console.v1.UnwrapRequest
+	0,  // 15: rune.console.v1.ConsoleService.ReportActivation:input_type -> rune.console.v1.ReportActivationRequest
+	3,  // 16: rune.console.v1.ConsoleService.GetAgentManifest:output_type -> rune.console.v1.GetAgentManifestResponse
+	5,  // 17: rune.console.v1.ConsoleService.GetCACert:output_type -> rune.console.v1.GetCACertResponse
+	7,  // 18: rune.console.v1.ConsoleService.Insert:output_type -> rune.console.v1.InsertResponse
+	9,  // 19: rune.console.v1.ConsoleService.GetCentroids:output_type -> rune.console.v1.CentroidChunk
+	15, // 20: rune.console.v1.ConsoleService.Search:output_type -> rune.console.v1.SearchResponse
+	20, // 21: rune.console.v1.ConsoleService.GetPermissions:output_type -> rune.console.v1.GetPermissionsResponse
+	22, // 22: rune.console.v1.ConsoleService.LookupWrap:output_type -> rune.console.v1.LookupWrapResponse
+	24, // 23: rune.console.v1.ConsoleService.Unwrap:output_type -> rune.console.v1.UnwrapResponse
+	1,  // 24: rune.console.v1.ConsoleService.ReportActivation:output_type -> rune.console.v1.ReportActivationResponse
+	16, // [16:25] is the sub-list for method output_type
+	7,  // [7:16] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name
@@ -1609,7 +1698,7 @@ func file_console_service_proto_init() {
 	if File_console_service_proto != nil {
 		return
 	}
-	file_console_service_proto_msgTypes[7].OneofWrappers = []any{
+	file_console_service_proto_msgTypes[9].OneofWrappers = []any{
 		(*CentroidChunk_Header)(nil),
 		(*CentroidChunk_Batch)(nil),
 	}
@@ -1619,7 +1708,7 @@ func file_console_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_service_proto_rawDesc), len(file_console_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   23,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
