@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src=".github/assets/repo-badges.svg" alt="Self-hosted · Go and React · Apache 2.0 · Release v1.0.0" width="790">
+  <img src=".github/assets/repo-badges.svg" alt="Self-hosted · Go and React · Apache 2.0 · Release v1.0.1" width="790">
 </p>
 
 <p align="center">
