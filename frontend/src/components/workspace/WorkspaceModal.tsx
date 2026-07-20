@@ -1,6 +1,8 @@
+import { useNavigate } from "react-router";
+
 import Button from "@/components/elements/Button";
 import Notice from "@/components/elements/Notice";
-import StorageStatus from "@/components/elements/StorageStatus";
+import WorkspaceStatus from "@/components/elements/WorkspaceStatus";
 import ModalLayout from "@/components/layout/ModalLayout";
 import {
   useDeleteWorkspaceMutation,
@@ -12,7 +14,12 @@ import {
   isTransitionalStatus,
   useWorkspaceQuery,
 } from "@/hooks/queries/useWorkspaceQuery";
-import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
+import {
+  BTN_TEXT,
+  MODAL_TITLES,
+  PATH_LIST,
+  WORKSPACE_MAX_MEMORIES,
+} from "@/constants/commonConstants";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 const FAIL_COPY = {
@@ -22,8 +29,18 @@ const FAIL_COPY = {
 
 const styles = {
   field: "flex items-center justify-between gap-4",
-  label: "text-muted-foreground text-sm",
-  value: "font-mono text-sm break-all",
+  label: "text-muted-foreground text-md",
+  value: "font-mono text-md break-all",
+};
+
+/** 저장된 기억 개수 usage line — count / plan max (percent of the cap,
+ * clamped to 100 even if the stored count overshoots the plan max). */
+const memoryUsage = (rowCount: number): string => {
+  const percent = Math.min(
+    100,
+    Math.round((rowCount / WORKSPACE_MAX_MEMORIES) * 100),
+  );
+  return `${rowCount.toLocaleString("en-US")} / ${WORKSPACE_MAX_MEMORIES.toLocaleString("en-US")} (${percent}%)`;
 };
 
 /**
@@ -36,11 +53,13 @@ const styles = {
  * mutation state.
  */
 const WorkspaceModal = () => {
+  const navigate = useNavigate();
   const { data: workspace, isError } = useWorkspaceQuery();
 
   const deleteConfirmOpen = useWorkspaceStore((s) => s.deleteConfirmOpen);
   const closeModal = useWorkspaceStore((s) => s.closeModal);
   const openDeleteConfirm = useWorkspaceStore((s) => s.openDeleteConfirm);
+  const beginRecreateHandoff = useWorkspaceStore((s) => s.beginRecreateHandoff);
 
   const stopMutation = useStopWorkspaceMutation();
   const startMutation = useStartWorkspaceMutation();
@@ -60,22 +79,9 @@ const WorkspaceModal = () => {
     />
   );
 
-  /* Recreate (orphan remediation) in flight or failed. Checked before the live
-     query is read: recreate deletes then creates, so mid-flight the workspace
-     404s (→ query null) and the orphaned flag drops — this keeps the 재생성 중 /
-     실패 body on screen regardless. Mount is fresh per open, so a failure clears
-     on reopen. */
-  if (recreateMutation.isPending) {
-    return (
-      <ModalLayout title={MODAL_TITLES.workspaceOrphaned} isOpen>
-        <p className="text-center text-base">
-          워크스페이스를 재생성하는 중입니다…
-          <br />
-          생성까지 약 3~5분 정도 소요됩니다.
-        </p>
-      </ModalLayout>
-    );
-  }
+  /* Recreate teardown (orphan remediation) failed — delete rejected or the
+     404 poll timed out. Mount is fresh per open, so the failure clears on
+     reopen (and reopening offers the retry). */
   if (recreateMutation.isError) {
     return (
       <ModalLayout title={MODAL_TITLES.workspaceOrphaned} isOpen>
@@ -131,30 +137,53 @@ const WorkspaceModal = () => {
      reinstall minted a fresh team_secret), so its stored data is encrypted under
      a key we no longer have. It cannot be adopted, only deleted + recreated.
      Derived from the query data (like D-2), not a store flag. Takes precedence
-     over the detail body: an orphaned workspace is not usable. */
-  if (workspace?.orphaned) {
+     over the detail body: an orphaned workspace is not usable.
+
+     Also rendered while the teardown (delete + 404 poll) is in flight — mid-
+     teardown the workspace 404s and the orphaned flag drops, so the pending
+     check can't rely on the query. The buttons stay visible but disabled so
+     the modal keeps its shape; once the teardown confirms the 404, the modal
+     hands off to WorkspacePage, which auto-starts the create and owns the
+     생성 중 UI (same as a first-time create). */
+  if (recreateMutation.isPending || workspace?.orphaned) {
+    const tearingDown = recreateMutation.isPending;
     return (
       <ModalLayout title={MODAL_TITLES.workspaceOrphaned} isOpen>
-        <p className="text-center text-base">
-          콘솔이 재설치되어 이 워크스페이스와 연결할 수 없습니다.
-          <br />
-          기존에 저장된 기억(memory)은 이전 보안 키로 암호화되어 복구할 수 없습니다.
-          <br />
-          삭제 후 재생성하면 빈 워크스페이스로 다시 시작합니다.
-        </p>
+        {tearingDown ? (
+          <p className="text-center text-base">
+            기존 워크스페이스를 삭제하는 중입니다…
+            <br />
+            삭제가 완료되면 워크스페이스 생성을 시작합니다.
+          </p>
+        ) : (
+          <p className="text-center text-base">
+            콘솔이 재설치되어 이 워크스페이스와 연결할 수 없습니다.
+            <br />
+            기존에 저장된 데이터는 이전 보안 키로 암호화되어 복구할 수 없습니다.
+            <br />
+            삭제 후 재생성하면 빈 워크스페이스로 다시 시작합니다.
+          </p>
+        )}
         <div className="flex w-full gap-2">
           <Button
             btnText={BTN_TEXT.close}
             btnSize="md"
             btnColor="grayOutline"
+            disabled={tearingDown}
             handleClick={closeModal}
           />
           <Button
             btnText={BTN_TEXT.recreate}
             btnSize="md"
             btnColor="redFilled"
+            disabled={tearingDown}
             handleClick={() =>
-              recreateMutation.mutate(undefined, { onSuccess: closeModal })
+              recreateMutation.mutate(undefined, {
+                onSuccess: () => {
+                  beginRecreateHandoff();
+                  navigate(PATH_LIST.workspace);
+                },
+              })
             }
           />
         </div>
@@ -184,61 +213,60 @@ const WorkspaceModal = () => {
 
   return (
     <ModalLayout title={MODAL_TITLES.workspaceManage} isOpen>
-      <div className="flex w-full flex-col gap-3">
-        <div className="border-border flex flex-col gap-2.5 rounded-md border p-4">
-          <div className={styles.field}>
-            <span className={styles.label}>Endpoint URL</span>
-            <span className={styles.value}>{workspace?.endpoint ?? "—"}</span>
+      <div className="flex w-full flex-col gap-4">
+        <div className={styles.field}>
+          <span className={styles.label}>플랜</span>
+          <span className={styles.label}>Free</span>
+        </div>
+        <div className={styles.field}>
+          <span className={styles.label}>상태</span>
+          <div className="flex items-center gap-4">
+            <WorkspaceStatus status={status} className="cursor-default" />
+            <div className="flex justify-end gap-3">
+              {status === "stopped" ? (
+                <Button
+                  btnText={BTN_TEXT.restart}
+                  btnSize="xs"
+                  btnColor="grayOutline"
+                  className="w-12"
+                  disabled={busy || startMutation.isPending}
+                  handleClick={() =>
+                    startMutation.mutate(undefined, { onSuccess: closeModal })
+                  }
+                />
+              ) : (
+                <Button
+                  btnText={BTN_TEXT.stop}
+                  btnSize="xs"
+                  btnColor="grayOutline"
+                  className="w-12"
+                  disabled={busy || stopMutation.isPending}
+                  handleClick={() =>
+                    stopMutation.mutate(undefined, { onSuccess: closeModal })
+                  }
+                />
+              )}
+              <Button
+                btnText={BTN_TEXT.delete}
+                btnSize="xs"
+                btnColor="redOutline"
+                className="w-16"
+                disabled={busy}
+                handleClick={openDeleteConfirm}
+              />
+            </div>
           </div>
-          <div className={styles.field}>
-            <span className={styles.label}>상태</span>
-            <StorageStatus status={status} className="cursor-default" />
-          </div>
-          <div className={styles.field}>
-            <span className={styles.label}>Row count</span>
-            <span className={styles.value}>
-              {workspace?.rowCount != null
-                ? workspace.rowCount.toLocaleString("en-US")
-                : "—"}
-            </span>
-          </div>
+        </div>
+        <div className={styles.field}>
+          <span className={styles.label}>저장된 기억 개수</span>
+          <span className={styles.value}>
+            {workspace?.rowCount != null
+              ? memoryUsage(workspace.rowCount)
+              : "—"}
+          </span>
         </div>
 
         {actionError && <Notice tone="error">{actionError}</Notice>}
-
-        <div className="flex justify-end gap-4">
-          {status === "stopped" ? (
-            <Button
-              btnText={BTN_TEXT.restart}
-              btnSize="sm"
-              btnColor="grayOutline"
-              className="w-20"
-              disabled={busy || startMutation.isPending}
-              handleClick={() =>
-                startMutation.mutate(undefined, { onSuccess: closeModal })
-              }
-            />
-          ) : (
-            <Button
-              btnText={BTN_TEXT.stop}
-              btnSize="sm"
-              btnColor="grayOutline"
-              className="w-20"
-              disabled={busy || stopMutation.isPending}
-              handleClick={() =>
-                stopMutation.mutate(undefined, { onSuccess: closeModal })
-              }
-            />
-          )}
-          <Button
-            btnText={BTN_TEXT.delete}
-            btnSize="sm"
-            btnColor="redFilled"
-            className="w-20"
-            disabled={busy}
-            handleClick={openDeleteConfirm}
-          />
-        </div>
       </div>
 
       {closeButton}

@@ -6,8 +6,9 @@
 
 /* Form controls embed w-full: the parent container constrains width.
    Metrics are UIKIT values normalized to even px (project rule). */
-/* Sizes are height-based: sm 32px / md 36px / lg 42px. */
+/* Sizes are height-based: xs 24px / sm 32px / md 36px / lg 42px. */
 export const BTN_SIZE_VAR = {
+  xs: "h-6 w-full rounded-[6px] px-2 text-xs",
   sm: "h-8 w-full rounded-[8px] px-3 text-sm",
   md: "h-9 w-full rounded-md px-4 text-base",
   lg: "h-[42px] w-full rounded-md px-5 text-lg",
@@ -81,18 +82,18 @@ export const BADGE_TONE_VAR = {
 /* Status chips — semantic colors are state, not decoration. */
 export const MEMBER_STATUS_VAR = {
   online: { label: "온라인", color: "text-mint" },
-  redeemed: { label: "초대코드 사용됨", color: "text-accent-blue" },
+  redeemed: { label: "초대 코드 사용됨", color: "text-accent-blue" },
   pending: { label: "초대 수락 대기", color: "text-warning" },
   "invite-expired": { label: "초대 코드 만료", color: "text-faint" },
   "session-expired": { label: "세션 만료", color: "text-negative" },
 } as const;
 
-export const STORAGE_STATUS_VAR = {
-  running: "text-mint",
-  provisioning: "text-warning",
-  starting: "text-warning",
-  stopping: "text-warning",
-  deleting: "text-warning",
-  stopped: "text-faint",
-  error: "text-negative",
+export const WORKSPACE_STATUS_VAR = {
+  provisioning: { label: "생성 중", color: "text-warning" },
+  running: { label: "실행 중", color: "text-mint" },
+  stopping: { label: "정지 중", color: "text-warning" },
+  stopped: { label: "정지", color: "text-faint" },
+  starting: { label: "재실행 중", color: "text-warning" },
+  deleting: { label: "삭제 중", color: "text-warning" },
+  error: { label: "사용 불가", color: "text-negative" },
 } as const;

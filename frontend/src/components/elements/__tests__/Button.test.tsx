@@ -43,6 +43,15 @@ describe("Button", () => {
     expect(handleClick).not.toHaveBeenCalled();
   });
 
+  it("supports the xs size — a 24px control below sm", () => {
+    render(
+      <Button btnText={BTN_TEXT.save} btnSize="xs" btnColor="grayOutline" />,
+    );
+    expect(screen.getByRole("button", { name: BTN_TEXT.save })).toHaveClass(
+      "h-6",
+    );
+  });
+
   it("defaults to type=button and honors btnType", () => {
     render(
       <Button btnText={BTN_TEXT.save} btnSize="sm" btnColor="grayOutline" />,

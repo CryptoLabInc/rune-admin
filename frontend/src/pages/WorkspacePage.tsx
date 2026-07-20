@@ -35,6 +35,8 @@ const WorkspacePage = () => {
   const { data: workspace, isLoading } = useWorkspaceQuery();
   const createMutation = useCreateWorkspaceMutation();
   const openModal = useWorkspaceStore((s) => s.openModal);
+  const recreateHandoff = useWorkspaceStore((s) => s.recreateHandoff);
+  const clearRecreateHandoff = useWorkspaceStore((s) => s.clearRecreateHandoff);
   /* Marks a create started here, so we auto-open the modal once it runs. */
   const [createdHere, setCreatedHere] = useState(false);
 
@@ -44,6 +46,18 @@ const WorkspacePage = () => {
       openModal();
     }
   }, [workspace?.status, createdHere, openModal]);
+
+  /* 삭제 후 재생성 handoff (orphan remediation): the modal already tore the
+     old workspace down, so pick up with a plain create — from here the flow
+     is identical to a first-time create. mutate is referentially stable. */
+  const { mutate: createWorkspace } = createMutation;
+  useEffect(() => {
+    if (recreateHandoff) {
+      clearRecreateHandoff();
+      setCreatedHere(true);
+      createWorkspace();
+    }
+  }, [recreateHandoff, clearRecreateHandoff, createWorkspace]);
 
   const exists = workspace != null;
   const transitional = exists && isTransitionalStatus(workspace.status);
@@ -61,7 +75,10 @@ const WorkspacePage = () => {
     createMutation.mutate();
   };
 
+  /* recreateHandoff keeps the spinner up on the first paint, before the
+     auto-create effect has fired. */
   const creating =
+    recreateHandoff ||
     createMutation.isPending ||
     (createMutation.isSuccess && !exists) ||
     transitional;
