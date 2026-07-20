@@ -570,14 +570,19 @@ open_console_tunnel() {
   fi
 }
 
-# _login_rc_file echoes the shell rc file for the invoking user's login shell
-# (zsh → .zshrc, bash → .bashrc, else .profile). Detection works under sudo:
-# passwd on Linux, dscl on macOS, $SHELL as a last resort. Shared by the
-# connect-shortcut install (CSP) and removal (local) paths.
-_login_rc_file() {
+# install_connect_shortcut writes a `runeconsole connect` command into the
+# invoking user's shell rc (zsh → .zshrc, bash → .bashrc, else .profile) so the
+# loopback console tunnel can be reopened later without retyping the ssh command.
+# Idempotent: a marker-delimited block is rewritten in place on re-install (so a
+# changed IP / key path propagates). If a real `runeconsole` binary is already on
+# PATH the shortcut is skipped so it is never shadowed.
+install_connect_shortcut() {
+  local key_path=$1 public_ip=$2
   local login_user="${SUDO_USER:-$(id -un)}"
   local user_home; user_home=$(eval echo "~${login_user}")
 
+  # Detect the login shell (works under sudo): passwd on Linux, dscl on macOS,
+  # $SHELL as a last resort — then map it to the rc file we append to.
   local login_shell=""
   if command -v getent >/dev/null 2>&1; then
     login_shell=$(getent passwd "$login_user" 2>/dev/null | cut -d: -f7)
@@ -587,38 +592,12 @@ _login_rc_file() {
   fi
   [[ -z "$login_shell" ]] && login_shell="${SHELL:-}"
 
+  local rc_file
   case "$login_shell" in
-    *zsh)  printf '%s/.zshrc\n'   "$user_home" ;;
-    *bash) printf '%s/.bashrc\n'  "$user_home" ;;
-    *)     printf '%s/.profile\n' "$user_home" ;;
+    *zsh)  rc_file="${user_home}/.zshrc" ;;
+    *bash) rc_file="${user_home}/.bashrc" ;;
+    *)     rc_file="${user_home}/.profile" ;;
   esac
-}
-
-# remove_connect_shortcut strips the marker-delimited `runeconsole connect`
-# tunnel shim from the invoking user's shell rc. The shim is a CSP-only helper;
-# on a local install a real `runeconsole` binary lands on PATH and a leftover
-# shell function from an earlier CSP install would shadow it, so the local path
-# always clears it. No-op when the block is absent.
-remove_connect_shortcut() {
-  local rc_file; rc_file=$(_login_rc_file)
-  local begin="# >>> runeconsole connect >>>"
-  [[ -f "$rc_file" ]] && grep -qF "$begin" "$rc_file" || return 0
-
-  local tmp; tmp=$(mktemp)
-  sed "/# >>> runeconsole connect >>>/,/# <<< runeconsole connect <<</d" "$rc_file" > "$tmp" && mv "$tmp" "$rc_file"
-  [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "$rc_file" 2>/dev/null || true
-  info "Removed the CSP 'runeconsole connect' tunnel shim from ${rc_file} (a local install needs no tunnel)."
-}
-
-# install_connect_shortcut writes a `runeconsole connect` command into the
-# invoking user's shell rc (zsh → .zshrc, bash → .bashrc, else .profile) so the
-# loopback console tunnel can be reopened later without retyping the ssh command.
-# Idempotent: a marker-delimited block is rewritten in place on re-install (so a
-# changed IP / key path propagates). If a real `runeconsole` binary is already on
-# PATH the shortcut is skipped so it is never shadowed.
-install_connect_shortcut() {
-  local key_path=$1 public_ip=$2
-  local rc_file; rc_file=$(_login_rc_file)
 
   # Never shadow an existing runeconsole command on PATH.
   if command -v runeconsole >/dev/null 2>&1; then
@@ -1530,15 +1509,9 @@ install_service() {
 
 # ── Phase 8: Post-install summary ─────────────────────────────────────────────
 post_install() {
-  # A local install serves the console directly at 127.0.0.1:8787 and needs no
-  # tunnel. Clear any `runeconsole connect` shim an earlier CSP install left in
-  # the shell rc so it can't shadow the real runeconsole binary now on PATH.
-  remove_connect_shortcut
-
-  local console_up=0
   if [[ "$SKIP_SERVICE" -eq 0 ]]; then
     info "Waiting for the daemon to start (first boot generates FHE keys — this can take a minute)..."
-    local i
+    local i console_up=0
     for i in $(seq 1 30); do
       # -fs (no -S) + stderr discard: stay quiet while the listener is not up yet.
       if curl -fs -o /dev/null "http://127.0.0.1:8787/healthz" 2>/dev/null; then
@@ -1588,7 +1561,7 @@ post_install() {
 
   # Only after the console answered /healthz — don't pop a browser at a
   # not-yet-listening port while first-boot key generation is still running.
-  [[ "$console_up" -eq 1 ]] && open_browser "http://127.0.0.1:8787"
+  [[ "${console_up:-0}" -eq 1 ]] && open_browser "http://127.0.0.1:8787"
 }
 
 # ── Main ───────────────────────────────────────────────────────────────────────
