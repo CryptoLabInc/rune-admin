@@ -1,0 +1,41 @@
+[Unit]
+Description=Rune-Console privileged update agent
+Documentation=https://github.com/CryptoLabInc/rune-console
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/var/lib/runeconsole-updater/inbox/request
+
+[Service]
+Type=oneshot
+User=root
+Group=runeconsole
+ExecStart=/usr/local/bin/runeconsole update-agent --config /opt/runeconsole/configs/runeconsole.conf --request-path /var/lib/runeconsole-updater/inbox/request --status-path /var/lib/runeconsole-updater/status.json
+UMask=0027
+# Backups and rollback are intentionally unbounded by the supervisor. Killing
+# this oneshot during its stopped-service critical section can strand a
+# partially recovered installation; the worker reports liveness separately.
+TimeoutStartSec=infinity
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=runeconsole-updater
+
+# The agent must replace the installed binary, snapshot/restore durable state,
+# and record its handoff status. Everything else stays read-only.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/usr/local/bin /opt/runeconsole /var/backups/runeconsole /var/lib/runeconsole-updater
+ProtectClock=true
+ProtectHostname=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RemoveIPC=true

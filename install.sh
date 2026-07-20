@@ -56,6 +56,17 @@ SKIP_VERIFY="${RUNECONSOLE_SKIP_VERIFY:-0}"
 LOCAL_BINARY="${RUNECONSOLE_LOCAL_BINARY:-}"
 SKIP_SERVICE="${RUNECONSOLE_SKIP_SERVICE:-0}"
 
+# Privileged web-updater handoff. These paths are intentionally fixed so the
+# unprivileged daemon cannot ask the root agent to operate on caller-selected
+# files. Keep them in sync with deployment/systemd and deployment/launchd.
+UPDATE_STATE_DIR=/var/lib/runeconsole-updater
+UPDATE_INBOX_DIR="${UPDATE_STATE_DIR}/inbox"
+UPDATE_STAGING_DIR="${UPDATE_STATE_DIR}/staging"
+UPDATE_REQUEST_PATH="${UPDATE_INBOX_DIR}/request"
+UPDATE_STATUS_PATH="${UPDATE_STATE_DIR}/status.json"
+UPDATE_CAPABILITY_PATH="${UPDATE_STATE_DIR}/enabled"
+UPDATE_BACKUP_DIR=/var/backups/runeconsole
+
 TARGET="${RUNECONSOLE_TARGET:-}"
 INSTALL_DIR_CSP="${RUNECONSOLE_INSTALL_DIR:-}"
 CSP_PUBLIC_IP=""
@@ -116,25 +127,47 @@ run_uninstall() {
   [[ "$(id -u)" -eq 0 ]] || die "Local uninstall must be run as root (use sudo)."
 
   if [[ "$OS_SLUG" = linux ]]; then
+    if systemctl is-active --quiet runeconsole-update.service 2>/dev/null; then
+      die "A Rune-Console update is in progress. Wait for it to finish before uninstalling."
+    fi
+    systemctl disable --now runeconsole-update.path 2>/dev/null || true
     if systemctl is-active --quiet runeconsole.service 2>/dev/null; then
       info "Stopping runeconsole.service..."
       systemctl stop runeconsole.service
     fi
     systemctl disable runeconsole.service 2>/dev/null || true
-    rm -f /etc/systemd/system/runeconsole.service
+    rm -f \
+      /etc/systemd/system/runeconsole.service \
+      /etc/systemd/system/runeconsole-update.service \
+      /etc/systemd/system/runeconsole-update.path
     systemctl daemon-reload
+    systemctl reset-failed runeconsole-update.service runeconsole-update.path 2>/dev/null || true
     success "systemd service removed."
   else
     local plist=/Library/LaunchDaemons/com.cryptolabinc.runeconsole.plist
+    local updater_plist=/Library/LaunchDaemons/com.cryptolabinc.runeconsole-updater.plist
+    if launchctl print system/com.cryptolabinc.runeconsole-updater 2>/dev/null \
+        | grep -q 'state = running'; then
+      die "A Rune-Console update is in progress. Wait for it to finish before uninstalling."
+    fi
+    launchctl bootout system/com.cryptolabinc.runeconsole-updater 2>/dev/null || true
+    rm -f "$updater_plist"
     if [[ -f "$plist" ]]; then
       launchctl bootout system/com.cryptolabinc.runeconsole 2>/dev/null || true
       rm -f "$plist"
-      success "launchd service removed."
     fi
+    success "launchd services removed."
   fi
 
   rm -f "$BINARY_DEST"
   success "Binary removed: ${BINARY_DEST}"
+
+  # This directory contains only the web-updater handoff/status markers. It is
+  # deliberately separate from customer configuration, databases, keys, TLS,
+  # and protected backups, all of which remain subject to the preservation
+  # behavior below.
+  rm -rf "$UPDATE_STATE_DIR"
+  success "Web updater state removed: ${UPDATE_STATE_DIR}"
 
   printf '\n'
   warn "The following directory contains Rune-Console Keys and configuration:"
@@ -1003,12 +1036,37 @@ _add_invoking_user_to_group() {
   success "Added '${invoking_user}' to group '${SERVICE_USER}'."
 }
 
+enable_update_capability() {
+  # Never follow a pre-existing link at this privileged marker path. The
+  # parent is root-owned and not group-writable, but keep reinstall behavior
+  # fail-closed if its contents were changed out of band.
+  if [[ -e "$UPDATE_CAPABILITY_PATH" || -L "$UPDATE_CAPABILITY_PATH" ]]; then
+    [[ -f "$UPDATE_CAPABILITY_PATH" && ! -L "$UPDATE_CAPABILITY_PATH" ]] \
+      || die "Unsafe web updater capability marker: ${UPDATE_CAPABILITY_PATH}"
+    chown "root:${SERVICE_USER}" "$UPDATE_CAPABILITY_PATH"
+    chmod 0440 "$UPDATE_CAPABILITY_PATH"
+  else
+    install -m 0440 -o root -g "$SERVICE_USER" /dev/null "$UPDATE_CAPABILITY_PATH"
+  fi
+}
+
 setup_system() {
   info "Setting up system..."
 
   if [[ "$SKIP_SERVICE" -eq 0 ]]; then
     _create_system_group
     _create_system_user
+
+    # The daemon writes a complete temporary request in staging, then publishes
+    # it to the watched inbox with a same-filesystem hard link. The root-owned
+    # parent also holds the read-only status/capability files. Reinstalling
+    # changes no request/status contents.
+    install -d -m 0750 -o root -g "$SERVICE_USER" "$UPDATE_STATE_DIR"
+    # setgid keeps every staged/published request in the runeconsole group so
+    # the consumer can verify that its gid matches the trusted parent.
+    install -d -m 2770 -o root -g "$SERVICE_USER" "$UPDATE_INBOX_DIR"
+    install -d -m 2770 -o root -g "$SERVICE_USER" "$UPDATE_STAGING_DIR"
+    install -d -m 0700 -o root -g root "$UPDATE_BACKUP_DIR"
   fi
 
   # /opt may not exist on fresh macOS
@@ -1183,6 +1241,8 @@ install_service() {
   fi
 
   local config_path="${INSTALL_PREFIX}/configs/runeconsole.conf"
+  local binary_dir
+  binary_dir=$(dirname "$BINARY_DEST")
 
   if [[ "$OS_SLUG" = linux ]]; then
     if systemctl is-active --quiet runeconsole.service 2>/dev/null; then
@@ -1214,7 +1274,7 @@ install_service() {
       "PrivateTmp=true" \
       "ProtectSystem=strict" \
       "ProtectHome=true" \
-      "ReadWritePaths=${INSTALL_PREFIX}" \
+      "ReadWritePaths=${INSTALL_PREFIX} ${UPDATE_INBOX_DIR} ${UPDATE_STAGING_DIR}" \
       "ProtectKernelTunables=true" \
       "ProtectKernelModules=true" \
       "ProtectControlGroups=true" \
@@ -1231,10 +1291,71 @@ install_service() {
       "WantedBy=multi-user.target" \
       > "$unit"
     chmod 0644 "$unit"
+
+    # The path unit is the only bridge from the unprivileged web daemon to the
+    # root update agent. The agent receives fixed paths and runs independently
+    # so stopping runeconsole cannot kill the update transaction.
+    local update_unit=/etc/systemd/system/runeconsole-update.service
+    printf '%s\n' \
+      "[Unit]" \
+      "Description=Rune-Console privileged update agent" \
+      "Documentation=https://github.com/${REPO}" \
+      "After=network-online.target" \
+      "Wants=network-online.target" \
+      "ConditionPathExists=${UPDATE_REQUEST_PATH}" \
+      "" \
+      "[Service]" \
+      "Type=oneshot" \
+      "User=root" \
+      "Group=${SERVICE_USER}" \
+      "ExecStart=${BINARY_DEST} update-agent --config ${config_path} --request-path ${UPDATE_REQUEST_PATH} --status-path ${UPDATE_STATUS_PATH}" \
+      "UMask=0027" \
+      "TimeoutStartSec=infinity" \
+      "StandardOutput=journal" \
+      "StandardError=journal" \
+      "SyslogIdentifier=runeconsole-updater" \
+      "NoNewPrivileges=true" \
+      "PrivateTmp=true" \
+      "PrivateDevices=true" \
+      "ProtectSystem=strict" \
+      "ProtectHome=true" \
+      "ReadWritePaths=${binary_dir} ${INSTALL_PREFIX} ${UPDATE_BACKUP_DIR} ${UPDATE_STATE_DIR}" \
+      "ProtectClock=true" \
+      "ProtectHostname=true" \
+      "ProtectKernelTunables=true" \
+      "ProtectKernelModules=true" \
+      "ProtectControlGroups=true" \
+      "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX" \
+      "RestrictNamespaces=true" \
+      "LockPersonality=true" \
+      "MemoryDenyWriteExecute=false" \
+      "RestrictRealtime=true" \
+      "RestrictSUIDSGID=true" \
+      "RemoveIPC=true" \
+      > "$update_unit"
+    chmod 0644 "$update_unit"
+
+    local update_path_unit=/etc/systemd/system/runeconsole-update.path
+    printf '%s\n' \
+      "[Unit]" \
+      "Description=Watch for Rune-Console web update requests" \
+      "Documentation=https://github.com/${REPO}" \
+      "" \
+      "[Path]" \
+      "PathExists=${UPDATE_REQUEST_PATH}" \
+      "Unit=runeconsole-update.service" \
+      "" \
+      "[Install]" \
+      "WantedBy=multi-user.target" \
+      > "$update_path_unit"
+    chmod 0644 "$update_path_unit"
+
     systemctl daemon-reload
+    systemctl enable --now runeconsole-update.path
+    enable_update_capability
     systemctl enable runeconsole.service
     systemctl start runeconsole.service
-    success "systemd service enabled and started."
+    success "systemd daemon and privileged web updater enabled and started."
 
   else
     info "Installing launchd service..."
@@ -1287,10 +1408,70 @@ install_service() {
       '</plist>' \
       > "$plist"
     chmod 0644 "$plist"
-    chown root "$plist"
+    chown root:wheel "$plist"
+
+    local updater_plist=/Library/LaunchDaemons/com.cryptolabinc.runeconsole-updater.plist
+    printf '%s\n' \
+      '<?xml version="1.0" encoding="UTF-8"?>' \
+      '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"' \
+      '  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+      '<plist version="1.0">' \
+      '<dict>' \
+      '  <key>Label</key>' \
+      '  <string>com.cryptolabinc.runeconsole-updater</string>' \
+      '' \
+      '  <key>ProgramArguments</key>' \
+      '  <array>' \
+      "    <string>${BINARY_DEST}</string>" \
+      '    <string>update-agent</string>' \
+      '    <string>--config</string>' \
+      "    <string>${config_path}</string>" \
+      '    <string>--request-path</string>' \
+      "    <string>${UPDATE_REQUEST_PATH}</string>" \
+      '    <string>--status-path</string>' \
+      "    <string>${UPDATE_STATUS_PATH}</string>" \
+      '  </array>' \
+      '' \
+      '  <key>UserName</key>' \
+      '  <string>root</string>' \
+      '' \
+      '  <key>GroupName</key>' \
+      "  <string>${SERVICE_USER}</string>" \
+      '' \
+      '  <key>QueueDirectories</key>' \
+      '  <array>' \
+      "    <string>${UPDATE_INBOX_DIR}</string>" \
+      '  </array>' \
+      '' \
+      '  <key>ThrottleInterval</key>' \
+      '  <integer>10</integer>' \
+      '' \
+      '  <key>StandardOutPath</key>' \
+      "  <string>${INSTALL_PREFIX}/logs/runeconsole-updater.stdout.log</string>" \
+      '' \
+      '  <key>StandardErrorPath</key>' \
+      "  <string>${INSTALL_PREFIX}/logs/runeconsole-updater.stderr.log</string>" \
+      '' \
+      '  <key>EnvironmentVariables</key>' \
+      '  <dict>' \
+      '    <key>PATH</key>' \
+      '    <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>' \
+      '  </dict>' \
+      '' \
+      '  <key>ProcessType</key>' \
+      '  <string>Background</string>' \
+      '</dict>' \
+      '</plist>' \
+      > "$updater_plist"
+    chmod 0644 "$updater_plist"
+    chown root:wheel "$updater_plist"
+
     launchctl bootout system/com.cryptolabinc.runeconsole 2>/dev/null || true
+    launchctl bootout system/com.cryptolabinc.runeconsole-updater 2>/dev/null || true
+    launchctl bootstrap system "$updater_plist"
+    enable_update_capability
     launchctl bootstrap system "$plist"
-    success "launchd service loaded."
+    success "launchd daemon and privileged web updater loaded."
   fi
 }
 

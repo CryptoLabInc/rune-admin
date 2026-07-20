@@ -13,6 +13,32 @@ library slice. OpenSSL and the Linux C++ runtime are statically linked into
 release binaries; Linux glibc and the macOS system libraries remain platform
 dependencies.
 
+## Console update prompt
+
+For installations created by the official installer, the authenticated console
+owner sees a non-blocking card in the upper-right corner only when GitHub's
+latest stable release is newer than the running version. Selecting **Update**
+queues that exact release for a separately supervised root helper; the web
+daemon itself never runs with elevated privileges or stops itself.
+
+The helper verifies that the queued tag is still the latest stable release,
+then uses the same checksum, candidate-version, backup, health-check, and
+rollback flow as the CLI below. The card remains visible while the daemon
+restarts and reloads the embedded web console after the new version becomes
+healthy. Choosing **Later** hides only that release for the current browser
+session.
+
+The installer provisions `runeconsole-update.path` and
+`runeconsole-update.service` on Linux, or
+`com.cryptolabinc.runeconsole-updater` on macOS. The privilege boundary uses
+only fixed request/status paths below `/var/lib/runeconsole-updater`; those
+files are separate from customer databases, configuration, keys, TLS files,
+and backups. If the helper is absent, the GitHub check fails, the platform is
+unsupported, the durable-state paths escape the official installation root,
+or the server is air-gapped, no card is shown. Custom storage layouts can
+still use the connected or offline CLI flows below, which are not constrained
+by the service helper's filesystem sandbox.
+
 ## Connected server
 
 Verify the latest published GitHub Release without stopping the daemon:

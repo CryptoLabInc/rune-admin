@@ -24,6 +24,7 @@ const (
 	defaultRepository = "CryptoLabInc/rune-console"
 	maxArchiveBytes   = 512 << 20
 	maxMetadataBytes  = 2 << 20
+	metadataTimeout   = 15 * time.Second
 )
 
 // LocalSource is used for air-gapped updates. The command layer requires all
@@ -62,6 +63,38 @@ type GitHubSource struct {
 	WebBaseURL string
 }
 
+// LatestVersion resolves only the tag of GitHub's latest stable release. It
+// deliberately does not resolve or download any release assets, so callers can
+// use it for a cheap UI availability check. GitHub's /releases/latest endpoint
+// excludes drafts and prereleases.
+func (s GitHubSource) LatestVersion(ctx context.Context) (string, error) {
+	client := s.Client
+	if client == nil {
+		client = &http.Client{Timeout: metadataTimeout}
+	}
+	repository := s.Repository
+	if repository == "" {
+		repository = defaultRepository
+	}
+	apiBase := strings.TrimRight(s.APIBaseURL, "/")
+	if apiBase == "" {
+		apiBase = "https://api.github.com"
+	}
+	endpoint := fmt.Sprintf("%s/repos/%s/releases/latest", apiBase, repository)
+	var metadata struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := getJSON(ctx, client, endpoint, &metadata); err != nil {
+		return "", fmt.Errorf("resolve latest GitHub release: %w", err)
+	}
+	raw := strings.TrimSpace(metadata.TagName)
+	version, err := ParseVersion(raw)
+	if err != nil || version.String() != raw {
+		return "", errors.New("latest GitHub release has a non-canonical version tag")
+	}
+	return raw, nil
+}
+
 func (s GitHubSource) Resolve(ctx context.Context, requested, goos, goarch string) (Release, error) {
 	client := s.Client
 	if client == nil {
@@ -82,14 +115,15 @@ func (s GitHubSource) Resolve(ctx context.Context, requested, goos, goarch strin
 
 	version := requested
 	if version == "" {
-		endpoint := fmt.Sprintf("%s/repos/%s/releases/latest", apiBase, repository)
-		var metadata struct {
-			TagName string `json:"tag_name"`
+		var err error
+		version, err = (GitHubSource{
+			Client:     client,
+			Repository: repository,
+			APIBaseURL: apiBase,
+		}).LatestVersion(ctx)
+		if err != nil {
+			return Release{}, err
 		}
-		if err := getJSON(ctx, client, endpoint, &metadata); err != nil {
-			return Release{}, fmt.Errorf("resolve latest GitHub release: %w", err)
-		}
-		version = metadata.TagName
 	}
 	version = strings.TrimSpace(version)
 	_, err := ParseVersion(version)
@@ -151,9 +185,17 @@ func getJSON(ctx context.Context, client *http.Client, endpoint string, destinat
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("server returned HTTP %d", resp.StatusCode)
 	}
-	limited := io.LimitReader(resp.Body, maxMetadataBytes+1)
-	dec := json.NewDecoder(limited)
-	if err := dec.Decode(destination); err != nil {
+	if resp.ContentLength > maxMetadataBytes {
+		return errors.New("metadata exceeds size limit")
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxMetadataBytes+1))
+	if err != nil {
+		return err
+	}
+	if len(body) > maxMetadataBytes {
+		return errors.New("metadata exceeds size limit")
+	}
+	if err := json.Unmarshal(body, destination); err != nil {
 		return err
 	}
 	return nil
