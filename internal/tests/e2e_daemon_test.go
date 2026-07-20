@@ -66,7 +66,6 @@ func writeBootConfig(t *testing.T, dataDir, name string, grpcPort, consolePort i
   console: { enabled: true, port: %d }
 cloud: { api_base_url: https://cloud.invalid, web_base_url: https://cloud.invalid }
 keys: { path: %s, embedding_dim: 1024 }
-runespace: { endpoint: "" }
 tokens: { team_secret: e2e-team-secret }
 storage: { data_dir: %s }
 members: { console_endpoint: "127.0.0.1:%d" }
