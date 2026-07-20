@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 
 import Button from "@/components/elements/Button";
 import Notice from "@/components/elements/Notice";
-import IconInfo from "@/components/icons/IconInfo";
 import IconSpinner from "@/components/icons/IconSpinner";
 import { useUpdateMutation } from "@/hooks/mutations/useUpdateMutation";
 import {
@@ -133,7 +132,7 @@ const UpdateFloatingCard = () => {
     ? "콘솔을 업데이트하는 중입니다"
     : failed
       ? "업데이트에 실패했습니다"
-      : "새 버전이 있습니다";
+      : "새 버전이 출시되었습니다";
 
   return (
     <aside
@@ -142,18 +141,13 @@ const UpdateFloatingCard = () => {
       aria-labelledby="system-update-title"
       className="border-border bg-panel-solid fixed top-20 right-6 z-60 flex w-80 flex-col gap-4 rounded-xl border p-5 shadow-[0_24px_48px_-20px_rgba(0,0,0,0.65)]"
     >
-      <div className="flex items-start gap-3">
-        <span className="border-accent-blue text-accent-blue mt-0.5 grid size-6 flex-none place-items-center rounded-full border">
-          <IconInfo className="size-3.5" />
-        </span>
-        <div className="min-w-0">
-          <h2 id="system-update-title" className="text-base font-semibold">
-            {title}
-          </h2>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {status.currentVersion} → {targetVersion}
-          </p>
-        </div>
+      <div className="min-w-0">
+        <h2 id="system-update-title" className="text-base font-semibold">
+          {title}
+        </h2>
+        <p className="text-muted-foreground mt-1 text-sm">
+          {status.currentVersion} → {targetVersion}
+        </p>
       </div>
 
       {busy ? (
@@ -174,8 +168,7 @@ const UpdateFloatingCard = () => {
         </Notice>
       ) : (
         <Notice>
-          SQLite DB와 설정을 백업한 뒤 업데이트하며, 콘솔이 자동으로
-          재시작됩니다.
+          콘솔이 재시작되는 동안 RUNE 사용이 일시적으로 중단될 수 있습니다.
         </Notice>
       )}
 

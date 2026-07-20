@@ -80,10 +80,14 @@ describe("UpdateFloatingCard", () => {
 
     render(<UpdateFloatingCard />);
 
-    const card = screen.getByRole("dialog", { name: "새 버전이 있습니다" });
+    const card = screen.getByRole("dialog", {
+      name: "새 버전이 출시되었습니다",
+    });
     expect(card).toHaveClass("fixed", "top-20", "right-6");
     expect(screen.getByText("v1.0.0 → v1.1.0")).toBeInTheDocument();
-    expect(screen.getByText(/SQLite DB와 설정을 백업/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/RUNE 사용이 일시적으로 중단될 수 있습니다/),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: BTN_TEXT.update }),
     ).toBeInTheDocument();
@@ -118,7 +122,7 @@ describe("UpdateFloatingCard", () => {
     setQuery({ ...available, targetVersion: "v1.2.0" });
     render(<UpdateFloatingCard />);
     expect(
-      screen.getByRole("dialog", { name: "새 버전이 있습니다" }),
+      screen.getByRole("dialog", { name: "새 버전이 출시되었습니다" }),
     ).toBeInTheDocument();
     expect(screen.getByText("v1.0.0 → v1.2.0")).toBeInTheDocument();
   });
