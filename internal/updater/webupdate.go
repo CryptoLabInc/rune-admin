@@ -431,6 +431,14 @@ func newUpdateJobID() (string, error) {
 }
 
 func enqueueUpdateRequest(stagingDir, requestPath string, request UpdateJobRequest) error {
+	return enqueueUpdateRequestWithLink(stagingDir, requestPath, request, os.Link)
+}
+
+func enqueueUpdateRequestWithLink(
+	stagingDir, requestPath string,
+	request UpdateJobRequest,
+	link func(string, string) error,
+) error {
 	if err := validateUpdateJobRequest(request); err != nil {
 		return err
 	}
@@ -447,10 +455,47 @@ func enqueueUpdateRequest(stagingDir, requestPath string, request UpdateJobReque
 	if err != nil {
 		return err
 	}
-	tempPath := filepath.Join(resolvedStaging, ".request-"+request.JobID)
+	tempPath, err := stageUpdateRequest(resolvedStaging, request.JobID, body)
+	if err != nil {
+		return err
+	}
+	defer removeStagedUpdateRequest(tempPath)
+
+	// A hard link is the publish point: the watcher sees either no request or
+	// the complete, fsynced JSON inode. Unlike Rename, Link cannot overwrite a
+	// request another browser/session already queued.
+	linkErr := link(tempPath, resolvedRequest)
+	if errors.Is(linkErr, syscall.EXDEV) {
+		// Older systemd units exposed staging and inbox as separate
+		// ReadWritePaths. systemd turns each path into its own bind mount, so
+		// link(2) reports EXDEV even when both directories are on the same
+		// filesystem. Restage inside the already-validated inbox and retain the
+		// same atomic, no-overwrite hard-link publication semantics.
+		inboxTempPath, fallbackErr := stageUpdateRequest(filepath.Dir(resolvedRequest), request.JobID, body)
+		if fallbackErr != nil {
+			return fallbackErr
+		}
+		defer removeStagedUpdateRequest(inboxTempPath)
+		linkErr = link(inboxTempPath, resolvedRequest)
+	}
+	if linkErr != nil {
+		if errors.Is(linkErr, fs.ErrExist) || errors.Is(linkErr, syscall.EEXIST) {
+			return ErrUpdateInProgress
+		}
+		return fmt.Errorf("publish update request: %w", linkErr)
+	}
+	if err := syncDirectory(filepath.Dir(resolvedRequest)); err != nil {
+		_ = os.Remove(resolvedRequest)
+		return errors.New("persist update request directory failed")
+	}
+	return nil
+}
+
+func stageUpdateRequest(directory, jobID string, body []byte) (string, error) {
+	tempPath := filepath.Join(directory, ".request-"+jobID)
 	fd, err := syscall.Open(tempPath, syscall.O_WRONLY|syscall.O_CREAT|syscall.O_EXCL|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0o600)
 	if err != nil {
-		return fmt.Errorf("stage update request: %w", err)
+		return "", fmt.Errorf("stage update request: %w", err)
 	}
 	f := os.NewFile(uintptr(fd), "runeconsole-update-request")
 	_, writeErr := f.Write(body)
@@ -458,26 +503,14 @@ func enqueueUpdateRequest(stagingDir, requestPath string, request UpdateJobReque
 	closeErr := f.Close()
 	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
 		_ = os.Remove(tempPath)
-		return errors.New("persist update request failed")
+		return "", errors.New("persist update request failed")
 	}
-	defer func() {
-		_ = os.Remove(tempPath)
-		_ = syncDirectory(resolvedStaging)
-	}()
-	// A hard link is the publish point: the watcher sees either no request or
-	// the complete, fsynced JSON inode. Unlike Rename, Link cannot overwrite a
-	// request another browser/session already queued.
-	if err := os.Link(tempPath, resolvedRequest); err != nil {
-		if errors.Is(err, fs.ErrExist) || errors.Is(err, syscall.EEXIST) {
-			return ErrUpdateInProgress
-		}
-		return fmt.Errorf("publish update request: %w", err)
-	}
-	if err := syncDirectory(filepath.Dir(resolvedRequest)); err != nil {
-		_ = os.Remove(resolvedRequest)
-		return errors.New("persist update request directory failed")
-	}
-	return nil
+	return tempPath, nil
+}
+
+func removeStagedUpdateRequest(path string) {
+	_ = os.Remove(path)
+	_ = syncDirectory(filepath.Dir(path))
 }
 
 func peekUpdateRequest(path string) (UpdateJobRequest, error) {

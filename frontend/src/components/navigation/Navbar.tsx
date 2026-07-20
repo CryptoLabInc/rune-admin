@@ -73,6 +73,13 @@ const Navbar = () => {
                 <span className="border-negative text-negative rounded border px-2 py-1 text-xs">
                   재생성 필요
                 </span>
+              ) : workspace.reconnectRequired ? (
+                /* Data-plane credential expired: the cloud workspace is fine but
+                   the local engine link is stale. Flag it (not the healthy pill);
+                   clicking opens the modal's 재연결 prompt. */
+                <span className="border-warning text-warning rounded border px-2 py-1 text-xs">
+                  재연결 필요
+                </span>
               ) : (
                 <WorkspaceStatus status={workspace.status} />
               )

@@ -14,6 +14,7 @@ import * as memberships from "./routes/memberships.ts";
 import * as mock from "./routes/mockControl.ts";
 import * as teamMembers from "./routes/teamMembers.ts";
 import * as teams from "./routes/teams.ts";
+import * as update from "./routes/update.ts";
 import * as users from "./routes/users.ts";
 import * as workspace from "./routes/workspace.ts";
 import { getSession, touchSession } from "./store.ts";
@@ -82,6 +83,10 @@ router.post("/api/v1/invitations", invitations.invite);
 router.post("/api/v1/invitations/resend", invitations.resend);
 router.post("/api/v1/invitations/cancel", invitations.cancel);
 router.get("/api/v1/invitations", invitations.invitationHistory);
+
+// ---- System update ---------------------------------------------------------
+router.get("/api/v1/system/update", update.getSystemUpdate);
+router.post("/api/v1/system/update", update.postSystemUpdate);
 
 const applyCors = (req: IncomingMessage, res: ServerResponse): void => {
   const origin = req.headers.origin;

@@ -87,12 +87,17 @@ func (s *Service) handleWorkspaceStatus(w http.ResponseWriter, r *http.Request) 
 		// The cloud rejected the data-plane refresh credential and background
 		// reconnects have no session to re-bootstrap with — retrying is
 		// pointless until the SPA drives a reconnect (POST /api/v1/workspace).
-		// Doc contract: 502 CLOUD_AUTH_EXPIRED on this polled endpoint is what
-		// feeds the SC-03 navbar badge. (Ordered after the nil check: a deleted
-		// workspace's 404 route-guard signal outranks a stale credential badge.
-		// Not logged here — the SPA polls this every few seconds and the 401
-		// that raised the flag is already logged once at its source.)
-		writeError(w, http.StatusBadGateway, "CLOUD_AUTH_EXPIRED", "cloud credential expired; reconnect the workspace")
+		// Surface it as a `reconnect` flag on the 200 view (the same shape as
+		// orphaned), not a 502: erroring this polled endpoint blanks the SC-03
+		// navbar badge and kills the SPA's poll loop, leaving no reconnect
+		// affordance. The SPA renders a "재연결 필요" badge and drives the
+		// reconnect. (Ordered after the nil check: a deleted workspace's 404
+		// route-guard signal outranks a stale credential badge. Not logged here —
+		// the SPA polls this every few seconds and the 401 that raised the flag
+		// is already logged once at its source.)
+		view := s.setStatus(workspaceView(ws))
+		view["reconnect"] = true
+		writeJSON(w, http.StatusOK, view)
 		return
 	}
 	writeJSON(w, http.StatusOK, s.setStatus(workspaceView(ws)))

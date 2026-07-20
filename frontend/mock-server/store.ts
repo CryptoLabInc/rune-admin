@@ -7,6 +7,7 @@ import type {
   InvitationRow,
   Membership,
   Session,
+  SystemUpdate,
   Team,
   User,
   Workspace,
@@ -23,6 +24,7 @@ export type State = {
   // set via POST /__mock/workspace/fail so the frontend can reproduce the
   // SC-02 failure screens (D-1 실패 / D-2 / D-3 / D-4).
   workspaceFail: Map<string, { status: number; code: string }>;
+  systemUpdate: SystemUpdate;
   session: Session;
   // Pending OAuth `state` values issued by /console/auth/start, consumed once
   // by /auth/callback.
@@ -174,6 +176,15 @@ const buildState = (): State => {
       orphaned: false,
     },
     workspaceFail: new Map(),
+    // Seeded with an available update so the SC update card renders against the
+    // mock; POST /system/update flips this to "queued".
+    systemUpdate: {
+      currentVersion: "1.0.0",
+      targetVersion: "1.0.1",
+      updateAvailable: true,
+      capable: true,
+      state: "idle",
+    },
     session: freshSession(),
     pendingAuthStates: new Set<string>(),
     seq: 100,

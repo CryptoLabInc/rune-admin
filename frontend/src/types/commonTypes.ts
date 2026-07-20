@@ -46,6 +46,13 @@ export type TWorkspace = {
    * deleted + recreated. Absent/false on a healthy workspace.
    */
   orphaned: boolean;
+  /**
+   * The data-plane credential expired and a background reconnect cannot
+   * re-bootstrap it — the user must drive a reconnect (POST /workspace). The
+   * cloud workspace itself is healthy; only the local engine link is stale.
+   * Mutually exclusive with orphaned (recreate supersedes reconnect).
+   */
+  reconnectRequired: boolean;
 };
 
 /** Wire shape of `GET /workspace` (console API design 2026-07-13, §Workspace). */
@@ -55,6 +62,8 @@ export type TWorkspaceWire = {
   rows: number | null;
   /** true when the workspace no longer matches this console (reinstall). */
   orphaned?: boolean;
+  /** true when the data-plane credential expired and needs a user-driven reconnect. */
+  reconnect?: boolean;
 };
 
 /** Recursive team-tree node (UIKIT AdminTeamNode, wireframe SC-06). */

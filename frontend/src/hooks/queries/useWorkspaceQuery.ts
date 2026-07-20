@@ -38,6 +38,7 @@ export const useWorkspaceQuery = () =>
         endpoint: data.endpointUrl,
         rowCount: data.rows,
         orphaned: data.orphaned ?? false,
+        reconnectRequired: data.reconnect ?? false,
       };
     },
     refetchInterval: (query) => {

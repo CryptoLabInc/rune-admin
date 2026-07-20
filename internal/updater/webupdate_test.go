@@ -416,6 +416,32 @@ func TestUpdateRequestAndStatusFilesAreStrictAndAtomic(t *testing.T) {
 			t.Fatalf("staging leaked %d files", len(entries))
 		}
 	})
+	t.Run("cross-mount staging falls back to the inbox", func(t *testing.T) {
+		env := newWebControlTestEnv(t, true)
+		request := UpdateJobRequest{JobID: "abcdefghijklmnop", TargetVersion: "v1.1.0", RequestedAt: time.Now().UTC()}
+		linkCalls := 0
+		link := func(oldPath, newPath string) error {
+			linkCalls++
+			if linkCalls == 1 {
+				return syscall.EXDEV
+			}
+			return os.Link(oldPath, newPath)
+		}
+		if err := enqueueUpdateRequestWithLink(env.paths.Staging, env.paths.Request, request, link); err != nil {
+			t.Fatalf("enqueue across sandbox mounts: %v", err)
+		}
+		if linkCalls != 2 {
+			t.Fatalf("link calls = %d, want primary attempt plus inbox fallback", linkCalls)
+		}
+		entries, err := os.ReadDir(env.paths.Staging)
+		if err != nil || len(entries) != 0 {
+			t.Fatalf("staging entries after fallback = %v, %v", entries, err)
+		}
+		got, err := ConsumeUpdateRequest(env.paths.Request)
+		if err != nil || got.JobID != request.JobID {
+			t.Fatalf("consume fallback request = %+v, %v", got, err)
+		}
+	})
 	t.Run("strict request JSON", func(t *testing.T) {
 		env := newWebControlTestEnv(t, true)
 		body := `{"jobId":"abcdefghijklmnop","targetVersion":"v1.1.0","requestedAt":"2026-07-20T00:00:00Z","binaryPath":"/tmp/evil"}`

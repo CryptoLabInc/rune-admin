@@ -6,6 +6,7 @@ import TextButton from "@/components/elements/TextButton";
 import WorkspaceStatus from "@/components/elements/WorkspaceStatus";
 import ModalLayout from "@/components/layout/ModalLayout";
 import {
+  useCreateWorkspaceMutation,
   useDeleteWorkspaceMutation,
   useRecreateWorkspaceMutation,
   useStartWorkspaceMutation,
@@ -66,6 +67,9 @@ const WorkspaceModal = () => {
   const startMutation = useStartWorkspaceMutation();
   const deleteMutation = useDeleteWorkspaceMutation();
   const recreateMutation = useRecreateWorkspaceMutation();
+  // POST /workspace re-bootstraps the expired data-plane credential — the same
+  // connect endpoint the empty-state create uses.
+  const reconnectMutation = useCreateWorkspaceMutation();
 
   const status = workspace?.status ?? "error";
   /* Transitional phases (+ any request in flight) lock the actions. */
@@ -185,6 +189,44 @@ const WorkspaceModal = () => {
                   navigate(PATH_LIST.workspace);
                 },
               })
+            }
+          />
+        </div>
+      </ModalLayout>
+    );
+  }
+
+  /* Reconnect — the data-plane credential expired. The cloud workspace is
+     healthy; POST /workspace re-bootstraps the local engine link. Takes
+     precedence over the detail body (the workspace can't serve until the link
+     is restored) and is mutually exclusive with orphaned — the backend returns
+     the orphaned flag first, so both are never set at once. */
+  if (workspace?.reconnectRequired) {
+    return (
+      <ModalLayout title={MODAL_TITLES.workspaceReconnect} isOpen>
+        <p className="text-center text-base">
+          워크스페이스 연결이 만료되었습니다.
+          <br />
+          재연결하여 데이터 플레인을 다시 활성화해 주세요.
+        </p>
+        {reconnectMutation.isError && (
+          <Notice tone="error">재연결에 실패했습니다. 다시 시도해 주세요.</Notice>
+        )}
+        <div className="flex w-full gap-2">
+          <Button
+            btnText={BTN_TEXT.close}
+            btnSize="md"
+            btnColor="grayOutline"
+            disabled={reconnectMutation.isPending}
+            handleClick={closeModal}
+          />
+          <Button
+            btnText={BTN_TEXT.reconnect}
+            btnSize="md"
+            btnColor="mintFilled"
+            disabled={reconnectMutation.isPending}
+            handleClick={() =>
+              reconnectMutation.mutate(undefined, { onSuccess: closeModal })
             }
           />
         </div>

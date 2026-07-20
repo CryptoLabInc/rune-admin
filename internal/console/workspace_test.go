@@ -48,10 +48,11 @@ func decodeErrorBody(t *testing.T, rr *httptest.ResponseRecorder) map[string]str
 }
 
 // TestWorkspaceStatusCloudAuthExpired: once the data plane records a rejected
-// refresh credential, GET /api/v1/workspace must surface the doc's 502
-// CLOUD_AUTH_EXPIRED (the SC-03 badge feed) instead of a healthy 200 — the
-// workspace itself is fine, but the data plane cannot restore itself without a
-// session-driven reconnect. A cleared flag returns the status to 200.
+// refresh credential, GET /api/v1/workspace flags reconnect:true on a 200 (the
+// SC-03 badge feed) rather than erroring — the workspace itself is fine, but the
+// data plane cannot restore itself without a session-driven reconnect. Surfacing
+// it as a flag (like orphaned) keeps the SPA's poll loop alive and the badge
+// populated; a 502 would blank both. A cleared flag drops the reconnect flag.
 func TestWorkspaceStatusCloudAuthExpired(t *testing.T) {
 	ts := mockCloud(t, "rs1.runespace.example")
 	h, dp, cookie := newWorkspaceHarness(t, ts.URL)
@@ -61,11 +62,15 @@ func TestWorkspaceStatusCloudAuthExpired(t *testing.T) {
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusBadGateway {
-		t.Fatalf("status = %d, want 502", rr.Code)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
 	}
-	if body := decodeErrorBody(t, rr); body["code"] != "CLOUD_AUTH_EXPIRED" {
-		t.Errorf("code = %q, want CLOUD_AUTH_EXPIRED", body["code"])
+	var expired map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &expired); err != nil {
+		t.Fatalf("workspace body is not JSON: %v (%s)", err, rr.Body.String())
+	}
+	if expired["reconnect"] != true {
+		t.Errorf("reconnect = %v, want true (%s)", expired["reconnect"], rr.Body.String())
 	}
 
 	// A successful exchange lowers the flag; the poll goes healthy again.
@@ -92,6 +97,9 @@ func TestWorkspaceStatusCloudAuthExpired(t *testing.T) {
 	}
 	if _, ok := view["host"]; ok {
 		t.Errorf("body still carries the off-contract `host` key: %v", rr.Body.String())
+	}
+	if view["reconnect"] == true {
+		t.Errorf("reconnect flag still set after recovery: %v", rr.Body.String())
 	}
 }
 
