@@ -1,11 +1,13 @@
 package server
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -46,6 +48,43 @@ func newConsoleAPIFixture(t *testing.T) *consoleAPIFixture {
 	ts := httptest.NewServer(h)
 	t.Cleanup(ts.Close)
 	return &consoleAPIFixture{ts: ts, v: v, members: memStore, invites: invStore}
+}
+
+// newPersistentConsoleAPIFixture mirrors the daemon's shared write-through
+// store setup. Tests that need to assert the actual members/memberships/tokens
+// rows, rather than only the in-memory projections, use this fixture.
+func newPersistentConsoleAPIFixture(t *testing.T) (*consoleAPIFixture, *sql.DB) {
+	t.Helper()
+	database := openTokensTestDB(t, filepath.Join(t.TempDir(), "runeconsole.db"))
+
+	tokStore := tokens.NewStore()
+	if err := tokStore.LoadFromDB(database); err != nil {
+		t.Fatal(err)
+	}
+	gs := groups.NewStore()
+	gs.SetPersonKeyValidator(members.ValidateID)
+	if err := gs.LoadFromDB(database); err != nil {
+		t.Fatal(err)
+	}
+	memStore := members.NewStore()
+	if err := memStore.LoadFromDB(database); err != nil {
+		t.Fatal(err)
+	}
+	invStore := invites.NewStore()
+	if err := invStore.LoadFromDB(database); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &Config{
+		Tokens: TokensConfig{TeamSecret: "test-secret"},
+		Keys:   KeysConfig{Path: t.TempDir(), EmbeddingDim: 1024},
+	}
+	v := NewConsole(cfg, tokStore, gs, nil, nil)
+	mailer := &recordingMailer{}
+	h := NewConsoleAPIHandler(v, memStore, invStore, mailer, InviteConnInfo{ConsoleEndpoint: "c.example:8443"}, 30*time.Minute)
+	ts := httptest.NewServer(h)
+	t.Cleanup(ts.Close)
+	return &consoleAPIFixture{ts: ts, v: v, members: memStore, invites: invStore}, database
 }
 
 func (f *consoleAPIFixture) do(t *testing.T, method, path, body string) (int, []byte) {
@@ -483,6 +522,81 @@ func TestConsoleUsersDeleteBatchPartialFailure(t *testing.T) {
 	// Missing userIds param → 400 (guard against whole-collection delete).
 	if status, _ := f.do(t, http.MethodDelete, "/users", ""); status != http.StatusBadRequest {
 		t.Errorf("delete without userIds status=%d, want 400", status)
+	}
+}
+
+func TestConsoleUsersDeleteSelfInvitedAdminMemberState(t *testing.T) {
+	f, database := newPersistentConsoleAPIFixture(t)
+	const admin = "owner@corp.com"
+	f.v.Groups().SetOrgAdmin(admin)
+
+	team, err := f.v.Groups().CreateGroup("Admin-data-team", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inviteBody := `{"account":"` + admin + `","memberships":[{"teamId":"` + team.ID + `","role":"write"}]}`
+	status, body := f.do(t, http.MethodPost, "/invitations", inviteBody)
+	if status != http.StatusCreated {
+		t.Fatalf("invite admin: status=%d body=%s", status, body)
+	}
+	var invited struct {
+		UserID string `json:"userId"`
+	}
+	if err := json.Unmarshal(body, &invited); err != nil || invited.UserID == "" {
+		t.Fatalf("decode invited admin: err=%v body=%s", err, body)
+	}
+
+	status, body = f.do(t, http.MethodDelete, "/users?userIds="+invited.UserID, "")
+	if status != http.StatusOK {
+		t.Fatalf("delete admin member state: status=%d body=%s", status, body)
+	}
+	var deleted struct {
+		Succeeded []string `json:"succeeded"`
+		Failed    []struct {
+			ID   string `json:"id"`
+			Code string `json:"code"`
+		} `json:"failed"`
+	}
+	if err := json.Unmarshal(body, &deleted); err != nil {
+		t.Fatalf("decode delete response: %v (%s)", err, body)
+	}
+	if !slices.Equal(deleted.Succeeded, []string{invited.UserID}) || len(deleted.Failed) != 0 {
+		t.Fatalf("delete result = %+v, want the admin member row to succeed", deleted)
+	}
+
+	for table, key := range map[string]string{
+		"members":     "id",
+		"memberships": "user",
+		"tokens":      "user",
+	} {
+		value := invited.UserID
+		if table == "tokens" {
+			value = admin
+		}
+		var count int
+		query := fmt.Sprintf("SELECT count(*) FROM %s WHERE %s = ?", table, key)
+		if err := database.QueryRow(query, value).Scan(&count); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		if count != 0 {
+			t.Errorf("%s rows after delete = %d, want 0", table, count)
+		}
+	}
+	var inviteStatus string
+	var tokenValue sql.NullString
+	if err := database.QueryRow(
+		`SELECT status, token_value FROM invites WHERE member_id = ?`, invited.UserID,
+	).Scan(&inviteStatus, &tokenValue); err != nil {
+		t.Fatalf("read invite history: %v", err)
+	}
+	if inviteStatus != invites.StatusRevoked || tokenValue.Valid {
+		t.Errorf("invite after delete = status %q token %v, want revoked with no token", inviteStatus, tokenValue)
+	}
+
+	// Admin authority is independent of the deleted member UUID. The BFF's
+	// console_owner/console_session database is likewise outside this handler.
+	if !f.v.Groups().IsOrgAdmin(admin) {
+		t.Error("deleting the admin's member state also erased org-admin authority")
 	}
 }
 
