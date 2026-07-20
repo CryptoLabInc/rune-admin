@@ -108,8 +108,10 @@ jobs:
           fi
           export CGO_LDFLAGS="-L${STATIC_LIB_DIR}"
           mkdir -p bin
+          # No -trimpath: it strips -ldflags from the binary's build info, and
+          # the privileged web updater verifies a candidate's release version by
+          # reading buildVersion back out of that recorded -ldflags setting.
           go build \
-            -trimpath \
             -ldflags "-s -w -X '${PKG}.buildVersion=${VERSION}' -X '${PKG}.buildCommit=${COMMIT}' -X '${PKG}.buildDate=${DATE}'" \
             -o bin/runeconsole \
             ./cmd
