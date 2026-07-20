@@ -4,4 +4,4 @@ package_update: true
 packages: [ca-certificates, curl, openssl]
 
 runcmd:
-  - touch /var/run/runevault-dev-ready
+  - touch /var/run/runeconsole-dev-ready

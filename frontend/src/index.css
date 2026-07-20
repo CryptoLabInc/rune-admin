@@ -1,0 +1,208 @@
+@import "tailwindcss";
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+
+/* Theme variant for the experimental light mode (html.light) — for the
+   rare spots where retinting a token is not enough and a utility must
+   differ per theme (e.g. the outline button face). */
+@custom-variant light (&:where(.light, .light *));
+
+@theme {
+  /*
+   * Layout strategy (decided 2026-07-12): fixed desktop layout, no
+   * responsive reflow. index.html pins the mobile viewport to 1200px
+   * so devices show the desktop layout scaled down; desktop windows
+   * narrower than 1200px scroll horizontally (body min-width). All
+   * breakpoints are removed — responsive variants must not be used.
+   */
+  --breakpoint-*: initial;
+
+  /* Content width cap (max-w-content); beyond 1380px the page background
+   * fills the viewport while navbar/footer backgrounds bleed full width. */
+  --container-content: 1380px;
+
+  /*
+   * Rune design tokens — source of truth: UIKIT
+   * modules/rune-foundations/tokens.css (--rn-*). Dark is the default
+   * theme; a light variant is under evaluation (2026-07-13) — its
+   * overrides live in the `.light` scope in @layer base below.
+   *
+   * The four dark text tiers were lifted one notch (2026-07-18, variant
+   * C) to raise overall readability — faint was below WCAG AA (4.25:1)
+   * on --color-background; the ramp now clears AA while keeping the tier
+   * hierarchy. These diverge from the UIKIT --rn-* source noted below.
+   */
+  --color-background: #060b14; /* --rn-bg */
+  --color-foreground: #f4f8ff; /* --rn-ink, lifted 2026-07-18 (was #eaf2ff) */
+  --color-subtle: #cdd9ea; /* tier-2 text — long prose/card body (no UIKIT source, added 2026-07-12; lifted 2026-07-18, was #bfcfe4) */
+  --color-muted-foreground: #a6b6ce; /* --rn-muted, lifted 2026-07-18 (was #93a6c2) */
+  --color-faint: #8296b0; /* --rn-faint — labels/captions only; lifted 2026-07-18 (was #64768f, 4.25:1 → 6.5:1) */
+  --color-border: rgba(146, 168, 196, 0.4); /* --rn-hair */
+  --color-border-strong: rgba(146, 168, 196, 0.32); /* --rn-hair-strong */
+  --color-panel: rgba(14, 24, 42, 0.9); /* --rn-panel */
+  --color-panel-solid: #0e182a; /* --rn-panel-solid — popover/dialog/drawer */
+  --color-well: #040a13; /* --rn-bg-deep — input wells */
+  --color-scrim: #040a13; /* overlay scrims — stays dark in both themes */
+  --color-surface: rgba(146, 168, 196, 0.04); /* --rn-surface */
+  --color-mint: #5ceada; /* --rn-mint — primary accent */
+  --color-mint-hot: #8dfff1;
+  --color-mint-deep: #22bda5;
+  --color-on-mint: #04241f; /* ink on mint surfaces */
+  --color-accent-blue: #7db4ff; /* --rn-blue — recall/query */
+  --color-cobalt: #7d97ff;
+  --color-negative: #ff7a88; /* --rn-red — reject/error */
+  /* ink on negative surfaces — dark red-black on the pastel dark-theme
+     red; light theme overrides to white (its red is deep enough) */
+  --color-on-negative: color-mix(in srgb, var(--color-negative) 22%, #000);
+  --color-warning: #f0c674; /* --rn-amber — danger semantics only */
+
+  --font-sans:
+    "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", system-ui,
+    sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace;
+
+  /* UI body text scale — even 2px steps (10/12/14/16, revised
+   * 2026-07-12 from the UIKIT 11/13 values). lg (16px) is the
+   * body-prose default; xl+ is the console heading scale — 4xl and
+   * above are landing-only and must not be used in the console.
+   * tag and xs share 10px: tag is the mono system voice (lh 1.3,
+   * tracked), xs is the sans caption/hint/error tier. md equals base
+   * (h3 titles differ by weight, not size). */
+  --text-tag: 10px;
+  --text-tag--line-height: 1.3;
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 14px;
+  --text-md--line-height: 1.5;
+  --text-lg: 16px;
+  --text-lg--line-height: 1.6;
+  --text-xl: 18px; /* h2 panel/modal titles */
+  --text-xl--line-height: 1.4;
+  --text-2xl: 20px; /* reserved section titles */
+  --text-2xl--line-height: 1.35;
+  --text-3xl: 24px; /* h1 page titles */
+  --text-3xl--line-height: 1.25;
+
+  --radius-sm: 6px; /* chips */
+  --radius-md: 10px; /* buttons, inputs, controls */
+  --radius-lg: 14px; /* cards */
+  --radius-xl: 16px; /* plates, modals */
+
+  --ease-sweep: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  --animate-menu-pop: menu-pop 0.32s cubic-bezier(0.34, 1.6, 0.5, 1);
+  --animate-menu-pop-up: menu-pop-up 0.32s cubic-bezier(0.34, 1.6, 0.5, 1);
+  --animate-menu-item: menu-item 0.22s cubic-bezier(0.4, 0, 0.2, 1) both;
+  --animate-drawer-slide: drawer-slide 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* Toast (wireframe spec): slides in right-to-left, holds 2s, exits right. */
+  --animate-toast-in: toast-in 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+  --animate-toast-out: toast-out 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+
+  @keyframes menu-pop {
+    from {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.98, 0.88);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes menu-pop-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98, 0.88);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes menu-item {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes drawer-slide {
+    from {
+      opacity: 0.7;
+      transform: translateX(28px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateX(24px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes toast-out {
+    to {
+      opacity: 0;
+      transform: translateX(24px);
+    }
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html {
+    /* Reserve the page scrollbar's space permanently so layout width
+       doesn't jump when a view is shorter than the viewport (e.g.
+       switching 트리·상세 ↔ 조직도, where only one page-scrolls). */
+    scrollbar-gutter: stable;
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    word-break: keep-all;
+    /* Fixed desktop layout floor — see the layout-strategy note above. */
+    min-width: 1200px;
+  }
+
+  /*
+   * Light theme (experimental, 2026-07-13) — toggled by putting the
+   * `light` class on <html> so portaled overlays (modal, drawer,
+   * toast, dropdown menus) re-theme too. Only color tokens change;
+   * scale/spacing/motion are theme-independent. Preview toggle lives
+   * on the UI test page. Known gaps: literal rgba() whites inside
+   * BTN_COLOR_VAR grayOutline are dark-tuned.
+   */
+  :root.light {
+    --color-background: #f4f7fb;
+    --color-foreground: #101b30;
+    --color-subtle: #3d5170;
+    --color-muted-foreground: #5b6e88;
+    --color-faint: #8b9ab0;
+    --color-border: rgba(23, 42, 74, 0.12);
+    --color-border-strong: rgba(23, 42, 74, 0.26);
+    --color-panel: rgba(255, 255, 255, 0.65);
+    --color-panel-solid: #ffffff;
+    --color-well: #e8edf5;
+    --color-scrim: #101b30;
+    --color-surface: rgba(23, 42, 74, 0.04);
+    --color-mint: #0fa595;
+    --color-mint-hot: #35c7b5;
+    --color-mint-deep: #0b7f73;
+    --color-on-mint: #ffffff;
+    --color-accent-blue: #2e6fd8;
+    --color-cobalt: #4553c8;
+    --color-negative: #d6455a;
+    --color-on-negative: #ffffff;
+    --color-warning: #a16a10;
+  }
+}

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Rune-Vault installer.
+# Rune-Console installer.
 #
-# Downloads, verifies, and installs the runevault daemon with systemd (Linux)
+# Downloads, verifies, and installs the runeconsole daemon with systemd (Linux)
 # or launchd (macOS) service registration.
 #
 # Usage:
@@ -11,7 +11,7 @@
 # Options:
 #   --version <tag>               Install a specific release tag (default: latest)
 #   --target <local|aws|gcp|oci>  Deploy locally or to a cloud provider (default: local)
-#   --install-dir <path>          CSP install directory (default: $HOME/rune-vault-<csp>)
+#   --install-dir <path>          CSP install directory (default: $HOME/rune-console-<csp>)
 #   --force                       Overwrite existing config and TLS certificates
 #   --non-interactive             Skip all prompts; supply secrets via env vars
 #   --uninstall                   Tear down the install. Local: stop service + remove files
@@ -19,49 +19,56 @@
 #                                 optionally remove the install directory.
 #
 # Non-interactive env vars (local install):
-#   RUNEVAULT_TEAM_NAME              keys.index_name (required)
-#   RUNEVAULT_ENVECTOR_ENDPOINT      envector.endpoint (required)
-#   RUNEVAULT_ENVECTOR_API_KEY       envector.api_key
-#   RUNEVAULT_ENVECTOR_API_KEY_FILE  envector.api_key_file (alternative)
-#   RUNEVAULT_TLS_CERT_PATH          Path to existing TLS cert (skips auto-gen)
-#   RUNEVAULT_TLS_KEY_PATH           Path to existing TLS key  (skips auto-gen)
+#   RUNECONSOLE_CLOUD_API_BASE_URL     cloud.api_base_url (default: https://api.rune.team)
+#   RUNECONSOLE_CLOUD_WEB_BASE_URL     cloud.web_base_url (default: https://rune.team)
+#
+# The runespace data-plane endpoint is NOT set at install time — it is
+# connected from the console after login (provision -> access token -> dial).
 #
 # Non-interactive env vars (CSP install — operator workstation):
-#   RUNEVAULT_ENVECTOR_ENDPOINT      enVector endpoint URL (required)
-#   RUNEVAULT_ENVECTOR_API_KEY       enVector API key (required)
-#   RUNEVAULT_TEAM_NAME              Team name — used for resource naming and vault index (required)
-#   RUNEVAULT_TARGET                 Pre-select target without interactive menu
-#   RUNEVAULT_INSTALL_DIR            Pre-set CSP install directory
-#   RUNEVAULT_CSP_REGION             Cloud region
-#   RUNEVAULT_GCP_PROJECT_ID         GCP: project ID (required for GCP)
-#   RUNEVAULT_OCI_COMPARTMENT_ID     OCI: compartment OCID (required for OCI)
+#   RUNECONSOLE_TARGET                Pre-select target without interactive menu
+#   RUNECONSOLE_INSTALL_DIR           Pre-set CSP install directory
+#   RUNECONSOLE_CSP_REGION            Cloud region
+#   RUNECONSOLE_GCP_PROJECT_ID        GCP: project ID (required for GCP)
+#   RUNECONSOLE_OCI_COMPARTMENT_ID    OCI: compartment OCID (required for OCI)
 #
 # Dev/testing env vars (set by scripts/install-dev.sh):
-#   RUNEVAULT_LOCAL_BINARY    Path to local binary; skips download + checksum verify
-#   RUNEVAULT_SKIP_VERIFY     Set to 1 to skip checksum verification (dev only)
-#   RUNEVAULT_INSTALL_PREFIX  Override /opt/runevault (default)
-#   RUNEVAULT_BINARY_PATH     Override /usr/local/bin/runevault (default)
-#   RUNEVAULT_SKIP_SERVICE    Set to 1 to skip systemd/launchd installation
+#   RUNECONSOLE_LOCAL_BINARY    Path to local binary; skips download + checksum verify
+#   RUNECONSOLE_SKIP_VERIFY     Set to 1 to skip checksum verification (dev only)
+#   RUNECONSOLE_INSTALL_PREFIX  Override /opt/runeconsole (default)
+#   RUNECONSOLE_BINARY_PATH     Override /usr/local/bin/runeconsole (default)
+#   RUNECONSOLE_SKIP_SERVICE    Set to 1 to skip systemd/launchd installation
 
 set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-REPO=CryptoLabInc/rune-admin
-SERVICE_USER=runevault
+REPO=CryptoLabInc/rune-console
+SERVICE_USER=runeconsole
 GRPC_PORT=50051
 
 RAW_BASE="https://raw.githubusercontent.com/${REPO}"
-DEFAULT_INSTALL_DIR_CSP_FMT="%s/rune-vault-%s"
+DEFAULT_INSTALL_DIR_CSP_FMT="%s/rune-console-%s"
 
 # Overridable by env (used by scripts/install-dev.sh)
-INSTALL_PREFIX="${RUNEVAULT_INSTALL_PREFIX:-/opt/runevault}"
-BINARY_DEST="${RUNEVAULT_BINARY_PATH:-/usr/local/bin/runevault}"
-SKIP_VERIFY="${RUNEVAULT_SKIP_VERIFY:-0}"
-LOCAL_BINARY="${RUNEVAULT_LOCAL_BINARY:-}"
-SKIP_SERVICE="${RUNEVAULT_SKIP_SERVICE:-0}"
+INSTALL_PREFIX="${RUNECONSOLE_INSTALL_PREFIX:-/opt/runeconsole}"
+BINARY_DEST="${RUNECONSOLE_BINARY_PATH:-/usr/local/bin/runeconsole}"
+SKIP_VERIFY="${RUNECONSOLE_SKIP_VERIFY:-0}"
+LOCAL_BINARY="${RUNECONSOLE_LOCAL_BINARY:-}"
+SKIP_SERVICE="${RUNECONSOLE_SKIP_SERVICE:-0}"
 
-TARGET="${RUNEVAULT_TARGET:-}"
-INSTALL_DIR_CSP="${RUNEVAULT_INSTALL_DIR:-}"
+# Privileged web-updater handoff. These paths are intentionally fixed so the
+# unprivileged daemon cannot ask the root agent to operate on caller-selected
+# files. Keep them in sync with deployment/systemd and deployment/launchd.
+UPDATE_STATE_DIR=/var/lib/runeconsole-updater
+UPDATE_INBOX_DIR="${UPDATE_STATE_DIR}/inbox"
+UPDATE_STAGING_DIR="${UPDATE_STATE_DIR}/staging"
+UPDATE_REQUEST_PATH="${UPDATE_INBOX_DIR}/request"
+UPDATE_STATUS_PATH="${UPDATE_STATE_DIR}/status.json"
+UPDATE_CAPABILITY_PATH="${UPDATE_STATE_DIR}/enabled"
+UPDATE_BACKUP_DIR=/var/backups/runeconsole
+
+TARGET="${RUNECONSOLE_TARGET:-}"
+INSTALL_DIR_CSP="${RUNECONSOLE_INSTALL_DIR:-}"
 CSP_PUBLIC_IP=""
 
 # ── Color helpers ──────────────────────────────────────────────────────────────
@@ -110,7 +117,7 @@ esac
 
 # ── Uninstall flow ─────────────────────────────────────────────────────────────
 run_uninstall() {
-  info "Uninstalling Rune-Vault..."
+  info "Uninstalling Rune-Console..."
 
   if [[ "$TARGET" != "local" ]]; then
     csp_uninstall "$TARGET"
@@ -120,28 +127,50 @@ run_uninstall() {
   [[ "$(id -u)" -eq 0 ]] || die "Local uninstall must be run as root (use sudo)."
 
   if [[ "$OS_SLUG" = linux ]]; then
-    if systemctl is-active --quiet runevault.service 2>/dev/null; then
-      info "Stopping runevault.service..."
-      systemctl stop runevault.service
+    if systemctl is-active --quiet runeconsole-update.service 2>/dev/null; then
+      die "A Rune-Console update is in progress. Wait for it to finish before uninstalling."
     fi
-    systemctl disable runevault.service 2>/dev/null || true
-    rm -f /etc/systemd/system/runevault.service
+    systemctl disable --now runeconsole-update.path 2>/dev/null || true
+    if systemctl is-active --quiet runeconsole.service 2>/dev/null; then
+      info "Stopping runeconsole.service..."
+      systemctl stop runeconsole.service
+    fi
+    systemctl disable runeconsole.service 2>/dev/null || true
+    rm -f \
+      /etc/systemd/system/runeconsole.service \
+      /etc/systemd/system/runeconsole-update.service \
+      /etc/systemd/system/runeconsole-update.path
     systemctl daemon-reload
+    systemctl reset-failed runeconsole-update.service runeconsole-update.path 2>/dev/null || true
     success "systemd service removed."
   else
-    local plist=/Library/LaunchDaemons/com.cryptolabinc.runevault.plist
-    if [[ -f "$plist" ]]; then
-      launchctl bootout system/com.cryptolabinc.runevault 2>/dev/null || true
-      rm -f "$plist"
-      success "launchd service removed."
+    local plist=/Library/LaunchDaemons/com.cryptolabinc.runeconsole.plist
+    local updater_plist=/Library/LaunchDaemons/com.cryptolabinc.runeconsole-updater.plist
+    if launchctl print system/com.cryptolabinc.runeconsole-updater 2>/dev/null \
+        | grep -q 'state = running'; then
+      die "A Rune-Console update is in progress. Wait for it to finish before uninstalling."
     fi
+    launchctl bootout system/com.cryptolabinc.runeconsole-updater 2>/dev/null || true
+    rm -f "$updater_plist"
+    if [[ -f "$plist" ]]; then
+      launchctl bootout system/com.cryptolabinc.runeconsole 2>/dev/null || true
+      rm -f "$plist"
+    fi
+    success "launchd services removed."
   fi
 
   rm -f "$BINARY_DEST"
   success "Binary removed: ${BINARY_DEST}"
 
+  # This directory contains only the web-updater handoff/status markers. It is
+  # deliberately separate from customer configuration, databases, keys, TLS,
+  # and protected backups, all of which remain subject to the preservation
+  # behavior below.
+  rm -rf "$UPDATE_STATE_DIR"
+  success "Web updater state removed: ${UPDATE_STATE_DIR}"
+
   printf '\n'
-  warn "The following directory contains Rune-Vault Keys and configuration:"
+  warn "The following directory contains Rune-Console Keys and configuration:"
   warn "  ${INSTALL_PREFIX}/"
   warn "This data CANNOT be recovered if deleted."
   printf '\n'
@@ -150,13 +179,13 @@ run_uninstall() {
   if [[ "$NON_INTERACTIVE" -eq 1 ]]; then
     warn "Non-interactive mode: data preserved. Remove manually: rm -rf ${INSTALL_PREFIX}"
   else
-    read -r -p "Delete all vault data including Rune-Vault Keys? [y/N] " answer
+    read -r -p "Delete all console data including Rune-Console Keys? [y/N] " answer
   fi
 
   case "$answer" in
     [Yy]*)
       rm -rf "${INSTALL_PREFIX}"
-      success "Vault data deleted."
+      success "Console data deleted."
       ;;
     *)
       info "Data preserved at ${INSTALL_PREFIX}"
@@ -183,7 +212,7 @@ run_uninstall() {
     fi
   fi
 
-  success "Rune-Vault uninstalled."
+  success "Rune-Console uninstalled."
 }
 
 # ── CSP helpers ───────────────────────────────────────────────────────────────
@@ -301,41 +330,30 @@ csp_prompt_config() {
     printf '  Cloud deployment configuration\n'
     printf '══════════════════════════════════════════════════════════\n'
     printf '\n'
-    printf '  Create your enVector cluster at https://envector.io\n'
-    printf '  before proceeding. You will need the endpoint URL and\n'
-    printf '  API key from the dashboard.\n'
+    printf '  The runespace cluster is connected later from the console\n'
+    printf '  (after login). No endpoint or API key is needed here.\n'
     printf '\n'
 
-    _prompt TEAM_NAME          "Team name"          ""
-    _prompt ENVECTOR_ENDPOINT  "enVector endpoint"  ""
-    _prompt ENVECTOR_API_KEY   "enVector API key"   ""
-
     case "$csp" in
-      aws) _prompt CSP_REGION "AWS region"   "us-east-1"   ;;
+      aws) _prompt CSP_REGION "AWS region"   "ap-northeast-2"   ;;
       gcp)
-        _prompt CSP_REGION    "GCP region"   "us-central1"
+        _prompt CSP_REGION    "GCP region"   "asia-northeast3"
         _prompt GCP_PROJECT_ID "GCP project ID" ""
         ;;
       oci)
-        _prompt CSP_REGION      "OCI region"          "us-ashburn-1"
+        _prompt CSP_REGION      "OCI region"          "ap-seoul-1"
         _prompt OCI_COMPARTMENT_ID "OCI compartment OCID" ""
         ;;
     esac
     printf '\n'
   else
-    TEAM_NAME="${RUNEVAULT_TEAM_NAME:-}"
-    ENVECTOR_ENDPOINT="${RUNEVAULT_ENVECTOR_ENDPOINT:-}"
-    ENVECTOR_API_KEY="${RUNEVAULT_ENVECTOR_API_KEY:-}"
-    CSP_REGION="${RUNEVAULT_CSP_REGION:-}"
-    GCP_PROJECT_ID="${RUNEVAULT_GCP_PROJECT_ID:-}"
-    OCI_COMPARTMENT_ID="${RUNEVAULT_OCI_COMPARTMENT_ID:-}"
+    CSP_REGION="${RUNECONSOLE_CSP_REGION:-}"
+    GCP_PROJECT_ID="${RUNECONSOLE_GCP_PROJECT_ID:-}"
+    OCI_COMPARTMENT_ID="${RUNECONSOLE_OCI_COMPARTMENT_ID:-}"
 
     local missing=()
-    [[ -z "$TEAM_NAME" ]]         && missing+=("RUNEVAULT_TEAM_NAME")
-    [[ -z "$ENVECTOR_ENDPOINT" ]] && missing+=("RUNEVAULT_ENVECTOR_ENDPOINT")
-    [[ -z "$ENVECTOR_API_KEY" ]]  && missing+=("RUNEVAULT_ENVECTOR_API_KEY")
-    [[ "$csp" = gcp && -z "$GCP_PROJECT_ID" ]]      && missing+=("RUNEVAULT_GCP_PROJECT_ID")
-    [[ "$csp" = oci && -z "$OCI_COMPARTMENT_ID" ]]  && missing+=("RUNEVAULT_OCI_COMPARTMENT_ID")
+    [[ "$csp" = gcp && -z "$GCP_PROJECT_ID" ]]      && missing+=("RUNECONSOLE_GCP_PROJECT_ID")
+    [[ "$csp" = oci && -z "$OCI_COMPARTMENT_ID" ]]  && missing+=("RUNECONSOLE_OCI_COMPARTMENT_ID")
     if [[ ${#missing[@]} -gt 0 ]]; then
       printf 'ERROR: Missing required env vars:\n' >&2
       for v in "${missing[@]}"; do printf '  %s\n' "$v" >&2; done
@@ -343,9 +361,6 @@ csp_prompt_config() {
     fi
   fi
 
-  [[ -n "$TEAM_NAME" ]]          || die "Team name is required."
-  [[ -n "$ENVECTOR_ENDPOINT" ]]  || die "enVector endpoint is required."
-  [[ -n "$ENVECTOR_API_KEY" ]]   || die "enVector API key is required."
   if [[ "$csp" = gcp ]]; then
     [[ -n "$GCP_PROJECT_ID" ]]     || die "GCP project ID is required."
   fi
@@ -428,11 +443,7 @@ csp_render_tfvars() {
     && public_key=$(cat "${INSTALL_DIR_CSP}/ssh_key.pub")
 
   {
-    printf 'team_name          = "%s"\n' "$(escape_tf "${TEAM_NAME:-default}")"
-    printf 'tls_mode           = "self-signed"\n'
-    printf 'envector_endpoint  = "%s"\n' "$(escape_tf "${ENVECTOR_ENDPOINT}")"
-    printf 'envector_api_key   = "%s"\n' "$(escape_tf "${ENVECTOR_API_KEY}")"
-    printf 'runevault_version  = "%s"\n' "$(escape_tf "${VERSION}")"
+    printf 'runeconsole_version  = "%s"\n' "$(escape_tf "${VERSION}")"
     printf 'public_key         = "%s"\n' "$(escape_tf "${public_key}")"
     printf 'region             = "%s"\n' "$(escape_tf "${CSP_REGION}")"
     case "$csp" in
@@ -467,8 +478,8 @@ csp_post_deploy() {
   local key_path="${INSTALL_DIR_CSP}/ssh_key"
 
   local public_ip
-  public_ip=$(cd "$tf_dir" && sudo -u "$tf_user" terraform output -raw vault_public_ip 2>/dev/null) \
-    || die "Could not read vault_public_ip from terraform output."
+  public_ip=$(cd "$tf_dir" && sudo -u "$tf_user" terraform output -raw console_public_ip 2>/dev/null) \
+    || die "Could not read console_public_ip from terraform output."
   CSP_PUBLIC_IP="$public_ip"
 
   local ssh_user=ubuntu
@@ -485,7 +496,7 @@ csp_post_deploy() {
   while [[ $(date +%s) -lt $deadline ]]; do
     # shellcheck disable=SC2086
     if $scp_prefix scp $scp_opts -i "$key_path" \
-         "${ssh_user}@${public_ip}:/opt/runevault/certs/ca.pem" \
+         "${ssh_user}@${public_ip}:/opt/runeconsole/certs/ca.pem" \
          "${INSTALL_DIR_CSP}/certs/ca.pem" 2>/dev/null; then
       success "CA certificate saved: ${INSTALL_DIR_CSP}/certs/ca.pem"
       return 0
@@ -493,7 +504,109 @@ csp_post_deploy() {
     sleep 15
   done
 
-  die "Timed out waiting for VM-side install. SSH in and check /var/log/runevault-install.log: ssh -i ${key_path} ${ssh_user}@${public_ip}"
+  die "Timed out waiting for VM-side install. SSH in and check /var/log/runeconsole-install.log: ssh -i ${key_path} ${ssh_user}@${public_ip}"
+}
+
+# Open the console SSH tunnel in the background (ssh -f -N) so the loopback
+# console is immediately reachable at http://127.0.0.1:8787. Best-effort:
+# skips if the local port is busy and falls back to the manual command on
+# any failure.
+open_console_tunnel() {
+  local key_path=$1 public_ip=$2
+  local ssh_user=ubuntu
+  local ssh_prefix=""
+  [[ -n "${SUDO_USER:-}" ]] && ssh_prefix="sudo -u ${SUDO_USER}"
+
+  if command -v lsof >/dev/null 2>&1 \
+     && lsof -iTCP:8787 -sTCP:LISTEN -P -n >/dev/null 2>&1; then
+    warn "Local port 8787 is already in use — skipping the auto-tunnel."
+    printf '  Open it yourself once free:  ssh -i %s -L 8787:127.0.0.1:8787 ubuntu@%s\n' \
+      "$key_path" "$public_ip"
+    return 0
+  fi
+
+  info "Opening the console tunnel in the background (ssh -f -N)..."
+  # shellcheck disable=SC2086
+  if $ssh_prefix ssh -f -N \
+       -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+       -o ExitOnForwardFailure=yes -o ConnectTimeout=15 \
+       -i "$key_path" -L 8787:127.0.0.1:8787 "${ssh_user}@${public_ip}" 2>/dev/null; then
+    success "Console tunnel open → http://127.0.0.1:8787"
+    printf '  Stop it later with:  pkill -f "8787:127.0.0.1:8787 ubuntu@%s"\n' "$public_ip"
+  else
+    warn "Could not open the tunnel automatically — open it manually:"
+    printf '  ssh -i %s -L 8787:127.0.0.1:8787 ubuntu@%s\n' "$key_path" "$public_ip"
+  fi
+}
+
+# install_connect_shortcut writes a `runeconsole connect` command into the
+# invoking user's shell rc (zsh → .zshrc, bash → .bashrc, else .profile) so the
+# loopback console tunnel can be reopened later without retyping the ssh command.
+# Idempotent: a marker-delimited block is rewritten in place on re-install (so a
+# changed IP / key path propagates). If a real `runeconsole` binary is already on
+# PATH the shortcut is skipped so it is never shadowed.
+install_connect_shortcut() {
+  local key_path=$1 public_ip=$2
+  local login_user="${SUDO_USER:-$(id -un)}"
+  local user_home; user_home=$(eval echo "~${login_user}")
+
+  # Detect the login shell (works under sudo): passwd on Linux, dscl on macOS,
+  # $SHELL as a last resort — then map it to the rc file we append to.
+  local login_shell=""
+  if command -v getent >/dev/null 2>&1; then
+    login_shell=$(getent passwd "$login_user" 2>/dev/null | cut -d: -f7)
+  fi
+  if [[ -z "$login_shell" ]] && command -v dscl >/dev/null 2>&1; then
+    login_shell=$(dscl . -read "/Users/${login_user}" UserShell 2>/dev/null | awk '{print $2}')
+  fi
+  [[ -z "$login_shell" ]] && login_shell="${SHELL:-}"
+
+  local rc_file
+  case "$login_shell" in
+    *zsh)  rc_file="${user_home}/.zshrc" ;;
+    *bash) rc_file="${user_home}/.bashrc" ;;
+    *)     rc_file="${user_home}/.profile" ;;
+  esac
+
+  # Never shadow an existing runeconsole command on PATH.
+  if command -v runeconsole >/dev/null 2>&1; then
+    warn "A 'runeconsole' command already exists on PATH — skipping the shell shortcut."
+    printf '  Reconnect manually:  ssh -i %s -L 8787:127.0.0.1:8787 ubuntu@%s\n' "$key_path" "$public_ip"
+    return 0
+  fi
+
+  local begin="# >>> runeconsole connect >>>"
+  local end="# <<< runeconsole connect <<<"
+
+  # Drop any previous block so a re-install refreshes the key path / IP.
+  if [[ -f "$rc_file" ]] && grep -qF "$begin" "$rc_file"; then
+    local tmp; tmp=$(mktemp)
+    sed "/# >>> runeconsole connect >>>/,/# <<< runeconsole connect <<</d" "$rc_file" > "$tmp" && mv "$tmp" "$rc_file"
+  fi
+
+  cat >> "$rc_file" <<EOF
+${begin}
+# Reach the loopback-only Rune-Console on the CSP VM over an SSH tunnel.
+runeconsole() {
+  case "\$1" in
+    connect)
+      if command -v lsof >/dev/null 2>&1 && lsof -iTCP:8787 -sTCP:LISTEN -P -n >/dev/null 2>&1; then
+        echo "runeconsole: already reachable -> http://127.0.0.1:8787"; return 0
+      fi
+      ssh -f -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -i "${key_path}" -L 8787:127.0.0.1:8787 "ubuntu@${public_ip}" && echo "runeconsole: tunnel open -> http://127.0.0.1:8787" || echo "runeconsole: failed to open the tunnel (check the SSH key / network)"
+      ;;
+    disconnect)
+      pkill -f "8787:127.0.0.1:8787 ubuntu@${public_ip}" && echo "runeconsole: tunnel closed" || echo "runeconsole: no tunnel running"
+      ;;
+    *)
+      echo "usage: runeconsole {connect|disconnect}  # connect, then browse http://127.0.0.1:8787"
+      ;;
+  esac
+}
+${end}
+EOF
+  [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "$rc_file" 2>/dev/null || true
+  success "Added 'runeconsole connect' to ${rc_file} (open a new shell or run 'source ${rc_file}' to use it)."
 }
 
 csp_summary() {
@@ -503,7 +616,7 @@ csp_summary() {
   local public_ip="${CSP_PUBLIC_IP:-<unknown>}"
 
   printf '\n'
-  success "Rune-Vault deployed to $(printf '%s' "$csp" | tr 'a-z' 'A-Z')."
+  success "Rune-Console deployed to $(printf '%s' "$csp" | tr 'a-z' 'A-Z')."
   printf '\n'
   printf '  Endpoint:  %s:50051\n' "$public_ip"
   printf '  CA cert:   %s\n'       "${INSTALL_DIR_CSP}/certs/ca.pem"
@@ -513,23 +626,30 @@ csp_summary() {
   printf 'Tear down:\n'
   printf '  cd %s && terraform destroy -auto-approve\n' "$tf_dir"
   printf '\n'
-  printf 'Next steps (SSH into the VM, then run on the VM):\n'
-  printf '  ssh -i %s ubuntu@%s\n' "$key_path" "$public_ip"
+  printf 'Access the console (loopback-only on the VM, reached over an SSH tunnel):\n'
+  open_console_tunnel "$key_path" "$public_ip"
+  install_connect_shortcut "$key_path" "$public_ip" || warn "Could not add the 'runeconsole connect' shortcut."
   printf '\n'
-  printf '  Issue a token:  runevault token issue --user <name> --role member\n'
-  printf '  Check status:   runevault status\n'
-  printf '  View logs:      runevault logs\n'
-  printf '  Manage daemon:  sudo systemctl start|stop|restart runevault\n'
+  printf '  Using it now: the tunnel above is live — browse http://127.0.0.1:8787\n'
+  printf '  Reconnect later:  runeconsole connect   (in a new shell)\n'
+  printf '  From another machine (copy the private key first):\n'
+  printf '    ssh -i %s -L 8787:127.0.0.1:8787 ubuntu@%s\n' "$key_path" "$public_ip"
+  printf '  SSH (port 22) is open, so key possession is all you need — no firewall change.\n'
   printf '\n'
-  warn "BACKUP: Keep this safe — it cannot be recovered if lost:"
-  warn "  Terraform state: ${tf_dir}/terraform.tfstate"
+  printf 'On the VM (ssh -i %s ubuntu@%s):\n' "$key_path" "$public_ip"
+  printf '  View logs:      runeconsole logs\n'
+  printf '  Manage daemon:  sudo systemctl start|stop|restart runeconsole\n'
+  printf '\n'
+  warn "BACKUP: Keep these safe — they cannot be recovered if lost:"
+  warn "  Terraform state:  ${tf_dir}/terraform.tfstate"
+  warn "  SSH private key:  ${key_path}"
 }
 
 csp_uninstall() {
   local csp=$1
   local user_home="${SUDO_USER:+$(eval echo ~"${SUDO_USER}")}"
   user_home="${user_home:-$HOME}"
-  INSTALL_DIR_CSP="${INSTALL_DIR_CSP:-${user_home}/rune-vault-${csp}}"
+  INSTALL_DIR_CSP="${INSTALL_DIR_CSP:-${user_home}/rune-console-${csp}}"
   local tf_dir="${INSTALL_DIR_CSP}/deployment"
 
   if [[ ! -f "${tf_dir}/terraform.tfstate" ]]; then
@@ -578,14 +698,14 @@ csp_uninstall() {
     esac
   fi
 
-  success "Rune-Vault ${csp} infrastructure uninstalled."
+  success "Rune-Console ${csp} infrastructure uninstalled."
 }
 
 csp_dispatch() {
   local csp="$TARGET"
   local user_home="${SUDO_USER:+$(eval echo ~"${SUDO_USER}")}"
   user_home="${user_home:-$HOME}"
-  INSTALL_DIR_CSP="${INSTALL_DIR_CSP:-${user_home}/rune-vault-${csp}}"
+  INSTALL_DIR_CSP="${INSTALL_DIR_CSP:-${user_home}/rune-console-${csp}}"
   mkdir -p "$INSTALL_DIR_CSP"
   [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "$INSTALL_DIR_CSP"
 
@@ -602,7 +722,7 @@ csp_dispatch() {
   fi
 
   csp_prompt_config "$csp"
-  [[ -n "$VERSION" ]] || die "runevault version is required (use --version <tag>)."
+  [[ -n "$VERSION" ]] || die "runeconsole version is required (use --version <tag>)."
   csp_generate_ssh_key
   csp_copy_terraform_files "$csp"
   csp_render_tfvars "$csp"
@@ -672,15 +792,26 @@ preflight() {
 
   [[ "$(id -u)" -eq 0 ]] || die "This installer must be run as root (use sudo)."
 
-  local tools=(curl)
+  if [[ "$OS_SLUG" = linux ]]; then
+    local libc_version libc_major libc_minor
+    libc_version=$(getconf GNU_LIBC_VERSION 2>/dev/null || true)
+    if [[ ! "$libc_version" =~ ^glibc[[:space:]]+([0-9]+)\.([0-9]+) ]]; then
+      die "Unsupported Linux C library. Rune-Console requires glibc 2.38 or newer."
+    fi
+    libc_major=${BASH_REMATCH[1]}
+    libc_minor=${BASH_REMATCH[2]}
+    if (( libc_major < 2 || (libc_major == 2 && libc_minor < 38) )); then
+      die "Unsupported ${libc_version}. Rune-Console requires glibc 2.38 or newer."
+    fi
+  fi
+
+  # openssl is always needed: the console serves TLS with a self-signed CA
+  # that this installer generates on first run.
+  local tools=(curl openssl)
   if [[ "$OS_SLUG" = linux ]]; then
     tools+=(sha256sum systemctl)
   else
     tools+=(shasum)
-  fi
-  # openssl only needed when auto-generating TLS certs
-  if [[ -z "${RUNEVAULT_TLS_CERT_PATH:-}" || -z "${RUNEVAULT_TLS_KEY_PATH:-}" ]]; then
-    tools+=(openssl)
   fi
 
   # Collect missing tools (systemctl is never auto-installable — fail immediately)
@@ -736,10 +867,10 @@ preflight() {
   if [[ "$port_occupied" -eq 1 ]]; then
     if [[ "$OS_SLUG" = linux ]]; then
       die "Port ${GRPC_PORT} is already in use. Stop the existing daemon first:
-       sudo systemctl stop runevault"
+       sudo systemctl stop runeconsole"
     else
       die "Port ${GRPC_PORT} is already in use. Stop the existing daemon first:
-       sudo launchctl bootout system/com.cryptolabinc.runevault"
+       sudo launchctl bootout system/com.cryptolabinc.runeconsole"
     fi
   fi
 
@@ -755,12 +886,16 @@ preflight() {
     info "Latest version: ${VERSION}"
   fi
 
+  if [[ -z "$LOCAL_BINARY" && ! "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+    die "Invalid release version: ${VERSION}. Expected vMAJOR.MINOR.PATCH[-PRERELEASE]."
+  fi
+
   # Already-installed version check (skip if --force or using a local binary)
   if [[ "$FORCE" -eq 0 && -z "$LOCAL_BINARY" && -x "$BINARY_DEST" ]]; then
     local installed_ver
     installed_ver=$("$BINARY_DEST" version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+[^ ]*' | head -1 || true)
     if [[ -n "$installed_ver" && "$installed_ver" = "$VERSION" ]]; then
-      warn "runevault ${VERSION} is already installed. Use --force to reinstall."
+      warn "runeconsole ${VERSION} is already installed. Use --force to reinstall."
       exit 0
     fi
   fi
@@ -803,11 +938,11 @@ download_and_verify() {
   if [[ -n "$LOCAL_BINARY" ]]; then
     info "Using local binary: ${LOCAL_BINARY}"
     [[ -x "$LOCAL_BINARY" ]] || die "Local binary not executable: ${LOCAL_BINARY}"
-    cp "$LOCAL_BINARY" "$SCRATCH/runevault"
+    cp "$LOCAL_BINARY" "$SCRATCH/runeconsole"
     return 0
   fi
 
-  local archive="runevault_${VERSION}_${OS_SLUG}_${ARCH_SLUG}.tar.gz"
+  local archive="runeconsole_${VERSION}_${OS_SLUG}_${ARCH_SLUG}.tar.gz"
   local base_url="https://github.com/${REPO}/releases/download/${VERSION}"
 
   info "Downloading ${archive}..."
@@ -823,9 +958,12 @@ download_and_verify() {
   fi
 
   info "Extracting binary..."
-  tar -xzf "$SCRATCH/${archive}" -C "$SCRATCH" ./runevault
-  "$SCRATCH/runevault" version >/dev/null 2>&1 \
+  tar -xzf "$SCRATCH/${archive}" -C "$SCRATCH" ./runeconsole
+  local candidate_version
+  candidate_version=$("$SCRATCH/runeconsole" version 2>/dev/null) \
     || die "Extracted binary failed smoke test."
+  [[ "$candidate_version" == "runeconsole ${VERSION} ("* ]] \
+    || die "Extracted binary version does not match ${VERSION}."
 }
 
 # ── Phase 4: System setup ──────────────────────────────────────────────────────
@@ -846,7 +984,7 @@ _create_system_group() {
       done
       dscl . -create /Groups/"$SERVICE_USER"
       dscl . -create /Groups/"$SERVICE_USER" PrimaryGroupID "$gid"
-      dscl . -create /Groups/"$SERVICE_USER" RealName "Rune Vault Admin Group"
+      dscl . -create /Groups/"$SERVICE_USER" RealName "Rune Console Admin Group"
       success "System group '${SERVICE_USER}' created (GID=${gid})."
     else
       info "System group '${SERVICE_USER}' already exists."
@@ -875,7 +1013,7 @@ _create_system_user() {
             | awk '{print $2}')
       dscl . -create /Users/"$SERVICE_USER"
       dscl . -create /Users/"$SERVICE_USER" UserShell        /usr/bin/false
-      dscl . -create /Users/"$SERVICE_USER" RealName         "Rune Vault Service"
+      dscl . -create /Users/"$SERVICE_USER" RealName         "Rune Console Service"
       dscl . -create /Users/"$SERVICE_USER" UniqueID         "$uid"
       dscl . -create /Users/"$SERVICE_USER" PrimaryGroupID   "$gid"
       dscl . -create /Users/"$SERVICE_USER" NFSHomeDirectory /var/empty
@@ -898,12 +1036,37 @@ _add_invoking_user_to_group() {
   success "Added '${invoking_user}' to group '${SERVICE_USER}'."
 }
 
+enable_update_capability() {
+  # Never follow a pre-existing link at this privileged marker path. The
+  # parent is root-owned and not group-writable, but keep reinstall behavior
+  # fail-closed if its contents were changed out of band.
+  if [[ -e "$UPDATE_CAPABILITY_PATH" || -L "$UPDATE_CAPABILITY_PATH" ]]; then
+    [[ -f "$UPDATE_CAPABILITY_PATH" && ! -L "$UPDATE_CAPABILITY_PATH" ]] \
+      || die "Unsafe web updater capability marker: ${UPDATE_CAPABILITY_PATH}"
+    chown "root:${SERVICE_USER}" "$UPDATE_CAPABILITY_PATH"
+    chmod 0440 "$UPDATE_CAPABILITY_PATH"
+  else
+    install -m 0440 -o root -g "$SERVICE_USER" /dev/null "$UPDATE_CAPABILITY_PATH"
+  fi
+}
+
 setup_system() {
   info "Setting up system..."
 
   if [[ "$SKIP_SERVICE" -eq 0 ]]; then
     _create_system_group
     _create_system_user
+
+    # The daemon writes a complete temporary request in staging, then publishes
+    # it to the watched inbox with a same-filesystem hard link. The root-owned
+    # parent also holds the read-only status/capability files. Reinstalling
+    # changes no request/status contents.
+    install -d -m 0750 -o root -g "$SERVICE_USER" "$UPDATE_STATE_DIR"
+    # setgid keeps every staged/published request in the runeconsole group so
+    # the consumer can verify that its gid matches the trusted parent.
+    install -d -m 2770 -o root -g "$SERVICE_USER" "$UPDATE_INBOX_DIR"
+    install -d -m 2770 -o root -g "$SERVICE_USER" "$UPDATE_STAGING_DIR"
+    install -d -m 0700 -o root -g root "$UPDATE_BACKUP_DIR"
   fi
 
   # /opt may not exist on fresh macOS
@@ -920,14 +1083,24 @@ setup_system() {
     chmod 0750 "$dir"
     [[ "$SKIP_SERVICE" -eq 0 ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "$dir"
   done
-  # vault-keys stays 0700: secret FHE key material must never be group-readable.
-  mkdir -p "${INSTALL_PREFIX}/vault-keys"
-  chmod 0700 "${INSTALL_PREFIX}/vault-keys"
-  [[ "$SKIP_SERVICE" -eq 0 ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "${INSTALL_PREFIX}/vault-keys"
+  # rune-console-keys stays 0700: secret FHE key material must never be group-readable.
+  mkdir -p "${INSTALL_PREFIX}/rune-console-keys"
+  chmod 0700 "${INSTALL_PREFIX}/rune-console-keys"
+  [[ "$SKIP_SERVICE" -eq 0 ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "${INSTALL_PREFIX}/rune-console-keys"
+
+  # The updater will recursively restore only roots explicitly marked as
+  # Rune-Console-owned. Keep this content in sync with updater.ManagedRootMarkerContent.
+  local managed_dir marker
+  for managed_dir in "${INSTALL_PREFIX}/configs" "${INSTALL_PREFIX}/rune-console-keys"; do
+    marker="${managed_dir}/.runeconsole-managed"
+    printf 'runeconsole-managed-v1\n' > "$marker"
+    chmod 0600 "$marker"
+    [[ "$SKIP_SERVICE" -eq 0 ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "$marker"
+  done
 
   success "Directories created under ${INSTALL_PREFIX}/"
 
-  install -m 0755 "$SCRATCH/runevault" "$BINARY_DEST"
+  install -m 0755 "$SCRATCH/runeconsole" "$BINARY_DEST"
   success "Binary installed: ${BINARY_DEST}"
 
   if [[ "$SKIP_SERVICE" -eq 0 ]]; then
@@ -938,18 +1111,6 @@ setup_system() {
 # ── Phase 5: TLS certificates ──────────────────────────────────────────────────
 generate_tls_certs() {
   local cert_dir="${INSTALL_PREFIX}/certs"
-
-  # BYO cert: copy provided files and skip generation
-  if [[ -n "${RUNEVAULT_TLS_CERT_PATH:-}" && -n "${RUNEVAULT_TLS_KEY_PATH:-}" ]]; then
-    cp "${RUNEVAULT_TLS_CERT_PATH}" "${cert_dir}/server.pem"
-    cp "${RUNEVAULT_TLS_KEY_PATH}"  "${cert_dir}/server.key"
-    chmod 0644 "${cert_dir}/server.pem"
-    chmod 0600 "${cert_dir}/server.key"
-    [[ "$SKIP_SERVICE" -eq 0 ]] \
-      && chown "$SERVICE_USER" "${cert_dir}/server.pem" "${cert_dir}/server.key"
-    info "Using provided TLS certificates."
-    return 0
-  fi
 
   if [[ -f "${cert_dir}/server.pem" && "$FORCE" -eq 0 ]]; then
     info "TLS certificates already exist (use --force to regenerate)."
@@ -967,12 +1128,12 @@ generate_tls_certs() {
   tmpconf=$(mktemp)
   printf '[req]\ndistinguished_name = req_dn\nreq_extensions = v3_req\nprompt = no\n\n' \
     > "$tmpconf"
-  printf '[req_dn]\nCN = runevault\n\n'              >> "$tmpconf"
+  printf '[req_dn]\nCN = runeconsole\n\n'              >> "$tmpconf"
   printf '[v3_req]\nsubjectAltName = @alt_names\n\n' >> "$tmpconf"
   printf '[alt_names]\n'                             >> "$tmpconf"
   printf 'DNS.1 = localhost\n'                       >> "$tmpconf"
-  printf 'DNS.2 = vault\n'                           >> "$tmpconf"
-  printf 'DNS.3 = runevault\n'                       >> "$tmpconf"
+  printf 'DNS.2 = rune-console\n'                           >> "$tmpconf"
+  printf 'DNS.3 = runeconsole\n'                       >> "$tmpconf"
   printf 'IP.1  = 127.0.0.1\n'                       >> "$tmpconf"
   [[ -n "$public_ip" ]] && printf 'IP.2  = %s\n' "$public_ip" >> "$tmpconf"
 
@@ -980,7 +1141,7 @@ generate_tls_certs() {
   openssl req -new -x509 \
     -key "${cert_dir}/ca.key" \
     -out "${cert_dir}/ca.pem" \
-    -days 3650 -subj "/CN=Rune-Vault CA" -sha256 2>/dev/null
+    -days 3650 -subj "/CN=Rune-Console CA" -sha256 2>/dev/null
 
   openssl genrsa -out "${cert_dir}/server.key" 2048 2>/dev/null
   local csr="${cert_dir}/server.csr"
@@ -1007,62 +1168,28 @@ generate_tls_certs() {
 
 # ── Phase 6: Configuration ─────────────────────────────────────────────────────
 collect_and_write_config() {
-  local conf_file="${INSTALL_PREFIX}/configs/runevault.conf"
+  local conf_file="${INSTALL_PREFIX}/configs/runeconsole.conf"
 
   if [[ -f "$conf_file" && "$FORCE" -eq 0 ]]; then
     info "Config already exists (use --force to overwrite): ${conf_file}"
   else
-    local team_name="${RUNEVAULT_TEAM_NAME:-}"
-    local envector_endpoint="${RUNEVAULT_ENVECTOR_ENDPOINT:-}"
-    local envector_api_key="${RUNEVAULT_ENVECTOR_API_KEY:-}"
-    local envector_api_key_file="${RUNEVAULT_ENVECTOR_API_KEY_FILE:-}"
-    local team_secret="${RUNEVAULT_TEAM_SECRET:-}"
-
-    if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
-      printf '\n'
-      printf '══════════════════════════════════════════════════════════\n'
-      printf '  Vault configuration\n'
-      printf '══════════════════════════════════════════════════════════\n'
-      printf '\n'
-      [[ -z "$team_name" ]] \
-        && read -r -p "Team name (vault index identifier): " team_name
-      [[ -z "$envector_endpoint" ]] \
-        && read -r -p "enVector endpoint URL: " envector_endpoint
-      if [[ -z "$envector_api_key" && -z "$envector_api_key_file" ]]; then
-        read -r -p "enVector API key: " envector_api_key
-      fi
-      printf '\n'
-    else
-      local missing=()
-      [[ -z "$team_name" ]]         && missing+=("RUNEVAULT_TEAM_NAME")
-      [[ -z "$envector_endpoint" ]] && missing+=("RUNEVAULT_ENVECTOR_ENDPOINT")
-      [[ -z "$envector_api_key" && -z "$envector_api_key_file" ]] \
-        && missing+=("RUNEVAULT_ENVECTOR_API_KEY or RUNEVAULT_ENVECTOR_API_KEY_FILE")
-      if [[ ${#missing[@]} -gt 0 ]]; then
-        printf 'ERROR: Missing required env vars for non-interactive install:\n' >&2
-        for v in "${missing[@]}"; do printf '  %s\n' "$v" >&2; done
-        exit 1
-      fi
-    fi
-
+    local team_secret="${RUNECONSOLE_TEAM_SECRET:-}"
     if [[ -z "$team_secret" ]]; then
       team_secret=$(LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 64; true)
     fi
 
-    [[ -n "$team_name" ]]         || die "team_name is required."
-    [[ -n "$envector_endpoint" ]] || die "envector_endpoint is required."
-    [[ -n "$envector_api_key" || -n "$envector_api_key_file" ]] \
-      || die "enVector API key or key file is required."
-
-    local api_key_line
-    if [[ -n "$envector_api_key_file" ]]; then
-      api_key_line="  api_key_file: ${envector_api_key_file}"
-    else
-      api_key_line="  api_key: ${envector_api_key}"
-    fi
+    # Cloud control-plane origin. Defaults to the rune.team production plane;
+    # override both for a temporary install against another plane (e.g. dev).
+    local cloud_api_base="${RUNECONSOLE_CLOUD_API_BASE_URL:-https://api.rune.team}"
+    local cloud_web_base="${RUNECONSOLE_CLOUD_WEB_BASE_URL:-https://rune.team}"
+    # Tolerate a bare host (e.g. api.runespace.click) by defaulting to https.
+    case "$cloud_api_base" in http://*|https://*) ;; *) cloud_api_base="https://${cloud_api_base}" ;; esac
+    case "$cloud_web_base" in http://*|https://*) ;; *) cloud_web_base="https://${cloud_web_base}" ;; esac
 
     info "Writing ${conf_file}..."
     printf '%s\n' \
+      "config_version: 1" \
+      "" \
       "server:" \
       "  grpc:" \
       "    host: 0.0.0.0" \
@@ -1070,65 +1197,38 @@ collect_and_write_config() {
       "    tls:" \
       "      cert: ${INSTALL_PREFIX}/certs/server.pem" \
       "      key: ${INSTALL_PREFIX}/certs/server.key" \
-      "      disable: false" \
-      "  admin:" \
-      "    socket: ${INSTALL_PREFIX}/admin.sock" \
+      "      ca: ${INSTALL_PREFIX}/certs/ca.pem" \
+      "  console:" \
+      "    enabled: true" \
+      "    port: 8787" \
+      "" \
+      "cloud:" \
+      "  api_base_url: ${cloud_api_base}" \
+      "  web_base_url: ${cloud_web_base}" \
       "" \
       "keys:" \
-      "  path: ${INSTALL_PREFIX}/vault-keys" \
-      "  index_name: ${team_name}" \
+      "  path: ${INSTALL_PREFIX}/rune-console-keys" \
       "  embedding_dim: 1024" \
-      "" \
-      "envector:" \
-      "  endpoint: ${envector_endpoint}" \
-      "${api_key_line}" \
       "" \
       "tokens:" \
       "  team_secret: ${team_secret}" \
-      "  roles_file: ${INSTALL_PREFIX}/configs/roles.yml" \
-      "  tokens_file: ${INSTALL_PREFIX}/configs/tokens.yml" \
       "" \
       "audit:" \
       "  mode: file+stdout" \
       "  path: ${INSTALL_PREFIX}/logs/audit.log" \
+      "" \
+      "storage:" \
+      "  # runeconsole.db and console-session.db live here." \
+      "  data_dir: ${INSTALL_PREFIX}/configs" \
       > "$conf_file"
     chmod 0640 "$conf_file"
     [[ "$SKIP_SERVICE" -eq 0 ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "$conf_file"
 
   fi
 
-  # roles.yml
-  local roles_file="${INSTALL_PREFIX}/configs/roles.yml"
-  if [[ ! -f "$roles_file" || "$FORCE" -eq 1 ]]; then
-    printf '%s\n' \
-      "roles:" \
-      "  admin:" \
-      "    scope:" \
-      "      - get_public_key" \
-      "      - decrypt_scores" \
-      "      - decrypt_metadata" \
-      "      - manage_tokens" \
-      "    top_k: 50" \
-      "    rate_limit: 150/60s" \
-      "  member:" \
-      "    scope:" \
-      "      - get_public_key" \
-      "      - decrypt_scores" \
-      "      - decrypt_metadata" \
-      "    top_k: 10" \
-      "    rate_limit: 30/60s" \
-      > "$roles_file"
-    chmod 0640 "$roles_file"
-    [[ "$SKIP_SERVICE" -eq 0 ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "$roles_file"
-  fi
-
-  # tokens.yml
-  local tokens_file="${INSTALL_PREFIX}/configs/tokens.yml"
-  if [[ ! -f "$tokens_file" || "$FORCE" -eq 1 ]]; then
-    printf 'tokens: []\n' > "$tokens_file"
-    chmod 0640 "$tokens_file"
-    [[ "$SKIP_SERVICE" -eq 0 ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "$tokens_file"
-  fi
+  # No roles.yml / tokens.yml are seeded: the daemon creates the store
+  # database itself and seeds the built-in admin/member roles into it on first
+  # boot, so a file here would be written and never read.
 
   success "Configuration written."
 }
@@ -1136,23 +1236,25 @@ collect_and_write_config() {
 # ── Phase 7: Service installation ─────────────────────────────────────────────
 install_service() {
   if [[ "$SKIP_SERVICE" -eq 1 ]]; then
-    info "Skipping service installation (RUNEVAULT_SKIP_SERVICE=1)."
+    info "Skipping service installation (RUNECONSOLE_SKIP_SERVICE=1)."
     return 0
   fi
 
-  local config_path="${INSTALL_PREFIX}/configs/runevault.conf"
+  local config_path="${INSTALL_PREFIX}/configs/runeconsole.conf"
+  local binary_dir
+  binary_dir=$(dirname "$BINARY_DEST")
 
   if [[ "$OS_SLUG" = linux ]]; then
-    if systemctl is-active --quiet runevault.service 2>/dev/null; then
-      info "Stopping running runevault service..."
-      systemctl stop runevault.service
-      info "Tip: manage the service with: sudo systemctl start|stop|restart runevault"
+    if systemctl is-active --quiet runeconsole.service 2>/dev/null; then
+      info "Stopping running runeconsole service..."
+      systemctl stop runeconsole.service
+      info "Tip: manage the service with: sudo systemctl start|stop|restart runeconsole"
     fi
     info "Installing systemd service..."
-    local unit=/etc/systemd/system/runevault.service
+    local unit=/etc/systemd/system/runeconsole.service
     printf '%s\n' \
       "[Unit]" \
-      "Description=Rune-Vault FHE gRPC Server" \
+      "Description=Rune-Console FHE gRPC Server" \
       "Documentation=https://github.com/${REPO}" \
       "After=network-online.target" \
       "Wants=network-online.target" \
@@ -1167,12 +1269,12 @@ install_service() {
       "TimeoutStopSec=30s" \
       "StandardOutput=journal" \
       "StandardError=journal" \
-      "SyslogIdentifier=runevault" \
+      "SyslogIdentifier=runeconsole" \
       "NoNewPrivileges=true" \
       "PrivateTmp=true" \
       "ProtectSystem=strict" \
       "ProtectHome=true" \
-      "ReadWritePaths=${INSTALL_PREFIX}" \
+      "ReadWritePaths=${INSTALL_PREFIX} ${UPDATE_INBOX_DIR} ${UPDATE_STAGING_DIR}" \
       "ProtectKernelTunables=true" \
       "ProtectKernelModules=true" \
       "ProtectControlGroups=true" \
@@ -1189,14 +1291,75 @@ install_service() {
       "WantedBy=multi-user.target" \
       > "$unit"
     chmod 0644 "$unit"
+
+    # The path unit is the only bridge from the unprivileged web daemon to the
+    # root update agent. The agent receives fixed paths and runs independently
+    # so stopping runeconsole cannot kill the update transaction.
+    local update_unit=/etc/systemd/system/runeconsole-update.service
+    printf '%s\n' \
+      "[Unit]" \
+      "Description=Rune-Console privileged update agent" \
+      "Documentation=https://github.com/${REPO}" \
+      "After=network-online.target" \
+      "Wants=network-online.target" \
+      "ConditionPathExists=${UPDATE_REQUEST_PATH}" \
+      "" \
+      "[Service]" \
+      "Type=oneshot" \
+      "User=root" \
+      "Group=${SERVICE_USER}" \
+      "ExecStart=${BINARY_DEST} update-agent --config ${config_path} --request-path ${UPDATE_REQUEST_PATH} --status-path ${UPDATE_STATUS_PATH}" \
+      "UMask=0027" \
+      "TimeoutStartSec=infinity" \
+      "StandardOutput=journal" \
+      "StandardError=journal" \
+      "SyslogIdentifier=runeconsole-updater" \
+      "NoNewPrivileges=true" \
+      "PrivateTmp=true" \
+      "PrivateDevices=true" \
+      "ProtectSystem=strict" \
+      "ProtectHome=true" \
+      "ReadWritePaths=${binary_dir} ${INSTALL_PREFIX} ${UPDATE_BACKUP_DIR} ${UPDATE_STATE_DIR}" \
+      "ProtectClock=true" \
+      "ProtectHostname=true" \
+      "ProtectKernelTunables=true" \
+      "ProtectKernelModules=true" \
+      "ProtectControlGroups=true" \
+      "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX" \
+      "RestrictNamespaces=true" \
+      "LockPersonality=true" \
+      "MemoryDenyWriteExecute=false" \
+      "RestrictRealtime=true" \
+      "RestrictSUIDSGID=true" \
+      "RemoveIPC=true" \
+      > "$update_unit"
+    chmod 0644 "$update_unit"
+
+    local update_path_unit=/etc/systemd/system/runeconsole-update.path
+    printf '%s\n' \
+      "[Unit]" \
+      "Description=Watch for Rune-Console web update requests" \
+      "Documentation=https://github.com/${REPO}" \
+      "" \
+      "[Path]" \
+      "PathExists=${UPDATE_REQUEST_PATH}" \
+      "Unit=runeconsole-update.service" \
+      "" \
+      "[Install]" \
+      "WantedBy=multi-user.target" \
+      > "$update_path_unit"
+    chmod 0644 "$update_path_unit"
+
     systemctl daemon-reload
-    systemctl enable runevault.service
-    systemctl start runevault.service
-    success "systemd service enabled and started."
+    systemctl enable --now runeconsole-update.path
+    enable_update_capability
+    systemctl enable runeconsole.service
+    systemctl start runeconsole.service
+    success "systemd daemon and privileged web updater enabled and started."
 
   else
     info "Installing launchd service..."
-    local plist=/Library/LaunchDaemons/com.cryptolabinc.runevault.plist
+    local plist=/Library/LaunchDaemons/com.cryptolabinc.runeconsole.plist
     printf '%s\n' \
       '<?xml version="1.0" encoding="UTF-8"?>' \
       '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"' \
@@ -1204,7 +1367,7 @@ install_service() {
       '<plist version="1.0">' \
       '<dict>' \
       '  <key>Label</key>' \
-      '  <string>com.cryptolabinc.runevault</string>' \
+      '  <string>com.cryptolabinc.runeconsole</string>' \
       '' \
       '  <key>ProgramArguments</key>' \
       '  <array>' \
@@ -1228,10 +1391,10 @@ install_service() {
       '  <integer>10</integer>' \
       '' \
       '  <key>StandardOutPath</key>' \
-      "  <string>${INSTALL_PREFIX}/logs/runevault.stdout.log</string>" \
+      "  <string>${INSTALL_PREFIX}/logs/runeconsole.stdout.log</string>" \
       '' \
       '  <key>StandardErrorPath</key>' \
-      "  <string>${INSTALL_PREFIX}/logs/runevault.stderr.log</string>" \
+      "  <string>${INSTALL_PREFIX}/logs/runeconsole.stderr.log</string>" \
       '' \
       '  <key>EnvironmentVariables</key>' \
       '  <dict>' \
@@ -1245,46 +1408,113 @@ install_service() {
       '</plist>' \
       > "$plist"
     chmod 0644 "$plist"
-    chown root "$plist"
-    launchctl bootout system/com.cryptolabinc.runevault 2>/dev/null || true
+    chown root:wheel "$plist"
+
+    local updater_plist=/Library/LaunchDaemons/com.cryptolabinc.runeconsole-updater.plist
+    printf '%s\n' \
+      '<?xml version="1.0" encoding="UTF-8"?>' \
+      '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"' \
+      '  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+      '<plist version="1.0">' \
+      '<dict>' \
+      '  <key>Label</key>' \
+      '  <string>com.cryptolabinc.runeconsole-updater</string>' \
+      '' \
+      '  <key>ProgramArguments</key>' \
+      '  <array>' \
+      "    <string>${BINARY_DEST}</string>" \
+      '    <string>update-agent</string>' \
+      '    <string>--config</string>' \
+      "    <string>${config_path}</string>" \
+      '    <string>--request-path</string>' \
+      "    <string>${UPDATE_REQUEST_PATH}</string>" \
+      '    <string>--status-path</string>' \
+      "    <string>${UPDATE_STATUS_PATH}</string>" \
+      '  </array>' \
+      '' \
+      '  <key>UserName</key>' \
+      '  <string>root</string>' \
+      '' \
+      '  <key>GroupName</key>' \
+      "  <string>${SERVICE_USER}</string>" \
+      '' \
+      '  <key>QueueDirectories</key>' \
+      '  <array>' \
+      "    <string>${UPDATE_INBOX_DIR}</string>" \
+      '  </array>' \
+      '' \
+      '  <key>ThrottleInterval</key>' \
+      '  <integer>10</integer>' \
+      '' \
+      '  <key>StandardOutPath</key>' \
+      "  <string>${INSTALL_PREFIX}/logs/runeconsole-updater.stdout.log</string>" \
+      '' \
+      '  <key>StandardErrorPath</key>' \
+      "  <string>${INSTALL_PREFIX}/logs/runeconsole-updater.stderr.log</string>" \
+      '' \
+      '  <key>EnvironmentVariables</key>' \
+      '  <dict>' \
+      '    <key>PATH</key>' \
+      '    <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>' \
+      '  </dict>' \
+      '' \
+      '  <key>ProcessType</key>' \
+      '  <string>Background</string>' \
+      '</dict>' \
+      '</plist>' \
+      > "$updater_plist"
+    chmod 0644 "$updater_plist"
+    chown root:wheel "$updater_plist"
+
+    launchctl bootout system/com.cryptolabinc.runeconsole 2>/dev/null || true
+    launchctl bootout system/com.cryptolabinc.runeconsole-updater 2>/dev/null || true
+    launchctl bootstrap system "$updater_plist"
+    enable_update_capability
     launchctl bootstrap system "$plist"
-    success "launchd service loaded."
+    success "launchd daemon and privileged web updater loaded."
   fi
 }
 
 # ── Phase 8: Post-install summary ─────────────────────────────────────────────
 post_install() {
   if [[ "$SKIP_SERVICE" -eq 0 ]]; then
-    info "Waiting for vault to start..."
-    local i
-    for i in $(seq 1 15); do
-      "$BINARY_DEST" status \
-        --config "${INSTALL_PREFIX}/configs/runevault.conf" \
-        >/dev/null 2>&1 && { success "Vault is up."; break; } || true
-      sleep 1
+    info "Waiting for the daemon to start (first boot generates FHE keys — this can take a minute)..."
+    local i console_up=0
+    for i in $(seq 1 30); do
+      # -fs (no -S) + stderr discard: stay quiet while the listener is not up yet.
+      if curl -fs -o /dev/null "http://127.0.0.1:8787/healthz" 2>/dev/null; then
+        success "Console is up."
+        console_up=1
+        break
+      fi
+      sleep 2
     done
+    if [[ "$console_up" -eq 0 ]]; then
+      warn "Console not responding yet — it may still be generating FHE keys on first boot."
+      warn "Check progress with: runeconsole logs"
+    fi
   fi
 
   local public_ip=""
   public_ip=$(curl -4 -sf --connect-timeout 5 ifconfig.me 2>/dev/null || true)
 
   printf '\n'
-  success "Rune-Vault ${VERSION:-local} installed successfully."
+  success "Rune-Console ${VERSION:-local} installed successfully."
   printf '\n'
   printf '  Binary:   %s\n' "$BINARY_DEST"
-  printf '  Config:   %s\n' "${INSTALL_PREFIX}/configs/runevault.conf"
+  printf '  Config:   %s\n' "${INSTALL_PREFIX}/configs/runeconsole.conf"
   printf '  CA cert:  %s\n' "${INSTALL_PREFIX}/certs/ca.pem"
   [[ -n "$public_ip" ]] && printf '  Endpoint: %s:%s\n' "$public_ip" "$GRPC_PORT"
   printf '\n'
   printf 'Next steps:\n'
-  printf '  Issue a token:  runevault token issue --user <name> --role member\n'
-  printf '  Check status:   runevault status\n'
-  printf '  View logs:      runevault logs\n'
+  printf '  Open the console:  http://127.0.0.1:8787\n'
+  printf '  View logs:         runeconsole logs\n'
+  printf '  Update safely:     sudo runeconsole update\n'
   if [[ "$OS_SLUG" = linux ]]; then
-    printf '  Manage daemon:  sudo systemctl start|stop|restart runevault\n'
+    printf '  Manage daemon:     sudo systemctl start|stop|restart runeconsole\n'
   else
-    printf '  Manage daemon:  sudo launchctl bootout system/com.cryptolabinc.runevault\n'
-    printf '                  sudo launchctl bootstrap system /Library/LaunchDaemons/com.cryptolabinc.runevault.plist\n'
+    printf '  Manage daemon:     sudo launchctl bootout system/com.cryptolabinc.runeconsole\n'
+    printf '                     sudo launchctl bootstrap system /Library/LaunchDaemons/com.cryptolabinc.runeconsole.plist\n'
   fi
   if [[ -n "${SUDO_USER:-}" ]]; then
     printf '\n'
@@ -1293,14 +1523,25 @@ post_install() {
   fi
   printf '\n'
   warn "BACKUP: Keep these safe — they cannot be recovered if lost:"
-  warn "  Rune-Vault Keys: ${INSTALL_PREFIX}/vault-keys/"
-  warn "  Config:          ${INSTALL_PREFIX}/configs/runevault.conf"
+  warn "  Rune-Console Keys: ${INSTALL_PREFIX}/rune-console-keys/"
+  warn "  Config + SQLite:   ${INSTALL_PREFIX}/configs/"
+  warn "  TLS material:      ${INSTALL_PREFIX}/certs/"
 }
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 resolve_target
 [[ "$UNINSTALL" -eq 1 ]] && { run_uninstall; exit 0; }
 [[ "$TARGET" != "local" ]] && csp_dispatch
+
+if [[ "$OS_SLUG" = darwin && "$ARCH_SLUG" = amd64 ]]; then
+  die "Local macOS Intel installations are not supported by runespace-sdk v1.0.0. Use Apple Silicon or Linux."
+fi
+if [[ "$OS_SLUG" = darwin ]]; then
+  MACOS_MAJOR=$(sw_vers -productVersion | cut -d. -f1)
+  if [[ ! "$MACOS_MAJOR" =~ ^[0-9]+$ ]] || (( MACOS_MAJOR < 14 )); then
+    die "Unsupported macOS version. Apple Silicon macOS 14 or newer is required."
+  fi
+fi
 
 preflight
 download_and_verify

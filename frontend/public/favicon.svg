@@ -1,0 +1,28 @@
+<svg width="64" height="64" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>Rune favicon</title>
+  <defs>
+    <linearGradient id="rune-icon-bg" x1="72" y1="32" x2="452" y2="486" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#14263f"/>
+      <stop offset="1" stop-color="#071324"/>
+    </linearGradient>
+    <linearGradient id="rune-navy-on-dark" x1="110" y1="116" x2="230" y2="395" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7ff5dd"/>
+      <stop offset="1" stop-color="#29bda7"/>
+    </linearGradient>
+    <linearGradient id="rune-mint" x1="260" y1="72" x2="430" y2="320" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ccfff3"/>
+      <stop offset="1" stop-color="#5cffd6"/>
+    </linearGradient>
+    <linearGradient id="rune-teal" x1="342" y1="294" x2="292" y2="468" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2ac6a8"/>
+      <stop offset="1" stop-color="#189e86"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#rune-icon-bg)"/>
+  <g transform="translate(52 40) scale(0.83)">
+    <path d="M365 281 L440 341 L259 475 L259 352 Z" fill="url(#rune-teal)"/>
+    <path d="M257 64 L440 201 L440 341 L365 281 L258 201 Z" fill="url(#rune-mint)"/>
+    <path d="M257 64 L95 185 L95 351 L164 401 L265 313 L190 260 L258 201 Z" fill="url(#rune-navy-on-dark)"/>
+    <path d="M95 351 L258 201 L190 260 L265 313 L164 401 Z" fill="#178c7e" opacity="0.38"/>
+  </g>
+</svg>

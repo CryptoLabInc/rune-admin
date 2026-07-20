@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Rune-Vault dev installer (sibling of install.sh).
+# Rune-Console dev installer (sibling of install.sh).
 #
-# Installs the runevault daemon from your local working tree — never from a
+# Installs the runeconsole daemon from your local working tree — never from a
 # published release. Use this to verify in-progress source code on your local
 # machine or on a CSP VM (AWS, GCP, OCI) before cutting a release.
 #
@@ -11,7 +11,7 @@
 #
 # Options:
 #   --target <local|aws|gcp|oci>  Install/uninstall target (default: prompt if TTY, else local)
-#   --install-dir <path>          CSP install dir (default: $HOME/rune-vault-<csp>)
+#   --install-dir <path>          CSP install dir (default: $HOME/rune-console-<csp>)
 #   --prefix <dir>                Local-only: rootless test prefix
 #   --non-interactive             Skip all prompts; supply secrets via env vars
 #   --uninstall                   Forward uninstall to install.sh (local or CSP target)
@@ -19,42 +19,36 @@
 #
 # Differences from install.sh:
 #   - Always installs from the local working tree (no GitHub release download).
-#   - For CSP targets, builds linux/amd64 in Docker (golang:1.25-bookworm) with
+#   - For CSP targets, builds linux/amd64 in Docker (golang:1.26-bookworm) with
 #     --platform linux/amd64 — works on any host arch via qemu emulation.
 #   - cloud-init-dev / startup-script-dev only prepare the VM; install.sh runs
 #     over SSH after cloud-init finishes.
 #
 # Non-interactive env vars (CSP install — operator workstation):
-#   RUNEVAULT_ENVECTOR_ENDPOINT      enVector endpoint URL (required)
-#   RUNEVAULT_ENVECTOR_API_KEY       enVector API key (required)
-#   RUNEVAULT_TEAM_NAME              Team name (required)
-#   RUNEVAULT_TARGET                 Pre-select target without interactive menu
-#   RUNEVAULT_INSTALL_DIR            Pre-set CSP install directory
-#   RUNEVAULT_CSP_REGION             Cloud region
-#   RUNEVAULT_GCP_PROJECT_ID         GCP: project ID (required for GCP)
-#   RUNEVAULT_OCI_COMPARTMENT_ID     OCI: compartment OCID (required for OCI)
+#   RUNECONSOLE_TARGET                Pre-select target without interactive menu
+#   RUNECONSOLE_INSTALL_DIR           Pre-set CSP install directory
+#   RUNECONSOLE_CSP_REGION            Cloud region
+#   RUNECONSOLE_GCP_PROJECT_ID        GCP: project ID (required for GCP)
+#   RUNECONSOLE_OCI_COMPARTMENT_ID    OCI: compartment OCID (required for OCI)
 
 set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
-LOCAL_BINARY_HOST="${REPO_ROOT}/vault/bin/runevault"
+LOCAL_BINARY_HOST="${REPO_ROOT}/bin/runeconsole"
 TARGET_OS=linux
 TARGET_ARCH=amd64
-LINUX_BINARY="${REPO_ROOT}/vault/bin/runevault-${TARGET_OS}-${TARGET_ARCH}"
-BUILDER_IMAGE="golang:1.25-bookworm"
+LINUX_BINARY="${REPO_ROOT}/bin/runeconsole-${TARGET_OS}-${TARGET_ARCH}"
+BUILDER_IMAGE="golang:1.26-bookworm"
 GRPC_PORT=50051
 
 # Overridable by env (mirrors install.sh)
-TARGET="${RUNEVAULT_TARGET:-}"
-INSTALL_DIR_CSP="${RUNEVAULT_INSTALL_DIR:-}"
+TARGET="${RUNECONSOLE_TARGET:-}"
+INSTALL_DIR_CSP="${RUNECONSOLE_INSTALL_DIR:-}"
 CSP_PUBLIC_IP=""
 
 # CSP config (populated by dev_csp_prompt_config)
-TEAM_NAME=""
-ENVECTOR_ENDPOINT=""
-ENVECTOR_API_KEY=""
 CSP_REGION=""
 GCP_PROJECT_ID=""
 OCI_COMPARTMENT_ID=""
@@ -109,7 +103,7 @@ print_banner() {
   commit=$(cd "$REPO_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown)
   printf '\n'
   printf '  ╭───────────────────────────────────────────────────────────────────╮\n'
-  printf '  │  Rune-Vault dev installer                                         │\n'
+  printf '  │  Rune-Console dev installer                                         │\n'
   printf '  │  Source: local working tree (not a published release)             │\n'
   printf '  │  Commit: %-56s │\n' "$commit"
   printf '  ╰───────────────────────────────────────────────────────────────────╯\n'
@@ -132,13 +126,6 @@ _prompt() {
 
 # Escape for embedding inside a double-quoted Terraform string.
 escape_tf() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
-
-# Escape for embedding inside a single-quoted shell argument.
-# Replaces every ' with '\''.
-escape_single() {
-  local s=$1
-  printf '%s' "${s//\'/\'\\\'\'}"
-}
 
 # ── Target resolution (mirror install.sh:198–226) ─────────────────────────────
 resolve_target() {
@@ -181,8 +168,8 @@ dev_preflight() {
     [[ "$(id -u)" -eq 0 ]] || die "This installer must be run as root (use sudo)."
   fi
 
-  [[ -d "${REPO_ROOT}/vault" ]] \
-    || die "vault/ directory not found under ${REPO_ROOT}. Run from a clone of rune-admin."
+  [[ -f "${REPO_ROOT}/go.mod" ]] \
+    || die "go.mod not found under ${REPO_ROOT}. Run from a clone of rune-console."
 
   local missing=()
   for tool in git mise; do
@@ -217,7 +204,7 @@ dev_check_docker() {
 
 # ── Build ──────────────────────────────────────────────────────────────────────
 dev_build_local_binary() {
-  info "Building runevault for host (${HOST_OS}/${HOST_ARCH})..."
+  info "Building runeconsole for host (${HOST_OS}/${HOST_ARCH})..."
   local build_user="${SUDO_USER:-$(id -un)}"
   (cd "$REPO_ROOT" && sudo -u "$build_user" -H bash -lc 'mise run go:build')
   [[ -x "$LOCAL_BINARY_HOST" ]] || die "Build did not produce ${LOCAL_BINARY_HOST}."
@@ -225,28 +212,40 @@ dev_build_local_binary() {
 }
 
 dev_build_linux_binary() {
-  info "Building runevault for ${TARGET_OS}/${TARGET_ARCH} via Docker (${BUILDER_IMAGE})..."
   local build_user="${SUDO_USER:-$(id -un)}"
+
+  # Build the SPA on the host first, mirroring the local `mise run go:build`
+  # (which depends on fe:build). The builder image has no node/pnpm, and the
+  # Docker go build below embeds the host's internal/console/webdist via the
+  # bind mount — so without this the CSP binary embeds an empty webdist and
+  # serves the placeholder page instead of the console UI.
+  # Retry with fe:setup (pnpm install) if the first build fails — a fresh
+  # checkout has no frontend/node_modules, so `tsc`/`vite` are missing.
+  info "Building frontend SPA on host (mise run fe:build)..."
+  (cd "$REPO_ROOT" && sudo -u "$build_user" -H bash -lc \
+    'mise run fe:build || { mise run fe:setup && mise run fe:build; }')
+
+  info "Building runeconsole for ${TARGET_OS}/${TARGET_ARCH} via Docker (${BUILDER_IMAGE})..."
   local user_home commit version date pkg
   user_home="${SUDO_USER:+$(eval echo ~"${SUDO_USER}")}"
   user_home="${user_home:-$HOME}"
   commit=$(cd "$REPO_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo none)
   version=dev
   date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  pkg="github.com/CryptoLabInc/rune-admin/vault/internal/commands"
+  pkg="github.com/CryptoLabInc/rune-console/internal/commands"
 
   local ldflags="-X '${pkg}.buildVersion=${version}' -X '${pkg}.buildCommit=${commit}' -X '${pkg}.buildDate=${date}'"
-  local out_rel="bin/runevault-${TARGET_OS}-${TARGET_ARCH}"
+  local out_rel="bin/runeconsole-${TARGET_OS}-${TARGET_ARCH}"
 
   mkdir -p "${user_home}/go/pkg/mod"
-  mkdir -p "${REPO_ROOT}/vault/bin"
-  [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "${REPO_ROOT}/vault/bin"
+  mkdir -p "${REPO_ROOT}/bin"
+  [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "${REPO_ROOT}/bin"
 
   # Run docker as the invoking user so written files are owned correctly and
   # the user's go module cache is reused for speed.
   sudo -u "$build_user" -H docker run --rm \
     --platform "${TARGET_OS}/${TARGET_ARCH}" \
-    -v "${REPO_ROOT}/vault:/src" \
+    -v "${REPO_ROOT}:/src" \
     -v "${user_home}/go/pkg/mod:/go/pkg/mod" \
     -w /src \
     -e CGO_ENABLED=1 \
@@ -263,43 +262,19 @@ dev_build_linux_binary() {
   success "Built: ${LINUX_BINARY}"
 }
 
-# ── Local config prompts (mirror dev_csp_prompt_config) ───────────────────────
-dev_local_prompt_config() {
-  if [[ "$NON_INTERACTIVE" -eq 0 ]]; then
-    printf '\n'
-    printf '══════════════════════════════════════════════════════════\n'
-    printf '  Local install configuration (dev mode)\n'
-    printf '══════════════════════════════════════════════════════════\n'
-    printf '\n'
-
-    _prompt RUNEVAULT_TEAM_NAME         "Team name"         "devteam"
-    _prompt RUNEVAULT_ENVECTOR_ENDPOINT "enVector endpoint" ""
-    _prompt RUNEVAULT_ENVECTOR_API_KEY  "enVector API key"  ""
-    printf '\n'
-
-    [[ -n "${RUNEVAULT_ENVECTOR_ENDPOINT:-}" ]] || die "enVector endpoint is required."
-    [[ -n "${RUNEVAULT_ENVECTOR_API_KEY:-}" ]]  || die "enVector API key is required."
-  else
-    RUNEVAULT_TEAM_NAME="${RUNEVAULT_TEAM_NAME:-devteam}"
-    RUNEVAULT_ENVECTOR_ENDPOINT="${RUNEVAULT_ENVECTOR_ENDPOINT:-https://envector.example.com}"
-    RUNEVAULT_ENVECTOR_API_KEY="${RUNEVAULT_ENVECTOR_API_KEY:-dev-api-key-placeholder}"
-  fi
-}
-
 # ── Local install branch ──────────────────────────────────────────────────────
+# No config prompts: a local install needs no team/endpoint/api key. The
+# runespace is connected from the console after login; install.sh writes the
+# rest of runeconsole.conf with safe defaults.
 dev_local_install() {
   dev_build_local_binary
-  dev_local_prompt_config
 
-  export RUNEVAULT_LOCAL_BINARY="$LOCAL_BINARY_HOST"
-  export RUNEVAULT_TEAM_NAME
-  export RUNEVAULT_ENVECTOR_ENDPOINT
-  export RUNEVAULT_ENVECTOR_API_KEY
+  export RUNECONSOLE_LOCAL_BINARY="$LOCAL_BINARY_HOST"
 
   if [[ -n "$PREFIX" ]]; then
-    export RUNEVAULT_INSTALL_PREFIX="$PREFIX"
-    export RUNEVAULT_BINARY_PATH="${PREFIX}/runevault"
-    export RUNEVAULT_SKIP_SERVICE=1
+    export RUNECONSOLE_INSTALL_PREFIX="$PREFIX"
+    export RUNECONSOLE_BINARY_PATH="${PREFIX}/runeconsole"
+    export RUNECONSOLE_SKIP_SERVICE=1
   fi
 
   exec bash "${REPO_ROOT}/install.sh" --target local "${PASSTHROUGH_ARGS[@]+"${PASSTHROUGH_ARGS[@]}"}"
@@ -315,8 +290,8 @@ dev_forward_uninstall() {
   [[ "$NON_INTERACTIVE" -eq 1 ]] && args+=(--non-interactive)
 
   if [[ "$TARGET" = "local" && -n "$PREFIX" ]]; then
-    export RUNEVAULT_INSTALL_PREFIX="$PREFIX"
-    export RUNEVAULT_BINARY_PATH="${PREFIX}/runevault"
+    export RUNECONSOLE_INSTALL_PREFIX="$PREFIX"
+    export RUNECONSOLE_BINARY_PATH="${PREFIX}/runeconsole"
   fi
 
   exec bash "${REPO_ROOT}/install.sh" "${args[@]}"
@@ -373,36 +348,26 @@ dev_csp_prompt_config() {
     printf '══════════════════════════════════════════════════════════\n'
     printf '\n'
 
-    _prompt TEAM_NAME          "Team name"          "devteam"
-    _prompt ENVECTOR_ENDPOINT  "enVector endpoint"  ""
-    _prompt ENVECTOR_API_KEY   "enVector API key"   ""
-
     case "$csp" in
-      aws) _prompt CSP_REGION "AWS region"   "us-east-1"   ;;
+      aws) _prompt CSP_REGION "AWS region"   "ap-northeast-2"   ;;
       gcp)
-        _prompt CSP_REGION    "GCP region"   "us-central1"
+        _prompt CSP_REGION    "GCP region"   "asia-northeast3"
         _prompt GCP_PROJECT_ID "GCP project ID" ""
         ;;
       oci)
-        _prompt CSP_REGION         "OCI region"          "us-ashburn-1"
+        _prompt CSP_REGION         "OCI region"          "ap-seoul-1"
         _prompt OCI_COMPARTMENT_ID "OCI compartment OCID" ""
         ;;
     esac
     printf '\n'
   else
-    TEAM_NAME="${RUNEVAULT_TEAM_NAME:-}"
-    ENVECTOR_ENDPOINT="${RUNEVAULT_ENVECTOR_ENDPOINT:-}"
-    ENVECTOR_API_KEY="${RUNEVAULT_ENVECTOR_API_KEY:-}"
-    CSP_REGION="${RUNEVAULT_CSP_REGION:-}"
-    GCP_PROJECT_ID="${RUNEVAULT_GCP_PROJECT_ID:-}"
-    OCI_COMPARTMENT_ID="${RUNEVAULT_OCI_COMPARTMENT_ID:-}"
+    CSP_REGION="${RUNECONSOLE_CSP_REGION:-}"
+    GCP_PROJECT_ID="${RUNECONSOLE_GCP_PROJECT_ID:-}"
+    OCI_COMPARTMENT_ID="${RUNECONSOLE_OCI_COMPARTMENT_ID:-}"
 
     local missing=()
-    [[ -z "$TEAM_NAME" ]]         && missing+=("RUNEVAULT_TEAM_NAME")
-    [[ -z "$ENVECTOR_ENDPOINT" ]] && missing+=("RUNEVAULT_ENVECTOR_ENDPOINT")
-    [[ -z "$ENVECTOR_API_KEY" ]]  && missing+=("RUNEVAULT_ENVECTOR_API_KEY")
-    [[ "$csp" = gcp && -z "$GCP_PROJECT_ID" ]]      && missing+=("RUNEVAULT_GCP_PROJECT_ID")
-    [[ "$csp" = oci && -z "$OCI_COMPARTMENT_ID" ]]  && missing+=("RUNEVAULT_OCI_COMPARTMENT_ID")
+    [[ "$csp" = gcp && -z "$GCP_PROJECT_ID" ]]      && missing+=("RUNECONSOLE_GCP_PROJECT_ID")
+    [[ "$csp" = oci && -z "$OCI_COMPARTMENT_ID" ]]  && missing+=("RUNECONSOLE_OCI_COMPARTMENT_ID")
     if [[ ${#missing[@]} -gt 0 ]]; then
       printf 'ERROR: Missing required env vars:\n' >&2
       for v in "${missing[@]}"; do printf '  %s\n' "$v" >&2; done
@@ -410,9 +375,6 @@ dev_csp_prompt_config() {
     fi
   fi
 
-  [[ -n "$TEAM_NAME" ]]          || die "Team name is required."
-  [[ -n "$ENVECTOR_ENDPOINT" ]]  || die "enVector endpoint is required."
-  [[ -n "$ENVECTOR_API_KEY" ]]   || die "enVector API key is required."
   if [[ "$csp" = gcp ]]; then
     [[ -n "$GCP_PROJECT_ID" ]]     || die "GCP project ID is required."
   fi
@@ -487,11 +449,7 @@ dev_csp_render_tfvars() {
     && public_key=$(cat "${INSTALL_DIR_CSP}/ssh_key.pub")
 
   {
-    printf 'team_name          = "%s"\n' "$(escape_tf "${TEAM_NAME:-default}")"
-    printf 'tls_mode           = "self-signed"\n'
-    printf 'envector_endpoint  = "%s"\n' "$(escape_tf "${ENVECTOR_ENDPOINT}")"
-    printf 'envector_api_key   = "%s"\n' "$(escape_tf "${ENVECTOR_API_KEY}")"
-    printf 'runevault_version  = "dev"\n'
+    printf 'runeconsole_version  = "dev"\n'
     printf 'public_key         = "%s"\n' "$(escape_tf "${public_key}")"
     printf 'region             = "%s"\n' "$(escape_tf "${CSP_REGION}")"
     case "$csp" in
@@ -529,8 +487,8 @@ dev_csp_upload_and_install() {
   local ssh_user=ubuntu
 
   local public_ip
-  public_ip=$(cd "$tf_dir" && sudo -u "$tf_user" terraform output -raw vault_public_ip 2>/dev/null) \
-    || die "Could not read vault_public_ip from terraform output."
+  public_ip=$(cd "$tf_dir" && sudo -u "$tf_user" terraform output -raw console_public_ip 2>/dev/null) \
+    || die "Could not read console_public_ip from terraform output."
   CSP_PUBLIC_IP="$public_ip"
 
   local ssh_opts="-o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15"
@@ -560,7 +518,7 @@ dev_csp_upload_and_install() {
   while [[ $(date +%s) -lt $deadline ]]; do
     # shellcheck disable=SC2086
     if $ssh_prefix ssh $ssh_opts -i "$key_path" "${ssh_user}@${public_ip}" \
-         "test -e /var/run/runevault-dev-ready" 2>/dev/null; then
+         "test -e /var/run/runeconsole-dev-ready" 2>/dev/null; then
       prereqs_ready=1
       break
     fi
@@ -571,7 +529,7 @@ dev_csp_upload_and_install() {
   success "Cloud-init-dev complete."
 
   # 3. SCP install.sh + linux/amd64 binary to /tmp.
-  info "Uploading install.sh and runevault binary to ${public_ip}..."
+  info "Uploading install.sh and runeconsole binary to ${public_ip}..."
   # shellcheck disable=SC2086
   $ssh_prefix scp $ssh_opts -i "$key_path" \
     "${REPO_ROOT}/install.sh" \
@@ -582,16 +540,16 @@ dev_csp_upload_and_install() {
 
   # 4. Run install.sh on the VM with dev hooks.
   info "Running install.sh on the VM..."
-  local tn ee ek
-  tn=$(escape_single "$TEAM_NAME")
-  ee=$(escape_single "$ENVECTOR_ENDPOINT")
-  ek=$(escape_single "$ENVECTOR_API_KEY")
+  # Forward an optional cloud-plane override so a dev CSP install can point at
+  # a non-production control plane (the config is written by the VM's install.sh).
+  local cloud_env=""
+  [[ -n "${RUNECONSOLE_CLOUD_API_BASE_URL:-}" ]] \
+    && cloud_env+=" RUNECONSOLE_CLOUD_API_BASE_URL='${RUNECONSOLE_CLOUD_API_BASE_URL}'"
+  [[ -n "${RUNECONSOLE_CLOUD_WEB_BASE_URL:-}" ]] \
+    && cloud_env+=" RUNECONSOLE_CLOUD_WEB_BASE_URL='${RUNECONSOLE_CLOUD_WEB_BASE_URL}'"
   local remote_cmd
   remote_cmd="sudo \
-    RUNEVAULT_LOCAL_BINARY=/tmp/runevault-${TARGET_OS}-${TARGET_ARCH} \
-    RUNEVAULT_TEAM_NAME='${tn}' \
-    RUNEVAULT_ENVECTOR_ENDPOINT='${ee}' \
-    RUNEVAULT_ENVECTOR_API_KEY='${ek}' \
+    RUNECONSOLE_LOCAL_BINARY=/tmp/runeconsole-${TARGET_OS}-${TARGET_ARCH}${cloud_env} \
     bash /tmp/install.sh --target local --non-interactive --version dev"
 
   # shellcheck disable=SC2086
@@ -605,13 +563,115 @@ dev_csp_upload_and_install() {
   [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "${INSTALL_DIR_CSP}/certs"
   # shellcheck disable=SC2086
   $ssh_prefix scp $ssh_opts -i "$key_path" \
-    "${ssh_user}@${public_ip}:/opt/runevault/certs/ca.pem" \
+    "${ssh_user}@${public_ip}:/opt/runeconsole/certs/ca.pem" \
     "${INSTALL_DIR_CSP}/certs/ca.pem" \
     || die "CA cert fetch failed."
   success "CA certificate saved: ${INSTALL_DIR_CSP}/certs/ca.pem"
 }
 
 # ── Summary (mirror install.sh:491–518 + dev banner) ──────────────────────────
+# Open the console SSH tunnel in the background (ssh -f -N) so the loopback
+# console is immediately reachable at http://127.0.0.1:8787. Best-effort:
+# skips if the local port is busy and falls back to the manual command on
+# any failure.
+open_console_tunnel() {
+  local key_path=$1 public_ip=$2
+  local ssh_user=ubuntu
+  local ssh_prefix=""
+  [[ -n "${SUDO_USER:-}" ]] && ssh_prefix="sudo -u ${SUDO_USER}"
+
+  if command -v lsof >/dev/null 2>&1 \
+     && lsof -iTCP:8787 -sTCP:LISTEN -P -n >/dev/null 2>&1; then
+    warn "Local port 8787 is already in use — skipping the auto-tunnel."
+    printf '  Open it yourself once free:  ssh -i %s -L 8787:127.0.0.1:8787 ubuntu@%s\n' \
+      "$key_path" "$public_ip"
+    return 0
+  fi
+
+  info "Opening the console tunnel in the background (ssh -f -N)..."
+  # shellcheck disable=SC2086
+  if $ssh_prefix ssh -f -N \
+       -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+       -o ExitOnForwardFailure=yes -o ConnectTimeout=15 \
+       -i "$key_path" -L 8787:127.0.0.1:8787 "${ssh_user}@${public_ip}" 2>/dev/null; then
+    success "Console tunnel open → http://127.0.0.1:8787"
+    printf '  Stop it later with:  pkill -f "8787:127.0.0.1:8787 ubuntu@%s"\n' "$public_ip"
+  else
+    warn "Could not open the tunnel automatically — open it manually:"
+    printf '  ssh -i %s -L 8787:127.0.0.1:8787 ubuntu@%s\n' "$key_path" "$public_ip"
+  fi
+}
+
+# install_connect_shortcut writes a `runeconsole connect` command into the
+# invoking user's shell rc (zsh → .zshrc, bash → .bashrc, else .profile) so the
+# loopback console tunnel can be reopened later without retyping the ssh command.
+# Idempotent: a marker-delimited block is rewritten in place on re-install (so a
+# changed IP / key path propagates). If a real `runeconsole` binary is already on
+# PATH the shortcut is skipped so it is never shadowed.
+install_connect_shortcut() {
+  local key_path=$1 public_ip=$2
+  local login_user="${SUDO_USER:-$(id -un)}"
+  local user_home; user_home=$(eval echo "~${login_user}")
+
+  # Detect the login shell (works under sudo): passwd on Linux, dscl on macOS,
+  # $SHELL as a last resort — then map it to the rc file we append to.
+  local login_shell=""
+  if command -v getent >/dev/null 2>&1; then
+    login_shell=$(getent passwd "$login_user" 2>/dev/null | cut -d: -f7)
+  fi
+  if [[ -z "$login_shell" ]] && command -v dscl >/dev/null 2>&1; then
+    login_shell=$(dscl . -read "/Users/${login_user}" UserShell 2>/dev/null | awk '{print $2}')
+  fi
+  [[ -z "$login_shell" ]] && login_shell="${SHELL:-}"
+
+  local rc_file
+  case "$login_shell" in
+    *zsh)  rc_file="${user_home}/.zshrc" ;;
+    *bash) rc_file="${user_home}/.bashrc" ;;
+    *)     rc_file="${user_home}/.profile" ;;
+  esac
+
+  # Never shadow an existing runeconsole command on PATH.
+  if command -v runeconsole >/dev/null 2>&1; then
+    warn "A 'runeconsole' command already exists on PATH — skipping the shell shortcut."
+    printf '  Reconnect manually:  ssh -i %s -L 8787:127.0.0.1:8787 ubuntu@%s\n' "$key_path" "$public_ip"
+    return 0
+  fi
+
+  local begin="# >>> runeconsole connect >>>"
+  local end="# <<< runeconsole connect <<<"
+
+  # Drop any previous block so a re-install refreshes the key path / IP.
+  if [[ -f "$rc_file" ]] && grep -qF "$begin" "$rc_file"; then
+    local tmp; tmp=$(mktemp)
+    sed "/# >>> runeconsole connect >>>/,/# <<< runeconsole connect <<</d" "$rc_file" > "$tmp" && mv "$tmp" "$rc_file"
+  fi
+
+  cat >> "$rc_file" <<EOF
+${begin}
+# Reach the loopback-only Rune-Console on the CSP VM over an SSH tunnel.
+runeconsole() {
+  case "\$1" in
+    connect)
+      if command -v lsof >/dev/null 2>&1 && lsof -iTCP:8787 -sTCP:LISTEN -P -n >/dev/null 2>&1; then
+        echo "runeconsole: already reachable -> http://127.0.0.1:8787"; return 0
+      fi
+      ssh -f -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -i "${key_path}" -L 8787:127.0.0.1:8787 "ubuntu@${public_ip}" && echo "runeconsole: tunnel open -> http://127.0.0.1:8787" || echo "runeconsole: failed to open the tunnel (check the SSH key / network)"
+      ;;
+    disconnect)
+      pkill -f "8787:127.0.0.1:8787 ubuntu@${public_ip}" && echo "runeconsole: tunnel closed" || echo "runeconsole: no tunnel running"
+      ;;
+    *)
+      echo "usage: runeconsole {connect|disconnect}  # connect, then browse http://127.0.0.1:8787"
+      ;;
+  esac
+}
+${end}
+EOF
+  [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "$rc_file" 2>/dev/null || true
+  success "Added 'runeconsole connect' to ${rc_file} (open a new shell or run 'source ${rc_file}' to use it)."
+}
+
 dev_csp_summary() {
   local csp=$1
   local tf_dir="${INSTALL_DIR_CSP}/deployment"
@@ -621,7 +681,7 @@ dev_csp_summary() {
   commit=$(cd "$REPO_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown)
 
   printf '\n'
-  success "Rune-Vault deployed to $(printf '%s' "$csp" | tr 'a-z' 'A-Z') (dev mode)."
+  success "Rune-Console deployed to $(printf '%s' "$csp" | tr 'a-z' 'A-Z') (dev mode)."
   printf '\n'
   printf '  Endpoint:  %s:%s\n' "$public_ip" "$GRPC_PORT"
   printf '  CA cert:   %s\n'    "${INSTALL_DIR_CSP}/certs/ca.pem"
@@ -632,16 +692,23 @@ dev_csp_summary() {
   printf 'Tear down:\n'
   printf '  cd %s && terraform destroy -auto-approve\n' "$tf_dir"
   printf '\n'
-  printf 'Next steps (SSH into the VM, then run on the VM):\n'
-  printf '  ssh -i %s ubuntu@%s\n' "$key_path" "$public_ip"
+  printf 'Access the console (loopback-only on the VM, reached over an SSH tunnel):\n'
+  open_console_tunnel "$key_path" "$public_ip"
+  install_connect_shortcut "$key_path" "$public_ip" || warn "Could not add the 'runeconsole connect' shortcut."
   printf '\n'
-  printf '  Issue a token:  runevault token issue --user <name> --role member\n'
-  printf '  Check status:   runevault status\n'
-  printf '  View logs:      runevault logs\n'
-  printf '  Manage daemon:  sudo systemctl start|stop|restart runevault\n'
+  printf '  Using it now: the tunnel above is live — browse http://127.0.0.1:8787\n'
+  printf '  Reconnect later:  runeconsole connect   (in a new shell)\n'
+  printf '  From another machine (copy the private key first):\n'
+  printf '    ssh -i %s -L 8787:127.0.0.1:8787 ubuntu@%s\n' "$key_path" "$public_ip"
+  printf '  SSH (port 22) is open, so key possession is all you need — no firewall change.\n'
   printf '\n'
-  warn "BACKUP: Keep this safe — it cannot be recovered if lost:"
-  warn "  Terraform state: ${tf_dir}/terraform.tfstate"
+  printf 'On the VM (ssh -i %s ubuntu@%s):\n' "$key_path" "$public_ip"
+  printf '  View logs:      runeconsole logs\n'
+  printf '  Manage daemon:  sudo systemctl start|stop|restart runeconsole\n'
+  printf '\n'
+  warn "BACKUP: Keep these safe — they cannot be recovered if lost:"
+  warn "  Terraform state:  ${tf_dir}/terraform.tfstate"
+  warn "  SSH private key:  ${key_path}"
 }
 
 # ── CSP dispatch (mirror install.sh:520–549) ──────────────────────────────────
@@ -649,7 +716,7 @@ dev_csp_dispatch() {
   local csp="$TARGET"
   local user_home="${SUDO_USER:+$(eval echo ~"${SUDO_USER}")}"
   user_home="${user_home:-$HOME}"
-  INSTALL_DIR_CSP="${INSTALL_DIR_CSP:-${user_home}/rune-vault-${csp}}"
+  INSTALL_DIR_CSP="${INSTALL_DIR_CSP:-${user_home}/rune-console-${csp}}"
   mkdir -p "$INSTALL_DIR_CSP"
   [[ -n "${SUDO_USER:-}" ]] && chown "${SUDO_USER}" "$INSTALL_DIR_CSP"
 

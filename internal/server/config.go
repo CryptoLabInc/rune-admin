@@ -1,0 +1,277 @@
+// Package server hosts the daemon transports (gRPC data plane + loopback console
+// HTTP), audit log, and runtime configuration. Pure crypto/token logic lives in
+// internal/crypto and internal/tokens respectively.
+package server
+
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"gopkg.in/yaml.v3"
+)
+
+// ConfigLookupPaths lists, in priority order, the on-disk locations that
+// LoadConfig probes when the caller doesn't pass an explicit path.
+var ConfigLookupPaths = []string{
+	"/opt/runeconsole/configs/runeconsole.conf",
+	"./runeconsole.conf",
+}
+
+const (
+	// InitialConfigVersion is the implicit version of an unversioned development
+	// config created before the first production release. This must remain 1
+	// even after CurrentConfigVersion advances.
+	InitialConfigVersion = 1
+	// CurrentConfigVersion is the newest on-disk runeconsole.conf contract this
+	// binary understands. Bump it only with an explicit config migration.
+	CurrentConfigVersion = 1
+)
+
+// 0640: group-readable so runeconsole group members can run CLI commands without sudo.
+const expectedSecretMode fs.FileMode = 0o640
+
+// Config is the in-memory shape of runeconsole.conf. Field names follow the
+// YAML schema exactly so the loader can decode without an intermediate type.
+type Config struct {
+	ConfigVersion int `yaml:"config_version"`
+
+	Server  ServerConfig  `yaml:"server"`
+	Cloud   CloudConfig   `yaml:"cloud"`
+	Keys    KeysConfig    `yaml:"keys"`
+	Tokens  TokensConfig  `yaml:"tokens"`
+	Members MembersConfig `yaml:"members"`
+	Audit   AuditConfig   `yaml:"audit"`
+	Storage StorageConfig `yaml:"storage"`
+
+	// Source records where this Config was loaded from (resolved absolute
+	// path), populated by LoadConfig. Empty for in-memory test configs.
+	Source string `yaml:"-" json:"-"`
+}
+
+type ServerConfig struct {
+	GRPC    GRPCConfig    `yaml:"grpc"`
+	Console ConsoleConfig `yaml:"console"`
+}
+
+type GRPCConfig struct {
+	Host string    `yaml:"host"`
+	Port int       `yaml:"port"`
+	TLS  TLSConfig `yaml:"tls"`
+}
+
+type TLSConfig struct {
+	Cert string `yaml:"cert"`
+	Key  string `yaml:"key"`
+	CA   string `yaml:"ca"` // installer-issued ca.pem, served to clients over GetCACert (bootstrap)
+}
+
+// ConsoleConfig configures the local console HTTP listener that hosts the
+// BFF auth endpoints, the embedded SPA, and the cookie-gated /api/v1 surface.
+// It binds 127.0.0.1 only (loopback OAuth redirect + security invariant); the
+// bind host is not configurable. TLS is never used (plain loopback HTTP).
+// Disabled by default so a headless daemon stays gRPC-only — but note that ALL
+// identity/RBAC bootstrap (the org admin, groups, grants, member invites) is
+// reachable ONLY through this console surface: there is no gRPC admin RPC, no
+// admin socket, and no CLI mutation. A console-disabled node therefore cannot
+// establish an org admin (the admin is the first console login) and can only
+// serve a data plane provisioned by a console elsewhere, so this mode is for
+// tests and pre-provisioned replicas — every real config sets enabled: true.
+type ConsoleConfig struct {
+	Enabled bool `yaml:"enabled"`
+	Port    int  `yaml:"port"` // default 8787
+}
+
+// CloudConfig points the BFF at the runespace-cloud control plane: APIBaseURL
+// is the server-to-server API origin, WebBaseURL the visible /signin page the
+// browser is routed through.
+type CloudConfig struct {
+	APIBaseURL string `yaml:"api_base_url"` // e.g. https://api.runespace.click
+	WebBaseURL string `yaml:"web_base_url"` // e.g. https://runespace.click
+}
+
+// ConsolePort returns the console listener port, defaulting to 8787.
+func (c *Config) ConsolePort() int {
+	if c.Server.Console.Port == 0 {
+		return 8787
+	}
+	return c.Server.Console.Port
+}
+
+// ConsoleDBPath returns the session-store path, defaulting into the data
+// directory.
+func (c *Config) ConsoleDBPath() string {
+	return filepath.Join(c.Storage.DataDir, "console-session.db")
+}
+
+type KeysConfig struct {
+	Path         string `yaml:"path"`
+	EmbeddingDim int    `yaml:"embedding_dim"`
+}
+
+// TokensConfig carries the team secret console tokens are minted from.
+type TokensConfig struct {
+	TeamSecret string `yaml:"team_secret"`
+}
+
+// MembersConfig configures the member registry + invite flow. Every field is
+// optional: the TTL defaults to 24 hours and the mail log defaults beside the
+// other store artifacts.
+type MembersConfig struct {
+	InviteTTLMinutes int    `yaml:"invite_ttl_minutes"` // default: 1440 = 24h (§8.3 wrap TTL as revised 2026-07-13: console UX policy adopted, residual risk offset by revoke/rotate)
+	ConsoleEndpoint  string `yaml:"console_endpoint"`   // ridden in the invite mail (conn info)
+}
+
+// InviteTTL returns the wrap TTL, defaulting to 24 hours when unset — the
+// invite-code lifetime the console UX promises ("valid for 24 hours from
+// issue", §8.3 [high] as revised 2026-07-13; per-request override stays
+// available via the invite endpoint's ttl_minutes).
+func (c *Config) InviteTTL() time.Duration {
+	m := c.Members.InviteTTLMinutes
+	if m <= 0 {
+		m = 1440
+	}
+	return time.Duration(m) * time.Minute
+}
+
+// AuditConfig.Mode is one of: "", "file", "stdout", "file+stdout".
+// Empty disables audit logging.
+type AuditConfig struct {
+	Mode string `yaml:"mode"`
+	Path string `yaml:"path"`
+}
+
+// StorageConfig says where the console keeps its state on disk. data_dir is
+// required: it is the directory every runtime artifact defaults into — the
+// unified store database (runeconsole.db) and the console session database
+// (console-session.db).
+type StorageConfig struct {
+	DataDir string `yaml:"data_dir"`
+}
+
+// StoreDBPath returns the unified store database path, defaulting to
+// runeconsole.db inside the data directory.
+func (c *Config) StoreDBPath() string {
+	return filepath.Join(c.Storage.DataDir, "runeconsole.db")
+}
+
+// LoadConfig resolves the config path (caller override → ConfigLookupPaths)
+// and decodes the YAML at that location. Source is set to the resolved
+// absolute path.
+//
+// Missing config produces an error that names every path probed so the
+// operator can copy the example file into place.
+func LoadConfig(override string) (*Config, error) {
+	path, searched, err := resolveConfigPath(override)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read config %s: %w", path, err)
+	}
+
+	var cfg Config
+	dec := yaml.NewDecoder(strings.NewReader(string(data)))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
+		return nil, fmt.Errorf("parse config %s: %w (searched: %s)", path, err, strings.Join(searched, ", "))
+	}
+	// Configs created manually during development before the first production
+	// release did not carry a version. They have the exact v1 shape, so treating
+	// an omitted value as v1 is safe and keeps tests/custom installs working.
+	if cfg.ConfigVersion == 0 {
+		cfg.ConfigVersion = InitialConfigVersion
+	}
+	if cfg.ConfigVersion != CurrentConfigVersion {
+		return nil, fmt.Errorf("config %s has unsupported config_version %d (this binary supports %d)",
+			path, cfg.ConfigVersion, CurrentConfigVersion)
+	}
+	cfg.Source = path
+
+	if err := checkSecretMode(path, "runeconsole.conf"); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+// resolveConfigPath returns the path to use plus the list of all paths
+// searched (for error messages). Override wins if non-empty.
+func resolveConfigPath(override string) (path string, searched []string, err error) {
+	if override != "" {
+		searched = append(searched, override)
+		if _, statErr := os.Stat(override); statErr != nil {
+			return "", searched, fmt.Errorf("config file not found at --config %s: %w", override, statErr)
+		}
+		abs, _ := filepath.Abs(override)
+		return abs, searched, nil
+	}
+	for _, p := range ConfigLookupPaths {
+		searched = append(searched, p)
+		if _, statErr := os.Stat(p); statErr == nil {
+			abs, _ := filepath.Abs(p)
+			return abs, searched, nil
+		}
+	}
+	return "", searched, fmt.Errorf("config file not found (searched: %s)", strings.Join(searched, ", "))
+}
+
+// checkSecretMode returns an error if the file's mode permits any access
+// beyond owner read/write and group read (i.e., any bit outside 0o640).
+// A missing file is treated as "not our problem" — the caller's subsequent
+// read surfaces the not-found error with the right context.
+func checkSecretMode(path, label string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil
+	}
+	mode := info.Mode().Perm()
+	if mode&^expectedSecretMode != 0 {
+		return fmt.Errorf("config: %s %s mode %04o is too permissive (expected at most 0640)", label, path, mode)
+	}
+	return nil
+}
+
+// Redact returns a copy of c with secret fields replaced by sentinel
+// strings. Use this for any debug dumps, structured log payloads, or
+// admin endpoints that surface configuration to operators.
+func (c *Config) Redact() Config {
+	out := *c
+	if out.Tokens.TeamSecret != "" {
+		out.Tokens.TeamSecret = "[REDACTED]"
+	}
+	return out
+}
+
+// Validate enforces invariants the daemon needs at startup.
+// Returns nil for fully populated configs.
+func (c *Config) Validate() error {
+	var errs []string
+	if c.Server.GRPC.Port == 0 {
+		errs = append(errs, "server.grpc.port is required")
+	}
+	if c.Server.Console.Enabled && c.Cloud.APIBaseURL == "" {
+		errs = append(errs, "cloud.api_base_url is required when server.console.enabled")
+	}
+	if c.Server.GRPC.TLS.Cert == "" || c.Server.GRPC.TLS.Key == "" {
+		errs = append(errs, "server.grpc.tls.cert and server.grpc.tls.key are required")
+	}
+	if c.Keys.Path == "" {
+		errs = append(errs, "keys.path is required")
+	}
+	if c.Keys.EmbeddingDim == 0 {
+		errs = append(errs, "keys.embedding_dim is required")
+	}
+	if c.Storage.DataDir == "" {
+		errs = append(errs, "storage.data_dir is required")
+	}
+	if len(errs) > 0 {
+		return errors.New("config invalid:\n  - " + strings.Join(errs, "\n  - "))
+	}
+	return nil
+}

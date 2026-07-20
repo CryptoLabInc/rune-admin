@@ -1,0 +1,807 @@
+import { MemoryRouter } from "react-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import TreeDetailView from "@/components/teams/TreeDetailView";
+import * as teamAPIs from "@/api/teamAPIs";
+import * as teamMemberAPIs from "@/api/teamMemberAPIs";
+import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
+import type { TTeamMember, TTeamTree } from "@/types/teamTypes";
+import { useNoticeStore } from "@/stores/noticeStore";
+
+const jsonRes = (body: unknown) =>
+  ({ ok: true, json: async () => body }) as unknown as Response;
+
+const TEAMS: TTeamTree = [
+  {
+    id: "t_1",
+    name: "Platform",
+    parentId: null,
+    childrenIds: [],
+    childCount: 0,
+    memberCount: 1,
+  },
+  {
+    id: "t_2",
+    name: "Infra",
+    parentId: null,
+    childrenIds: [],
+    childCount: 0,
+    memberCount: 1,
+  },
+];
+
+const member = (overrides: Partial<TTeamMember> = {}): TTeamMember => ({
+  userId: "u_1",
+  account: "kim@corp.com",
+  username: "김철수",
+  role: "edit",
+  invitationStatus: "invite_redeemed",
+  sessionStatus: "online",
+  joinedAt: "2026-07-02T00:00:00Z",
+  ...overrides,
+});
+
+const treeDetailViewTree = (client: QueryClient, selectedTeamId: string) => (
+  <QueryClientProvider client={client}>
+    <MemoryRouter>
+      <TreeDetailView
+        teams={TEAMS}
+        teamSearch=""
+        selectedTeamId={selectedTeamId}
+        onSelectTeam={() => {}}
+      />
+    </MemoryRouter>
+  </QueryClientProvider>
+);
+
+const renderView = (selectedTeamId = "t_1") => {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+  return render(treeDetailViewTree(client, selectedTeamId));
+};
+
+describe("TreeDetailView", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("renders member rows from the members query", async () => {
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 1,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({
+        total: 1,
+        page: 1,
+        size: 10,
+        items: [member()],
+      }),
+    );
+    renderView();
+    const username = await screen.findByText("김철수");
+    const row = username.closest("tr");
+    expect(row).not.toBeNull();
+    expect(row!).toHaveTextContent("온라인");
+  });
+
+  it("renders an inherited-read member (null joinedAt) with an em-dash date", async () => {
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 1,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    // The real API lists inherited-read members with role read and a null
+    // joinedAt (no stored membership row — console_api.go memberDTO).
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({
+        total: 1,
+        page: 1,
+        size: 10,
+        items: [
+          member({
+            account: "jung@corp.com",
+            username: "정다은",
+            role: "read",
+            joinedAt: null,
+          }),
+        ],
+      }),
+    );
+    renderView();
+    const username = await screen.findByText("정다은");
+    const row = username.closest("tr");
+    expect(row).not.toBeNull();
+    expect(row!).toHaveTextContent("—");
+  });
+
+  it("shows a loading row while the members query is pending", () => {
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 1,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockReturnValue(
+      new Promise(() => {}),
+    );
+    renderView();
+    expect(screen.getByText("불러오는 중…")).toBeInTheDocument();
+  });
+
+  it("shows an error row when the members query fails", async () => {
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 1,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue({
+      ok: false,
+    } as Response);
+    renderView();
+    expect(
+      await screen.findByText("멤버 목록을 불러올 수 없습니다."),
+    ).toBeInTheDocument();
+  });
+
+  it("shows an empty row when the team has no members", async () => {
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 0,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 0, page: 1, size: 10, items: [] }),
+    );
+    renderView();
+    expect(await screen.findByText("멤버가 없습니다.")).toBeInTheDocument();
+  });
+
+  it("pages the member table via the members query", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 9,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    const listMembers = vi
+      .spyOn(teamMemberAPIs, "listTeamMembers")
+      .mockImplementation(async (_teamId, page) =>
+        jsonRes({
+          total: 11,
+          page,
+          size: 10,
+          items: [
+            member({
+              userId: page === 1 ? "u_1" : "u_9",
+              account: page === 1 ? "kim@corp.com" : "lee@corp.com",
+              username: page === 1 ? "김철수" : "이영희",
+            }),
+          ],
+        }),
+      );
+
+    renderView();
+    expect(await screen.findByText("김철수")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "2" }));
+    await waitFor(() => expect(listMembers).toHaveBeenCalledWith("t_1", 2, 10));
+    expect(await screen.findByText("이영희")).toBeInTheDocument();
+  });
+
+  it("resets to page 1 when the selected team changes", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockImplementation(async (teamId) =>
+      jsonRes({
+        id: teamId,
+        name: teamId === "t_1" ? "Platform" : "Infra",
+        parentId: null,
+        children: [],
+        memberCount: 9,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    const listMembers = vi
+      .spyOn(teamMemberAPIs, "listTeamMembers")
+      .mockImplementation(async (_teamId, page) =>
+        jsonRes({
+          total: 11,
+          page,
+          size: 10,
+          items: [
+            member({
+              userId: page === 1 ? "u_1" : "u_9",
+              account: page === 1 ? "kim@corp.com" : "lee@corp.com",
+              username: page === 1 ? "김철수" : "이영희",
+            }),
+          ],
+        }),
+      );
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const { rerender } = render(treeDetailViewTree(client, "t_1"));
+    expect(await screen.findByText("김철수")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "2" }));
+    await waitFor(() => expect(listMembers).toHaveBeenCalledWith("t_1", 2, 10));
+
+    rerender(treeDetailViewTree(client, "t_2"));
+    await waitFor(() => expect(listMembers).toHaveBeenCalledWith("t_2", 1, 10));
+
+    /* The reset effect commits after the rerender, so a query for the new
+       team's stale `page` value may fire transiently before the effect
+       flips it back to 1 — assert on the settled state instead of every
+       call: the table must land on page 1 for t_2, not page 2. */
+    await waitFor(() =>
+      expect(listMembers).toHaveBeenLastCalledWith("t_2", 1, 10),
+    );
+    expect(await screen.findByText("김철수")).toBeInTheDocument();
+  });
+
+  it("creates a team via the API", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 0,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 0, page: 1, size: 10, items: [] }),
+    );
+    const create = vi.spyOn(teamAPIs, "createTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_3",
+        name: "New",
+        parentId: null,
+        children: [],
+        memberCount: 0,
+        createdAt: "2026-07-16T00:00:00Z",
+      }),
+    );
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
+    renderView();
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.createGroup }),
+    );
+    await user.type(screen.getByLabelText("팀 이름"), "New");
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.create }));
+    await waitFor(() =>
+      expect(create).toHaveBeenCalledWith({ name: "New", parentId: null }),
+    );
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        "팀 생성",
+        "팀이 생성되었습니다.",
+        "success",
+      ),
+    );
+  });
+
+  it("shows the mapped inline error when create fails with a duplicate name", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 0,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 0, page: 1, size: 10, items: [] }),
+    );
+    vi.spyOn(teamAPIs, "createTeam").mockResolvedValue({
+      ok: false,
+      json: async () => ({ code: "TEAM_NAME_DUPLICATE" }),
+    } as unknown as Response);
+    renderView();
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.createGroup }),
+    );
+    await user.type(screen.getByLabelText("팀 이름"), "Infra");
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.create }));
+    expect(
+      await screen.findByText("같은 상위 팀에 동일한 이름이 이미 있습니다."),
+    ).toBeInTheDocument();
+  });
+
+  it("renames a team via the API and reselects on delete success", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 0,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 0, page: 1, size: 10, items: [] }),
+    );
+    const rename = vi.spyOn(teamAPIs, "renameTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Renamed",
+        parentId: null,
+        children: [],
+        memberCount: 0,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
+    renderView();
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.rename }));
+    const input = screen.getByLabelText("팀 이름");
+    await user.clear(input);
+    await user.type(input, "Renamed");
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.save }));
+    await waitFor(() =>
+      expect(rename).toHaveBeenCalledWith("t_1", { name: "Renamed" }),
+    );
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        "팀 이름 변경",
+        "팀 이름이 변경되었습니다.",
+        "success",
+      ),
+    );
+  });
+
+  it("deletes a team via the API and reselects the other surviving root team", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 0,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 0, page: 1, size: 10, items: [] }),
+    );
+    const del = vi
+      .spyOn(teamAPIs, "deleteTeam")
+      .mockResolvedValue({ ok: true } as Response);
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
+    const onSelectTeam = vi.fn();
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <TreeDetailView
+            teams={TEAMS}
+            teamSearch=""
+            selectedTeamId="t_1"
+            onSelectTeam={onSelectTeam}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.deleteTeam }));
+    await user.click(screen.getByRole("radio", { name: /팀 내 기억 삭제/ }));
+    await user.type(
+      screen.getByLabelText("확인 - 삭제할 팀명 입력"),
+      "Platform",
+    );
+    /* Two "팀 삭제" buttons exist once the confirm modal opens (the card
+       trigger + the modal's confirm) — the confirm one is the last. */
+    const confirmButtons = screen.getAllByRole("button", {
+      name: BTN_TEXT.deleteTeam,
+    });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
+    await waitFor(() =>
+      expect(del).toHaveBeenCalledWith("t_1", "purge", undefined),
+    );
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        "팀 삭제",
+        "팀이 삭제되었습니다.",
+        "success",
+        expect.any(Function),
+      ),
+    );
+    /* Navigation must not fire until the notice is confirmed. */
+    expect(onSelectTeam).not.toHaveBeenCalled();
+    /* t_1 is the just-deleted team — reselect must land on the OTHER
+       surviving root (t_2), never the dead one — once the captured
+       onConfirm runs. */
+    showNoticeSpy.mock.calls.at(-1)![3]!();
+    expect(onSelectTeam).toHaveBeenCalledWith("t_2");
+  });
+
+  it("shows the mapped inline error when adding a member hits an existing membership", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 0,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 0, page: 1, size: 10, items: [] }),
+    );
+    vi.spyOn(teamMemberAPIs, "addTeamMember").mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ code: "ALREADY_TEAM_MEMBER", message: "x" }),
+    } as unknown as Response);
+    renderView();
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.addMember }));
+    await user.type(screen.getByLabelText("이메일 (account)"), "kim@corp.com");
+    await user.type(screen.getByLabelText("사용자 이름 (username)"), "김철수");
+    await user.click(screen.getByLabelText("권한 (role)"));
+    await user.click(screen.getByRole("option", { name: "edit" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.invite }));
+    expect(
+      await screen.findByText("이미 초대된 사용자입니다."),
+    ).toBeInTheDocument();
+    /* Modal stays open on failure — the invite trigger button is gone
+       while the modal is mounted, and the modal's own cancel/submit
+       buttons are still present. */
+    expect(
+      screen.getByRole("button", { name: BTN_TEXT.invite }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a success notice when adding a member succeeds", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 0,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 0, page: 1, size: 10, items: [] }),
+    );
+    vi.spyOn(teamMemberAPIs, "addTeamMember").mockResolvedValue(
+      jsonRes(member()),
+    );
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
+    renderView();
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.addMember }));
+    await user.type(screen.getByLabelText("이메일 (account)"), "kim@corp.com");
+    await user.type(screen.getByLabelText("사용자 이름 (username)"), "김철수");
+    await user.click(screen.getByLabelText("권한 (role)"));
+    await user.click(screen.getByRole("option", { name: "edit" }));
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.invite }));
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        "멤버 추가",
+        "멤버를 추가했습니다.",
+        "success",
+      ),
+    );
+  });
+
+  it("shows a success notice when a full-success role change is applied", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 1,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 1, page: 1, size: 10, items: [member()] }),
+    );
+    vi.spyOn(teamMemberAPIs, "bulkRoleChange").mockResolvedValue(
+      jsonRes({ succeeded: ["u_1"], failed: [] }),
+    );
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
+    renderView();
+    await screen.findByText("김철수");
+    await user.click(screen.getByLabelText("kim@corp.com role"));
+    await user.click(screen.getByRole("option", { name: "read" }));
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.updateChanges }),
+    );
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.change }));
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        MODAL_TITLES.roleChange,
+        "변경사항이 저장되었습니다.",
+        "success",
+      ),
+    );
+  });
+
+  it("resets every staged role pick back to the saved value via 변경사항 초기화", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 1,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 1, page: 1, size: 10, items: [member()] }),
+    );
+    const bulk = vi.spyOn(teamMemberAPIs, "bulkRoleChange");
+    renderView();
+    await screen.findByText("김철수");
+
+    const reset = screen.getByRole("button", { name: BTN_TEXT.resetChanges });
+    expect(reset).toBeDisabled(); // nothing staged yet
+
+    await user.click(screen.getByLabelText("kim@corp.com role"));
+    await user.click(screen.getByRole("option", { name: "read" }));
+    expect(screen.getByLabelText("kim@corp.com role")).toHaveTextContent(
+      "read",
+    );
+    await user.click(reset);
+
+    /* The staged pick is gone: the dropdown shows the saved role again
+       and both staged-change buttons drop back to disabled. No server
+       call is involved — reset is purely client-side staging. */
+    expect(screen.getByLabelText("kim@corp.com role")).toHaveTextContent(
+      "edit",
+    );
+    expect(reset).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: BTN_TEXT.updateChanges }),
+    ).toBeDisabled();
+    expect(bulk).not.toHaveBeenCalled();
+  });
+
+  it("shows a failure notice when the bulk role-change request errors", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 1,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 1, page: 1, size: 10, items: [member()] }),
+    );
+    vi.spyOn(teamMemberAPIs, "bulkRoleChange").mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ code: "INTERNAL", message: "x" }),
+    } as unknown as Response);
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
+    renderView();
+    await screen.findByText("김철수");
+    await user.click(screen.getByLabelText("kim@corp.com role"));
+    await user.click(screen.getByRole("option", { name: "read" }));
+    await user.click(
+      screen.getByRole("button", { name: BTN_TEXT.updateChanges }),
+    );
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.change }));
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        MODAL_TITLES.roleChange,
+        "권한 변경에 실패했습니다.",
+        "error",
+      ),
+    );
+  });
+
+  it("shows a success notice when a full-success member removal completes", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 1,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 1, page: 1, size: 10, items: [member()] }),
+    );
+    vi.spyOn(teamMemberAPIs, "removeTeamMembers").mockResolvedValue(
+      jsonRes({ succeeded: ["u_1"], failed: [] }),
+    );
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
+    renderView();
+    await screen.findByText("김철수");
+    await user.click(
+      screen.getByRole("checkbox", { name: "kim@corp.com 선택" }),
+    );
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.remove }));
+    const confirmButtons = screen.getAllByRole("button", {
+      name: BTN_TEXT.remove,
+    });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        MODAL_TITLES.removeMembership,
+        "멤버십이 제거되었습니다.",
+        "success",
+      ),
+    );
+  });
+
+  it("shows a failure notice when the bulk member removal request errors", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 1,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 1, page: 1, size: 10, items: [member()] }),
+    );
+    vi.spyOn(teamMemberAPIs, "removeTeamMembers").mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ code: "INTERNAL", message: "x" }),
+    } as unknown as Response);
+    const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
+    renderView();
+    await screen.findByText("김철수");
+    await user.click(
+      screen.getByRole("checkbox", { name: "kim@corp.com 선택" }),
+    );
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.remove }));
+    const confirmButtons = screen.getAllByRole("button", {
+      name: BTN_TEXT.remove,
+    });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
+    await waitFor(() =>
+      expect(showNoticeSpy).toHaveBeenCalledWith(
+        MODAL_TITLES.removeMembership,
+        "멤버십 제거에 실패했습니다.",
+        "error",
+      ),
+    );
+  });
+
+  it("shows the mapped inline error when deleting a childless team hits a server conflict", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 0,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 0, page: 1, size: 10, items: [] }),
+    );
+    vi.spyOn(teamAPIs, "deleteTeam").mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ code: "TEAM_HAS_CHILDREN", message: "x" }),
+    } as unknown as Response);
+    renderView();
+    /* t_1 has childCount: 0 in the TEAMS fixture, so DeleteTeamModal's
+       client-side hasChildren gate passes and the confirm flow reaches
+       the server, whose 409 drives the inline error mapping below. */
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.deleteTeam }));
+    await user.click(screen.getByRole("radio", { name: /팀 내 기억 삭제/ }));
+    await user.type(
+      screen.getByLabelText("확인 - 삭제할 팀명 입력"),
+      "Platform",
+    );
+    const confirmButtons = screen.getAllByRole("button", {
+      name: BTN_TEXT.deleteTeam,
+    });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
+    expect(
+      await screen.findByText("하위 팀이 있어 삭제할 수 없습니다."),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the batch-failure modal on a partial remove", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 2,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 1, page: 1, size: 10, items: [member()] }),
+    );
+    vi.spyOn(teamMemberAPIs, "removeTeamMembers").mockResolvedValue(
+      jsonRes({
+        succeeded: [],
+        failed: [{ id: "u_1", code: "NOT_TEAM_MEMBER", message: "x" }],
+      }),
+    );
+    renderView();
+    await screen.findByText("김철수");
+    await user.click(
+      screen.getByRole("checkbox", { name: "kim@corp.com 선택" }),
+    );
+    await user.click(screen.getByRole("button", { name: BTN_TEXT.remove }));
+    /* Two "제거" buttons exist once the confirm modal opens (the table
+       trigger + the modal's confirm) — the confirm one is the last. */
+    const confirmButtons = screen.getAllByRole("button", {
+      name: BTN_TEXT.remove,
+    });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
+    expect(await screen.findByText("팀 멤버가 아닙니다")).toBeInTheDocument();
+  });
+});
