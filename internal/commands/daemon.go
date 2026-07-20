@@ -202,31 +202,29 @@ func runDaemonStart(ctx context.Context) error {
 			// cloud-held runespace is orphaned.
 			TeamHash: crypto.TeamHash(cfg.Tokens.TeamSecret),
 			Inviter:  selfInviter,
-			OwnerRegistrar: func(email, displayName string) error {
+			OwnerRegistrar: func(email, _ string) error {
 				// The console owner IS the single org admin (identity
 				// unification, dual-role §11): authority derives from the
 				// durable first-login claim, never from config. SetOrgAdmin
-				// replaces the admin, and it must run before the member-row
-				// early return below so a boot replay restores admin authority
-				// even when the member row already exists.
+				// replaces the admin, so a boot replay restores admin authority
+				// idempotently.
 				groupStore.SetOrgAdmin(email)
-				// Name the admin. With config org_admins gone this line is the
-				// only statement of who holds grant authority, and the account
-				// is whoever happened to claim the console first — which need
-				// not be who the operator expected, and cannot be changed once
-				// bound. An operator following the migration error deletes the
-				// admin they had declared, so leaving the replacement unnamed
-				// would leave them nothing to check.
+				// Name the admin in the log. With config org_admins gone this is
+				// the only statement of who holds grant authority, and the account
+				// is whoever happened to claim the console first — which need not
+				// be who the operator expected, and cannot be changed once bound.
 				slog.Info("console: org admin derived from the console owner", "admin", email)
-				// Ensure the owner has a member registry row (option A) so they
-				// appear in listings and can be granted memberships by UUID.
-				// Idempotent — a no-op on every later login. Zero group
-				// memberships are created.
-				if _, gerr := memberStore.GetByEmail(email); gerr == nil {
-					return nil
-				}
-				_, aerr := memberStore.Add(email, displayName)
-				return aerr
+				// No member registry row is seeded for the admin (option A
+				// dropped). The admin is a MANAGEMENT-plane identity — grant
+				// authority via SetOrgAdmin above — not a data-plane member.
+				// Seeding a bare row made the admin surface in the member list as
+				// a phantom "invite pending" that no invite ever backed (the state
+				// had no honest label). An admin who wants to appear in the list
+				// and/or capture memories invites an email — their own or another —
+				// through the normal flow, which creates a real, invite-backed
+				// member row (with a grantable UUID) like anyone else. Nothing at
+				// boot/login reads this row back, so its absence is inert.
+				return nil
 			},
 			Logger: slog.Default(),
 		})

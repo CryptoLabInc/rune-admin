@@ -535,6 +535,40 @@ func TestConsoleInvitationConflictAndBadEmail(t *testing.T) {
 	}
 }
 
+// Design 2: the org admin is NOT auto-seeded as a member, and their own email
+// is invitable like anyone — there is no "cannot invite the admin / cannot
+// invite yourself" guard. This is the same-owner-email path of "an admin who
+// wants to appear in the list and/or capture invites an email (their own or
+// another)". Inviting the owner's own address must succeed and create a real,
+// invite-backed member row (not the old phantom row).
+func TestConsoleInviteOwnAdminEmailSucceeds(t *testing.T) {
+	f := newConsoleAPIFixture(t)
+	// The console owner / org admin. SetOrgAdmin alone seeds NO member row.
+	f.v.Groups().SetOrgAdmin("owner@corp.com")
+	if _, err := f.members.GetByEmail("owner@corp.com"); err == nil {
+		t.Fatal("precondition: the org admin must have no member row before inviting (no auto-seed)")
+	}
+
+	status, body := f.do(t, http.MethodPost, "/teams", `{"name":"T"}`)
+	if status != http.StatusCreated {
+		t.Fatalf("create team: %d %s", status, body)
+	}
+	var created map[string]any
+	_ = json.Unmarshal(body, &created)
+	id := created["id"].(string)
+
+	// Inviting the owner's OWN email must succeed (no admin/self guard).
+	inv := `{"account":"owner@corp.com","memberships":[{"teamId":"` + id + `","role":"write"}]}`
+	if status, body = f.do(t, http.MethodPost, "/invitations", inv); status != http.StatusCreated {
+		t.Fatalf("invite owner's own email: %d %s, want 201 (the org admin is invitable like anyone)", status, body)
+	}
+	// A real, invite-backed member row now exists — the honest lifecycle, not a
+	// phantom "invite pending" that no invite backed.
+	if _, err := f.members.GetByEmail("owner@corp.com"); err != nil {
+		t.Fatalf("owner should have a real member row after inviting their own email: %v", err)
+	}
+}
+
 func TestConsoleTeamRolesBatchRejectsBadRole(t *testing.T) {
 	f := newConsoleAPIFixture(t)
 	status, body := f.do(t, http.MethodPost, "/teams", `{"name":"T"}`)

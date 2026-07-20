@@ -52,9 +52,9 @@ type Deps struct {
 	// once at handler construction when the console is already claimed (a
 	// restarted daemon must re-derive the owner's org-admin authority without
 	// waiting for a login), and after the owner is bound on a successful login.
-	// It must be idempotent — it runs on every login — and create zero group
-	// memberships (option A: admin reach is granted, not implied). A returned
-	// error is logged and does not block login. nil skips registration.
+	// It must be idempotent — it runs on every login — and seeds neither a member
+	// row nor any group membership (admin reach is granted, not implied). A
+	// returned error is logged and does not block login. nil skips registration.
 	OwnerRegistrar func(email, displayName string) error
 	Logger         *slog.Logger
 }
@@ -72,7 +72,7 @@ type Service struct {
 	teamHash      string                                // team_secret fingerprint for orphan detection ("" disables)
 	engineReady   func() bool                           // reports data-plane engine connection status
 	inviter       InviteIssuer                          // nil when self-invite issuance is not wired
-	registerOwner func(email, displayName string) error // ensure the owner has a member row (idempotent); nil when unwired
+	registerOwner func(email, displayName string) error // derive the org admin from the owner (idempotent; seeds no member row); nil when unwired
 	log           *slog.Logger
 }
 
@@ -202,9 +202,9 @@ func NewHandler(d Deps) (http.Handler, *Dataplane, error) {
 	return mux, dp, nil
 }
 
-// registerOwnerBestEffort runs the owner registrar (member row + org-admin
-// derivation) for an established owner, taking the display name from the cloud
-// principal. It is the single place that owns the "never block on a registrar
+// registerOwnerBestEffort runs the owner registrar (org-admin derivation only;
+// no member row is seeded) for an established owner, taking the display name
+// from the cloud principal. It is the single place that owns the "never block on a registrar
 // failure" policy: the owner is bound and the session is valid either way, and
 // the registration self-heals on the next login or boot. A nil registrar (not
 // wired) is a no-op. `at` names the call site for the log line.

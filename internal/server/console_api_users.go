@@ -467,12 +467,12 @@ func (h *consoleAPI) usersDeleteBatch(w http.ResponseWriter, r *http.Request) {
 			res.fail(id, "USER_NOT_FOUND", "no such user")
 			continue
 		}
-		// The org admin's registry row is their identity, not a grant: it is
-		// what group memberships are keyed by, and only they can hand out
-		// grants. Deleting it drops those memberships and mints a new UUID on
-		// the next login, so the grants cannot be restored by anyone else —
-		// and the row carries no admin marker, so in a young org it looks like
-		// a stray account with no teams. Revoking the admin's access is the
+		// The org admin is not auto-seeded a member row (authority is email-keyed
+		// via SetOrgAdmin), so by default they are not in this batch at all. But
+		// if the admin invited their own email, that row carries their
+		// self-granted memberships, keyed by its UUID. Deleting it would drop
+		// those memberships and — since login no longer re-creates the row —
+		// leave no automatic restore. Revoking the admin's access is the
 		// supported operation (their memory reach is pure membership like
 		// anyone's); erasing the identity behind it is not. Refuse per-item so
 		// the rest of the batch still applies.

@@ -430,7 +430,10 @@ func (h *consoleAPI) addTeamMember(w http.ResponseWriter, r *http.Request) {
 	}
 	// The org admin (Owner) may hold a normal team membership like anyone else:
 	// admin-ness is an independent axis (IsOrgAdmin governs grant authority), not
-	// a bar to membership. Memory access is still governed by the granted role.
+	// a bar to membership. But the admin is not auto-seeded a member row, so
+	// adding the owner's own email through this "add existing member" path 404s
+	// (USER_NOT_FOUND) until they have been invited (the invite flow creates the
+	// row). Memory access is still governed by the granted role.
 	m, err := h.ms.members.GetByEmail(body.Account)
 	if err != nil {
 		apiErr(w, http.StatusNotFound, "USER_NOT_FOUND", "no registered user for account "+body.Account)

@@ -815,7 +815,7 @@ func (s *ConsoleGRPC) GetPermissions(ctx context.Context, req *pb.GetPermissions
 		return &pb.GetPermissionsResponse{Error: msg}, status.Error(st, msg)
 	}
 	user = username
-	key, hasRow, err := s.v.resolveMemberAccess(username)
+	key, _, err := s.v.resolveMemberAccess(username)
 	if err != nil {
 		statusStr = "denied"
 		ed := err.Error()
@@ -853,21 +853,16 @@ func (s *ConsoleGRPC) GetPermissions(ctx context.Context, req *pb.GetPermissions
 
 	// member_roles is the org-wide listing — organization admin only (plan
 	// §6-D8, D11): a non-admin request is denied with a reason, never a silent
-	// empty list. Admin power is judged at request time as (token email is the
-	// org admin — derived from the first-login console owner) AND (that email
-	// has a registered member row): an unregistered admin email gets no
-	// listing. The member-row conjunct only applies when a registry is wired
-	// (always, on this branch).
+	// empty list. Admin power is judged at request time on the single gate that
+	// (token email is the org admin — derived from the first-login console
+	// owner). The admin need NOT have a member row of their own: the admin is a
+	// management identity that is deliberately not auto-seeded as a member, and
+	// the listing is built from every membership org-wide (MemberRoles below),
+	// which is independent of the caller's own row.
 	if req.GetIncludeMemberRoles() {
 		if !s.v.groups.IsOrgAdmin(user) {
 			statusStr = "denied"
 			msg := fmt.Sprintf("permission denied: include_member_roles requires the organization admin (Owner); '%s' is not", user)
-			errDetail = &msg
-			return &pb.GetPermissionsResponse{Error: msg}, status.Error(codes.PermissionDenied, msg)
-		}
-		if s.v.memberDir != nil && !hasRow {
-			statusStr = "denied"
-			msg := fmt.Sprintf("permission denied: include_member_roles requires the organization admin to be a registered member; '%s' has no member row", user)
 			errDetail = &msg
 			return &pb.GetPermissionsResponse{Error: msg}, status.Error(codes.PermissionDenied, msg)
 		}

@@ -141,11 +141,13 @@ func (s *Service) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// First-login registration (option A): ensure the console owner (the single
-	// org admin) has a member registry row so they appear in member listings and
-	// can be granted memberships by UUID like anyone. Idempotent — a no-op on
-	// every later login — and creates zero group memberships (admin reach is
-	// granted, never implied). Never blocks login (see the helper).
+	// First-login registration: derive the single org admin from the console
+	// owner (grant authority via SetOrgAdmin). The admin is a management-plane
+	// identity and is NOT seeded a member registry row — an admin who wants to
+	// appear in member listings and/or be granted memberships invites an email
+	// (their own or another) through the normal flow, which creates a real row.
+	// Idempotent, creates zero group memberships (admin reach is granted, never
+	// implied), and never blocks login (see the helper).
 	s.registerOwnerBestEffort(email, me, "login")
 
 	sess, err := s.sessions.create(tok.SessionToken, tok.CookieName, me)

@@ -243,25 +243,17 @@ func TestGetPermissionsMemberKeyed(t *testing.T) {
 		t.Errorf("memberships = %+v, want the UUID-keyed grant on %s", resp.GetMemberships(), g.ID)
 	}
 
-	// Unregistered org-admin email: IsOrgAdmin passes, member-row conjunct
-	// fails → no member_roles listing.
+	// The org admin need NOT be a registered member: include_member_roles is
+	// gated on IsOrgAdmin alone. The admin is a management identity that is not
+	// auto-seeded into the member registry, so an unregistered admin email must
+	// still get the org-wide listing, with UUIDs mapped back to emails.
 	tokAdmin, err := v.Tokens().AddToken("admin@corp.com", "admin", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = srv.GetPermissions(ctx, &pb.GetPermissionsRequest{Token: tokAdmin.Token, IncludeMemberRoles: true})
-	if status.Code(err) != codes.PermissionDenied || !strings.Contains(err.Error(), "no member row") {
-		t.Errorf("unregistered admin include_member_roles = %v, want PermissionDenied mentioning no member row", err)
-	}
-
-	// Register the admin: the listing opens up, with UUIDs mapped back to
-	// emails for display.
-	if _, err := reg.Add("admin@corp.com", "Admin"); err != nil {
-		t.Fatal(err)
-	}
 	resp2, err := srv.GetPermissions(ctx, &pb.GetPermissionsRequest{Token: tokAdmin.Token, IncludeMemberRoles: true})
 	if err != nil {
-		t.Fatalf("registered admin GetPermissions = %v, want nil", err)
+		t.Fatalf("unregistered admin GetPermissions = %v, want nil (IsOrgAdmin is the only gate)", err)
 	}
 	if len(resp2.GetMemberRoles()) != 1 {
 		t.Fatalf("member_roles = %+v, want exactly the eng grant", resp2.GetMemberRoles())
