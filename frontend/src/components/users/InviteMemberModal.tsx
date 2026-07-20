@@ -9,6 +9,12 @@ import ModalLayout from "@/components/layout/ModalLayout";
 import { buildTeamOptions, ROLE_OPTIONS } from "@/components/teams/teamOptions";
 import { buildInvitePreview } from "@/components/users/invitePreview";
 import ModalTable from "@/components/users/ModalTable";
+import {
+  isSubmittableUsername,
+  normalizeUsernameInput,
+  USERNAME_MAX_LENGTH,
+  validateUsername,
+} from "@/utils/username";
 import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import type { TTeamTree } from "@/types/teamTypes";
 import type { TInvitePayload, TInviteResult } from "@/types/userTypes";
@@ -58,6 +64,7 @@ const InviteMemberModal = ({
 }: InviteMemberModalProps) => {
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [username, setUsername] = useState("");
   const [sets, setSets] = useState<TSetDraft[]>([
     { id: 0, teamId: "", role: "" },
   ]);
@@ -71,8 +78,10 @@ const InviteMemberModal = ({
      sub-teams (SC-12 no.3 — "하위 팀이 달린 상위 팀 선택 시"). */
   const showPreview = previewRows.some((row) => row.indent);
 
+  const usernameError = validateUsername(username);
   const canSubmit =
     EMAIL_PATTERN.test(email.trim()) &&
+    isSubmittableUsername(username) &&
     completeSets.length >= 1 &&
     completeSets.length === sets.length &&
     !submitting;
@@ -118,6 +127,7 @@ const InviteMemberModal = ({
     try {
       const result = await onSubmit({
         email: email.trim(),
+        username: username.trim(),
         sets: completeSets.map(({ teamId, role }) => ({ teamId, role })),
       });
       if (result === "success") onClose();
@@ -147,6 +157,16 @@ const InviteMemberModal = ({
           }}
           onBlur={validateEmail}
           error={emailError}
+        />
+
+        <Input
+          id="invite-username"
+          labelText="사용자 이름 (username)"
+          placeholder="사용자 이름"
+          maxLength={USERNAME_MAX_LENGTH}
+          value={username}
+          setValue={(value) => setUsername(normalizeUsernameInput(value))}
+          error={usernameError}
         />
 
         <div className="flex flex-col gap-2">

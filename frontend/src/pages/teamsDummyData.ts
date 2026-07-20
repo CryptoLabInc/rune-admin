@@ -11,9 +11,12 @@ import type { TTeamNode, TTeamTree } from "@/types/teamTypes";
  * - GET /teams/{teamId}/members (Team members — per-team member table, paginated)
  */
 
-/** Member status enum on the wire (common contract). */
-export type TApiMemberStatus =
-  "online" | "invite_pending" | "invite_expired" | "session_expired";
+/** Invitation-code lifecycle status on the wire (common contract). */
+export type TApiInvitationStatus =
+  "invite_pending" | "invite_expired" | "invite_redeemed";
+
+/** Session-token liveness on the wire (common contract). */
+export type TApiSessionStatus = "online" | "offline";
 
 /** Roles grantable to members (common contract — Admin is console-account only). */
 export type TApiMemberRole = "edit" | "write" | "read";
@@ -29,7 +32,8 @@ export type TApiUserMembership = {
 export type TApiUser = {
   userId: string;
   account: string;
-  status: TApiMemberStatus;
+  invitationStatus: TApiInvitationStatus;
+  sessionStatus: TApiSessionStatus;
   memberships: TApiUserMembership[];
   lastAccessAt: string | null;
   lastInvitedAt: string | null;
@@ -41,7 +45,8 @@ export type TApiTeamMember = {
   userId: string;
   account: string;
   role: TApiMemberRole;
-  status: TApiMemberStatus;
+  invitationStatus: TApiInvitationStatus;
+  sessionStatus: TApiSessionStatus;
   joinedAt: string | null;
 };
 
@@ -128,12 +133,12 @@ export const DUMMY_TEAMS_TREE: TTeamTree = [
 ];
 
 /**
- * GET /users?page=1&size=10 — 23 users over 3 pages, covering all four
- * member statuses. Per-status timestamp display (Users): online →
- * lastAccessAt / pending·expired → lastInvitedAt / session_expired →
- * sessionExpiredAt. u_9~u_11 are also team B members (mirrored in
- * DUMMY_TEAM_B_MEMBERS); u_16 exercises the "+n" membership overflow
- * chip and u_17 the long-account truncation.
+ * GET /users?page=1&size=10 — 23 users over 3 pages, covering all
+ * invitation/session status combinations. Per-status timestamp display
+ * (Users): online → lastAccessAt / pending·expired → lastInvitedAt /
+ * offline-after-redeemed → sessionExpiredAt. u_9~u_11 are also team B
+ * members (mirrored in DUMMY_TEAM_B_MEMBERS); u_16 exercises the "+n"
+ * membership overflow chip and u_17 the long-account truncation.
  */
 export const DUMMY_USERS: TApiPage<TApiUser> = {
   total: 23,
@@ -143,7 +148,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_1",
       account: "k@corp.com",
-      status: "online",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "online",
       memberships: [
         { teamId: "t_a", teamName: "플랫폼", role: "edit" },
         { teamId: "t_b", teamName: "백엔드", role: "edit" },
@@ -156,7 +162,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_2",
       account: "m@corp.com",
-      status: "invite_pending",
+      invitationStatus: "invite_pending",
+      sessionStatus: "offline",
       memberships: [{ teamId: "t_b", teamName: "백엔드", role: "read" }],
       lastAccessAt: null,
       lastInvitedAt: "2026-07-05T18:20:00Z",
@@ -165,7 +172,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_3",
       account: "n@corp.com",
-      status: "invite_expired",
+      invitationStatus: "invite_expired",
+      sessionStatus: "offline",
       memberships: [{ teamId: "t_b", teamName: "백엔드", role: "write" }],
       lastAccessAt: null,
       lastInvitedAt: "2026-07-03T10:00:00Z",
@@ -174,7 +182,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_4",
       account: "p@corp.com",
-      status: "invite_pending",
+      invitationStatus: "invite_pending",
+      sessionStatus: "offline",
       memberships: [{ teamId: "t_c", teamName: "프론트엔드", role: "read" }],
       lastAccessAt: null,
       lastInvitedAt: "2026-07-06T15:40:00Z",
@@ -183,7 +192,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_5",
       account: "q@corp.com",
-      status: "invite_expired",
+      invitationStatus: "invite_expired",
+      sessionStatus: "offline",
       memberships: [
         { teamId: "t_a", teamName: "플랫폼", role: "read" },
         { teamId: "t_d", teamName: "디자인", role: "read" },
@@ -195,7 +205,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_6",
       account: "r@corp.com",
-      status: "session_expired",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "offline",
       memberships: [{ teamId: "t_e", teamName: "보안", role: "write" }],
       lastAccessAt: "2026-07-04T11:30:00Z",
       lastInvitedAt: "2026-07-01T10:10:00Z",
@@ -204,7 +215,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_7",
       account: "s@corp.com",
-      status: "online",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "online",
       memberships: [
         { teamId: "t_d", teamName: "디자인", role: "edit" },
         { teamId: "t_f", teamName: "볼트", role: "read" },
@@ -216,7 +228,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_8",
       account: "t@corp.com",
-      status: "online",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "online",
       memberships: [{ teamId: "t_e", teamName: "보안", role: "read" }],
       lastAccessAt: "2026-07-07T07:55:00Z",
       lastInvitedAt: "2026-07-04T11:30:00Z",
@@ -225,7 +238,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_9",
       account: "u@corp.com",
-      status: "online",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "online",
       memberships: [{ teamId: "t_b", teamName: "백엔드", role: "write" }],
       lastAccessAt: "2026-07-06T21:10:00Z",
       lastInvitedAt: "2026-07-01T09:20:00Z",
@@ -234,7 +248,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_10",
       account: "v@corp.com",
-      status: "invite_pending",
+      invitationStatus: "invite_pending",
+      sessionStatus: "offline",
       memberships: [{ teamId: "t_b", teamName: "백엔드", role: "read" }],
       lastAccessAt: null,
       lastInvitedAt: "2026-07-06T10:20:00Z",
@@ -243,7 +258,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_11",
       account: "w@corp.com",
-      status: "session_expired",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "offline",
       memberships: [
         { teamId: "t_b", teamName: "백엔드", role: "edit" },
         { teamId: "t_gql", teamName: "쿼리 API", role: "read" },
@@ -255,7 +271,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_12",
       account: "x@corp.com",
-      status: "online",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "online",
       memberships: [{ teamId: "t_con", teamName: "콘솔", role: "edit" }],
       lastAccessAt: "2026-07-07T06:45:00Z",
       lastInvitedAt: "2026-07-02T14:00:00Z",
@@ -264,7 +281,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_13",
       account: "y@corp.com",
-      status: "online",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "online",
       memberships: [
         { teamId: "t_sre", teamName: "사이트 신뢰성", role: "write" },
         { teamId: "t_obs", teamName: "관측성", role: "read" },
@@ -276,7 +294,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_14",
       account: "z@corp.com",
-      status: "invite_pending",
+      invitationStatus: "invite_pending",
+      sessionStatus: "offline",
       memberships: [
         { teamId: "t_fhe", teamName: "동형암호 코어", role: "read" },
       ],
@@ -287,7 +306,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_15",
       account: "aa@corp.com",
-      status: "invite_expired",
+      invitationStatus: "invite_expired",
+      sessionStatus: "offline",
       memberships: [{ teamId: "t_mkt", teamName: "마케팅", role: "read" }],
       lastAccessAt: null,
       lastInvitedAt: "2026-06-25T16:00:00Z",
@@ -296,7 +316,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_16",
       account: "ab@corp.com",
-      status: "online",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "online",
       memberships: [
         { teamId: "t_mob", teamName: "모바일", role: "edit" },
         { teamId: "t_ios", teamName: "아이폰 앱", role: "write" },
@@ -311,7 +332,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_17",
       account: "external.partner.jihoon.kim@verylong-partner-domain.co.kr",
-      status: "online",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "online",
       memberships: [{ teamId: "t_ana", teamName: "분석", role: "read" }],
       lastAccessAt: "2026-07-04T09:12:00Z",
       lastInvitedAt: "2026-07-01T10:30:00Z",
@@ -320,7 +342,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_18",
       account: "ac@corp.com",
-      status: "session_expired",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "offline",
       memberships: [{ teamId: "t_net", teamName: "네트워크", role: "write" }],
       lastAccessAt: "2026-06-30T18:25:00Z",
       lastInvitedAt: "2026-06-27T09:40:00Z",
@@ -329,7 +352,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_19",
       account: "ad@corp.com",
-      status: "invite_pending",
+      invitationStatus: "invite_pending",
+      sessionStatus: "offline",
       memberships: [{ teamId: "t_prod", teamName: "프로덕트", role: "read" }],
       lastAccessAt: null,
       lastInvitedAt: "2026-07-05T11:00:00Z",
@@ -338,7 +362,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_20",
       account: "ae@corp.com",
-      status: "online",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "online",
       memberships: [
         { teamId: "t_trn", teamName: "학습", role: "edit" },
         { teamId: "t_inf", teamName: "추론", role: "edit" },
@@ -350,7 +375,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_21",
       account: "af@corp.com",
-      status: "invite_expired",
+      invitationStatus: "invite_expired",
+      sessionStatus: "offline",
       memberships: [{ teamId: "t_key", teamName: "키 관리", role: "read" }],
       lastAccessAt: null,
       lastInvitedAt: "2026-06-24T15:30:00Z",
@@ -359,7 +385,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_22",
       account: "ag@corp.com",
-      status: "online",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "online",
       memberships: [{ teamId: "t_gw", teamName: "게이트웨이", role: "write" }],
       lastAccessAt: "2026-07-07T05:58:00Z",
       lastInvitedAt: "2026-07-04T10:05:00Z",
@@ -368,7 +395,8 @@ export const DUMMY_USERS: TApiPage<TApiUser> = {
     {
       userId: "u_23",
       account: "ah@corp.com",
-      status: "invite_pending",
+      invitationStatus: "invite_pending",
+      sessionStatus: "offline",
       memberships: [{ teamId: "t_edu", teamName: "교육", role: "read" }],
       lastAccessAt: null,
       lastInvitedAt: "2026-07-06T19:45:00Z",
@@ -392,42 +420,48 @@ export const DUMMY_TEAM_B_MEMBERS: TApiPage<TApiTeamMember> = {
       userId: "u_1",
       account: "k@corp.com",
       role: "edit",
-      status: "online",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "online",
       joinedAt: "2026-07-02T00:00:00Z",
     },
     {
       userId: "u_2",
       account: "m@corp.com",
       role: "read",
-      status: "invite_pending",
+      invitationStatus: "invite_pending",
+      sessionStatus: "offline",
       joinedAt: null,
     },
     {
       userId: "u_3",
       account: "n@corp.com",
       role: "write",
-      status: "invite_expired",
+      invitationStatus: "invite_expired",
+      sessionStatus: "offline",
       joinedAt: null,
     },
     {
       userId: "u_9",
       account: "u@corp.com",
       role: "write",
-      status: "online",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "online",
       joinedAt: "2026-07-02T00:00:00Z",
     },
     {
       userId: "u_10",
       account: "v@corp.com",
       role: "read",
-      status: "invite_pending",
+      invitationStatus: "invite_pending",
+      sessionStatus: "offline",
       joinedAt: null,
     },
     {
       userId: "u_11",
       account: "w@corp.com",
       role: "edit",
-      status: "session_expired",
+      invitationStatus: "invite_redeemed",
+      sessionStatus: "offline",
       joinedAt: "2026-06-29T00:00:00Z",
     },
   ],

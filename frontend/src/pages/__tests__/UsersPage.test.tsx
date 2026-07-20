@@ -31,15 +31,19 @@ const TEAM_TREE_FIXTURE = [
   },
 ];
 
-/** One membership + status shape reused across fixture rows. */
+/** One membership + status shape reused across fixture rows. The table
+    renders username (not account), so row-presence queries key off it. */
 const user = (
   userId: string,
   account: string,
+  username: string,
   overrides: Partial<TUserListItem> = {},
 ): TUserListItem => ({
   userId,
   account,
-  status: "online",
+  username,
+  invitationStatus: "invite_redeemed",
+  sessionStatus: "online",
   memberships: [{ teamId: "t_b", teamName: "백엔드", role: "edit" }],
   lastAccessAt: "2026-07-07T08:12:00Z",
   lastInvitedAt: "2026-07-06T09:00:00Z",
@@ -51,7 +55,10 @@ const PAGE_FIXTURE = {
   total: 2,
   page: 1,
   size: 10,
-  items: [user("u_1", "k@corp.com"), user("u_2", "m@corp.com")],
+  items: [
+    user("u_1", "k@corp.com", "김철수", { sessionStatus: "online" }),
+    user("u_2", "m@corp.com", "박미영", { sessionStatus: "offline" }),
+  ],
 };
 
 const mockListSuccess = (page: unknown = PAGE_FIXTURE) =>
@@ -82,18 +89,45 @@ describe("UsersPage", () => {
     mockListSuccess();
     renderPage();
 
-    expect(await screen.findByText("k@corp.com")).toBeInTheDocument();
-    expect(screen.getByText("m@corp.com")).toBeInTheDocument();
+    expect(await screen.findByText("김철수")).toBeInTheDocument();
+    expect(screen.getByText("박미영")).toBeInTheDocument();
     expect(screen.getByText("총 2명 · 10명/페이지")).toBeInTheDocument();
+  });
+
+  it("renders the session status chip per row — online vs offline", async () => {
+    mockListSuccess();
+    renderPage();
+
+    const kimRow = (await screen.findByText("김철수")).closest("tr");
+    const parkRow = screen.getByText("박미영").closest("tr");
+
+    expect(
+      within(kimRow as HTMLElement).getByText("온라인"),
+    ).toBeInTheDocument();
+    expect(
+      within(parkRow as HTMLElement).getByText("오프라인"),
+    ).toBeInTheDocument();
+  });
+
+  it("offers exactly the 전체/온라인/오프라인 status filter options", async () => {
+    mockListSuccess();
+    const typer = userEvent.setup();
+    renderPage();
+    await screen.findByText("김철수");
+
+    await typer.click(screen.getByRole("button", { name: "status 필터" }));
+
+    const options = screen.getAllByRole("option").map((el) => el.textContent);
+    expect(options).toEqual(["✓전체", "온라인", "오프라인"]);
   });
 
   it("calls listUsers with the debounced search term", async () => {
     const spy = mockListSuccess();
     const typer = userEvent.setup();
     renderPage();
-    await screen.findByText("k@corp.com");
+    await screen.findByText("김철수");
 
-    await typer.type(screen.getByPlaceholderText("계정 검색"), "kim");
+    await typer.type(screen.getByPlaceholderText("이름 검색"), "kim");
 
     await waitFor(() =>
       expect(spy).toHaveBeenLastCalledWith(
@@ -106,14 +140,14 @@ describe("UsersPage", () => {
     const spy = mockListSuccess();
     const typer = userEvent.setup();
     renderPage();
-    await screen.findByText("k@corp.com");
+    await screen.findByText("김철수");
 
     await typer.click(screen.getByRole("button", { name: "status 필터" }));
-    await typer.click(screen.getByRole("option", { name: "세션 만료" }));
+    await typer.click(screen.getByRole("option", { name: "오프라인" }));
 
     await waitFor(() =>
       expect(spy).toHaveBeenLastCalledWith(
-        expect.objectContaining({ status: "session_expired", page: 1 }),
+        expect.objectContaining({ status: "offline", page: 1 }),
       ),
     );
   });
@@ -122,7 +156,7 @@ describe("UsersPage", () => {
     mockListSuccess();
     const typer = userEvent.setup();
     renderPage();
-    await screen.findByText("k@corp.com");
+    await screen.findByText("김철수");
 
     await typer.click(
       screen.getByRole("checkbox", { name: "k@corp.com 선택" }),
@@ -134,7 +168,7 @@ describe("UsersPage", () => {
     /* Checked rows may drop out of the new result, so changing what's
        listed must reset the selection. */
     await typer.click(screen.getByRole("button", { name: "status 필터" }));
-    await typer.click(screen.getByRole("option", { name: "세션 만료" }));
+    await typer.click(screen.getByRole("option", { name: "오프라인" }));
 
     await waitFor(() =>
       expect(
@@ -148,11 +182,11 @@ describe("UsersPage", () => {
       total: 12, // > PAGE_SIZE → a second page exists
       page: 1,
       size: 10,
-      items: [user("u_1", "k@corp.com"), user("u_2", "m@corp.com")],
+      items: [user("u_1", "k@corp.com", "김철수"), user("u_2", "m@corp.com", "박미영")],
     });
     const typer = userEvent.setup();
     renderPage();
-    await screen.findByText("k@corp.com");
+    await screen.findByText("김철수");
 
     await typer.click(
       screen.getByRole("checkbox", { name: "k@corp.com 선택" }),
@@ -186,10 +220,10 @@ describe("UsersPage", () => {
       .mockResolvedValue(jsonRes({ total: 0, page: 1, size: 10, items: [] }));
     const typer = userEvent.setup();
     renderPage();
-    await screen.findByText("k@corp.com");
+    await screen.findByText("김철수");
 
     await typer.type(
-      screen.getByPlaceholderText("계정 검색"),
+      screen.getByPlaceholderText("이름 검색"),
       "nobody@nowhere",
     );
 
@@ -219,13 +253,14 @@ describe("UsersPage", () => {
         jsonRes({
           userId: "u_3",
           account: "new@corp.com",
-          status: "invite_pending",
+          invitationStatus: "invite_pending",
+          sessionStatus: "offline",
           codeSent: true,
         }),
       );
     const typer = userEvent.setup();
     renderPage();
-    await screen.findByText("k@corp.com");
+    await screen.findByText("김철수");
 
     await typer.click(
       screen.getByRole("button", { name: BTN_TEXT.inviteMember }),
@@ -233,6 +268,10 @@ describe("UsersPage", () => {
     await typer.type(
       screen.getByPlaceholderText("user@corp.com"),
       "new@corp.com",
+    );
+    await typer.type(
+      screen.getByLabelText("사용자 이름 (username)"),
+      "김신입",
     );
     await typer.click(screen.getByRole("button", { name: "세트 1 팀" }));
     await typer.click(screen.getByRole("option", { name: "백엔드" }));
@@ -245,6 +284,7 @@ describe("UsersPage", () => {
     await waitFor(() =>
       expect(postSpy).toHaveBeenCalledWith({
         account: "new@corp.com",
+        username: "김신입",
         memberships: [{ teamId: "t_b", role: "edit" }],
       }),
     );
@@ -279,13 +319,14 @@ describe("UsersPage", () => {
         jsonRes({
           userId: "u_4",
           account: "growth@corp.com",
-          status: "invite_pending",
+          invitationStatus: "invite_pending",
+          sessionStatus: "offline",
           codeSent: true,
         }),
       );
     const typer = userEvent.setup();
     renderPage();
-    await screen.findByText("k@corp.com");
+    await screen.findByText("김철수");
 
     await typer.click(
       screen.getByRole("button", { name: BTN_TEXT.inviteMember }),
@@ -293,6 +334,10 @@ describe("UsersPage", () => {
     await typer.type(
       screen.getByPlaceholderText("user@corp.com"),
       "growth@corp.com",
+    );
+    await typer.type(
+      screen.getByLabelText("사용자 이름 (username)"),
+      "그로스 담당자",
     );
     await typer.click(screen.getByRole("button", { name: "세트 1 팀" }));
     expect(
@@ -308,6 +353,7 @@ describe("UsersPage", () => {
     await waitFor(() =>
       expect(postSpy).toHaveBeenCalledWith({
         account: "growth@corp.com",
+        username: "그로스 담당자",
         memberships: [{ teamId: "t_growth", role: "edit" }],
       }),
     );
@@ -322,7 +368,7 @@ describe("UsersPage", () => {
     );
     const typer = userEvent.setup();
     renderPage();
-    await screen.findByText("k@corp.com");
+    await screen.findByText("김철수");
 
     await typer.click(
       screen.getByRole("button", { name: BTN_TEXT.inviteMember }),
@@ -331,6 +377,7 @@ describe("UsersPage", () => {
       screen.getByPlaceholderText("user@corp.com"),
       "k@corp.com",
     );
+    await typer.type(screen.getByLabelText("사용자 이름 (username)"), "김철수");
     await typer.click(screen.getByRole("button", { name: "세트 1 팀" }));
     await typer.click(screen.getByRole("option", { name: "백엔드" }));
     await typer.click(screen.getByRole("button", { name: "세트 1 role" }));
@@ -351,12 +398,16 @@ describe("UsersPage", () => {
     vi.spyOn(invitationAPIs, "resendInvitation").mockImplementation(
       async (userId: string) =>
         userId === "u_1"
-          ? jsonRes({ userId, status: "invite_pending" })
+          ? jsonRes({
+              userId,
+              invitationStatus: "invite_pending",
+              sessionStatus: "offline",
+            })
           : new Response(null, { status: 500 }),
     );
     const typer = userEvent.setup();
     renderPage();
-    await screen.findByText("k@corp.com");
+    await screen.findByText("김철수");
 
     await typer.click(screen.getByLabelText("k@corp.com 선택"));
     await typer.click(screen.getByLabelText("m@corp.com 선택"));
@@ -381,7 +432,7 @@ describe("UsersPage", () => {
     );
     const typer = userEvent.setup();
     renderPage();
-    await screen.findByText("k@corp.com");
+    await screen.findByText("김철수");
 
     await typer.click(screen.getByLabelText("k@corp.com 선택"));
     await typer.click(screen.getByLabelText("m@corp.com 선택"));
@@ -409,7 +460,7 @@ describe("UsersPage", () => {
     const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     const typer = userEvent.setup();
     renderPage();
-    await screen.findByText("k@corp.com");
+    await screen.findByText("김철수");
 
     await typer.click(screen.getByLabelText("k@corp.com 선택"));
     await typer.click(screen.getByLabelText("m@corp.com 선택"));

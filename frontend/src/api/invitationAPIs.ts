@@ -5,6 +5,7 @@ import type { TTeamMemberRole } from "@/types/teamTypes";
     (POST /invitations). */
 export const postInvitation = async (body: {
   account: string;
+  username: string;
   memberships: { teamId: string; role: TTeamMemberRole }[];
 }) =>
   await serviceFetch("invitations", {

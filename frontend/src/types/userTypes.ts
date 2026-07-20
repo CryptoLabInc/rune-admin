@@ -1,10 +1,17 @@
-import type { TTeamMemberRole, TTeamMemberStatus } from "@/types/teamTypes";
+import type {
+  TInvitationStatus,
+  TSessionStatus,
+  TTeamMemberRole,
+} from "@/types/teamTypes";
 
 /** A row of GET /users (cross-team user list, SC-11). */
 export type TUserListItem = {
   userId: string;
   account: string;
-  status: TTeamMemberStatus;
+  /** Display name (not an identifier — account stays unique, API 2026-07-20). */
+  username: string;
+  invitationStatus: TInvitationStatus;
+  sessionStatus: TSessionStatus;
   memberships: { teamId: string; teamName: string; role: TTeamMemberRole }[];
   lastAccessAt: string | null;
   lastInvitedAt: string | null;
@@ -33,6 +40,7 @@ export type TInviteSet = {
 /** Invite request body (SC-12 [초대 전송]). */
 export type TInvitePayload = {
   email: string;
+  username: string;
   sets: TInviteSet[];
 };
 
@@ -68,13 +76,16 @@ export type TRoleChange = {
 export type TInvitationResponse = {
   userId: string;
   account: string;
-  status: TTeamMemberStatus;
+  username: string;
+  invitationStatus: TInvitationStatus;
+  sessionStatus: TSessionStatus;
   codeSent: boolean;
 };
 
 /** One row of GET /invitations?view=history (SC-16). */
 export type TInvitationHistoryRow = {
   account: string;
+  username: string;
   issuedAt: string;
   lastAccessAt: string | null;
 };

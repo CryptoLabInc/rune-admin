@@ -18,7 +18,9 @@ const teamName = (teamId: string): string =>
 const userView = (u: User) => ({
   userId: u.id,
   account: u.account,
-  status: u.status,
+  username: u.username,
+  invitationStatus: u.invitationStatus,
+  sessionStatus: u.sessionStatus,
   memberships: state.memberships
     .filter((m) => m.userId === u.id)
     .map((m) => ({
@@ -46,8 +48,12 @@ export const listUsers = (ctx: Ctx): void => {
 
   let rows = state.users.slice();
   if (search)
-    rows = rows.filter((u) => u.account.toLowerCase().includes(search));
-  if (status) rows = rows.filter((u) => u.status === status);
+    rows = rows.filter(
+      (u) =>
+        u.account.toLowerCase().includes(search) ||
+        u.username.toLowerCase().includes(search),
+    );
+  if (status) rows = rows.filter((u) => u.sessionStatus === status);
   if (teamId) {
     const ids = new Set(
       state.memberships.filter((m) => m.teamId === teamId).map((m) => m.userId),
@@ -98,21 +104,27 @@ export const deleteUsers = (ctx: Ctx): void => {
 export const deactivateSession = (ctx: Ctx): void => {
   const user = state.users.find((u) => u.id === ctx.params.userId);
   if (!user) throw new HttpError(404, "USER_NOT_FOUND", "user not found");
-  if (user.status !== "online") {
+  // Deactivation destroys the live session token — only meaningful while
+  // online (the visible session state maps 1:1 to the button).
+  if (user.sessionStatus !== "online") {
     throw new HttpError(
       409,
       "SESSION_NOT_ACTIVE",
       "no active session to destroy",
     );
   }
-  user.status = "session_expired";
+  user.sessionStatus = "offline";
   user.sessionExpiredAt = new Date().toISOString();
-  sendJson(ctx.res, 200, { userId: user.id, status: user.status });
+  sendJson(ctx.res, 200, {
+    userId: user.id,
+    invitationStatus: user.invitationStatus,
+    sessionStatus: user.sessionStatus,
+  });
 };
 
 export const usersStats = (ctx: Ctx): void => {
   const invitePending = state.users.filter(
-    (u) => u.status === "invite_pending",
+    (u) => u.invitationStatus === "invite_pending",
   ).length;
   sendJson(ctx.res, 200, { invitePending });
 };

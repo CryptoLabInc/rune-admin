@@ -9,8 +9,9 @@ import { deleteUsers } from "@/api/userAPIs";
 import { QUERY_KEYS } from "@/constants/commonConstants";
 import {
   type TBatchResult,
+  type TInvitationStatus,
+  type TSessionStatus,
   type TTeamMemberRole,
-  type TTeamMemberStatus,
 } from "@/types/teamTypes";
 import { type TInvitationResponse } from "@/types/userTypes";
 
@@ -34,6 +35,7 @@ export const useInviteMutation = () => {
     Response,
     {
       account: string;
+      username: string;
       memberships: { teamId: string; role: TTeamMemberRole }[];
     }
   >({
@@ -52,7 +54,11 @@ export const useResendInvitation = () => {
   const queryClient = useQueryClient();
   const invalidate = useInvalidateInvitations();
   return useMutation<
-    { userId: string; status: TTeamMemberStatus },
+    {
+      userId: string;
+      invitationStatus: TInvitationStatus;
+      sessionStatus: TSessionStatus;
+    },
     Response,
     string
   >({
@@ -61,7 +67,8 @@ export const useResendInvitation = () => {
       if (!res.ok) throw res;
       return (await res.json()) as {
         userId: string;
-        status: TTeamMemberStatus;
+        invitationStatus: TInvitationStatus;
+        sessionStatus: TSessionStatus;
       };
     },
     onSuccess: (_, userId) => {
@@ -77,7 +84,11 @@ export const useCancelInvitation = () => {
   const queryClient = useQueryClient();
   const invalidate = useInvalidateInvitations();
   return useMutation<
-    { userId: string; status: TTeamMemberStatus },
+    {
+      userId: string;
+      invitationStatus: TInvitationStatus;
+      sessionStatus: TSessionStatus;
+    },
     Response,
     string
   >({
@@ -86,7 +97,8 @@ export const useCancelInvitation = () => {
       if (!res.ok) throw res;
       return (await res.json()) as {
         userId: string;
-        status: TTeamMemberStatus;
+        invitationStatus: TInvitationStatus;
+        sessionStatus: TSessionStatus;
       };
     },
     onSuccess: (_, userId) => {

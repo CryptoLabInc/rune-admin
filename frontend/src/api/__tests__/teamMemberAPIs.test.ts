@@ -21,13 +21,18 @@ describe("teamMemberAPIs", () => {
 
   it("adds a member with a POST body", async () => {
     const f = spyFetch();
-    await addTeamMember("t_1", { account: "k@x.com", role: "read" });
+    await addTeamMember("t_1", {
+      account: "k@x.com",
+      role: "read",
+      username: "김철수",
+    });
     const [url, opts] = f.mock.calls[0];
     expect(url).toBe("/api/v1/teams/t_1/members");
     expect(opts).toMatchObject({ method: "POST" });
     expect(JSON.parse(opts!.body as string)).toEqual({
       account: "k@x.com",
       role: "read",
+      username: "김철수",
     });
   });
 

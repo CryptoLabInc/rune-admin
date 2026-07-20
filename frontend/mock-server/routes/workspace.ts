@@ -15,6 +15,7 @@ const view = (w: Workspace) => ({
   endpointUrl: w.endpointUrl,
   rows: w.rows,
   createdAt: w.createdAt,
+  orphaned: w.orphaned,
 });
 
 /**
@@ -56,6 +57,9 @@ export const createWorkspace = (ctx: Ctx): void => {
     endpointUrl: null,
     rows: null,
     createdAt: new Date().toISOString(),
+    // A fresh create is pinned to the current team_secret, so it can never
+    // start orphaned — this is what the recreate flow relies on.
+    orphaned: false,
   };
   scheduleWorkspacePhase("running", () => {
     state.workspace.endpointUrl =
@@ -105,6 +109,7 @@ export const deleteWorkspace = (ctx: Ctx): void => {
       endpointUrl: null,
       rows: null,
       createdAt: null,
+      orphaned: false,
     };
   });
   sendJson(ctx.res, 202, view(w));

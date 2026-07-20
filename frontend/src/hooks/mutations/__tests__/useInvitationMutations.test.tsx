@@ -15,7 +15,11 @@ describe("useResendInvitation", () => {
 
   it("calls the API and invalidates users + usersStats + invitations + user keys on success", async () => {
     vi.spyOn(invitationAPIs, "resendInvitation").mockResolvedValue(
-      jsonRes({ userId: "u_1", status: "invite_pending" }),
+      jsonRes({
+        userId: "u_1",
+        invitationStatus: "invite_pending",
+        sessionStatus: "offline",
+      }),
     );
     const client = new QueryClient({
       defaultOptions: { mutations: { retry: false } },

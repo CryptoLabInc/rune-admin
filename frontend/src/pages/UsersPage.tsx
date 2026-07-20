@@ -48,22 +48,20 @@ import { useNoticeStore } from "@/stores/noticeStore";
 
 const styles = {
   page: "flex flex-col gap-3.5 p-4",
-  /* Wide enough for full corporate emails at the 40% column; anything
-     longer (external partner domains) truncates with an ellipsis and
-     keeps the full address in the title tooltip. */
-  accountCell: "max-w-[400px] truncate",
+  /* Wide enough for typical names at the 40% column; anything longer
+     (up to the 50-char username cap) truncates with an ellipsis and
+     keeps the full name in the title tooltip. */
+  usernameCell: "max-w-[400px] truncate",
   overflowChip:
     "border-border text-faint ml-1.5 rounded-full border px-2 text-xs",
 };
 
-/* Filter/sort option sets (SC-11 no.2–3). "all" stands in for 전체. */
+/* Filter/sort option sets (SC-11 no.2–3). "all" stands in for 전체. The list
+   shows only the session axis, so the filter matches it. */
 const STATUS_OPTIONS: TDropdownOption[] = [
   { value: "all", label: "전체" },
   { value: "online", label: "온라인" },
-  { value: "invite_redeemed", label: "초대코드 사용됨" },
-  { value: "invite_pending", label: "초대 수락 대기" },
-  { value: "invite_expired", label: "초대 코드 만료" },
-  { value: "session_expired", label: "세션 만료" },
+  { value: "offline", label: "오프라인" },
 ];
 
 /* Depth indent stripped — the 150px filter trigger can't fit deep-tree
@@ -78,7 +76,7 @@ const buildGroupOptions = (teams: TTeamTree): TDropdownOption[] => [
 
 const SORT_OPTIONS: TDropdownOption[] = [
   { value: "last_invited", label: "최근 초대 코드 발송" },
-  { value: "account", label: "account" },
+  { value: "username", label: "멤버 이름" },
 ];
 
 /** First membership as "team · role"; the rest collapse into "+n". */
@@ -213,6 +211,7 @@ const UsersPage = () => {
     try {
       await invite.mutateAsync({
         account: payload.email,
+        username: payload.username,
         memberships: payload.sets.map((set) => ({
           teamId: set.teamId,
           role: set.role as TTeamMemberRole,
@@ -348,14 +347,14 @@ const UsersPage = () => {
                 <SearchInput
                   value={search}
                   onChange={withPageReset(setSearch)}
-                  placeholder="계정 검색"
+                  placeholder="이름 검색"
                   maxLength={100}
                   className="w-50"
                 />
                 {/* filter/order dropdown */}
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-md text-faint">정렬 기준 </span>
+                    <span className="text-md text-faint">정렬 기준</span>
                     <Dropdown
                       options={SORT_OPTIONS}
                       value={sort}
@@ -366,7 +365,7 @@ const UsersPage = () => {
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-md text-faint">status </span>
+                    <span className="text-md text-faint">멤버 상태</span>
                     <Dropdown
                       options={STATUS_OPTIONS}
                       value={statusFilter}
@@ -377,7 +376,7 @@ const UsersPage = () => {
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-md text-faint">team </span>
+                    <span className="text-md text-faint">팀</span>
                     <Dropdown
                       options={groupOptions}
                       value={groupFilter}
@@ -442,9 +441,9 @@ const UsersPage = () => {
           </TableHeaderCell>
           {/* Fixed column widths — auto layout would resize per page's
               content and shift the headers while paginating. */}
-          <TableHeaderCell className="w-[40%]">account</TableHeaderCell>
-          <TableHeaderCell className="w-[20%]">status</TableHeaderCell>
-          <TableHeaderCell className="w-[40%]">teams (role)</TableHeaderCell>
+          <TableHeaderCell className="w-[40%]">멤버 이름</TableHeaderCell>
+          <TableHeaderCell className="w-[20%]">멤버 상태</TableHeaderCell>
+          <TableHeaderCell className="w-[40%]">팀 (권한)</TableHeaderCell>
         </TableHead>
         <tbody>
           {usersQuery.isPending && (
@@ -485,11 +484,11 @@ const UsersPage = () => {
                     />
                   </div>
                 </TableCell>
-                <TableCell className={styles.accountCell}>
-                  <span title={user.account}>{user.account}</span>
+                <TableCell className={styles.usernameCell}>
+                  <span title={user.username}>{user.username}</span>
                 </TableCell>
                 <TableCell>
-                  <MemberStatus status={CHIP_STATUS[user.status]} />
+                  <MemberStatus status={CHIP_STATUS[user.sessionStatus]} />
                 </TableCell>
                 <TableCell>
                   {summary}

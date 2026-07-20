@@ -12,9 +12,12 @@ export type TTeamTree = TTeamNode[];
 /** Grantable member role (Admin is console-account only — API §0). */
 export type TTeamMemberRole = "edit" | "write" | "read";
 
-/** Member status on the wire (common contract). */
-export type TTeamMemberStatus =
-  "online" | "invite_redeemed" | "invite_pending" | "invite_expired" | "session_expired";
+/** Invitation-code lifecycle status on the wire (common contract). */
+export type TInvitationStatus =
+  "invite_pending" | "invite_expired" | "invite_redeemed";
+
+/** Session-token liveness on the wire (common contract). */
+export type TSessionStatus = "online" | "offline";
 
 /** GET /teams/{id} detail. */
 export type TTeamDetail = {
@@ -30,9 +33,17 @@ export type TTeamDetail = {
 export type TTeamMember = {
   userId: string;
   account: string;
+  /** Display name (not an identifier — account stays unique, API 2026-07-20). */
+  username: string;
   role: TTeamMemberRole;
-  status: TTeamMemberStatus;
-  joinedAt: string;
+  invitationStatus: TInvitationStatus;
+  sessionStatus: TSessionStatus;
+  /**
+   * Granted-at of the stored membership. Null for an inherited-read row —
+   * the member reaches this team by downward inheritance from an ancestor,
+   * so there is no stored grant and no join timestamp (API memberDTO).
+   */
+  joinedAt: string | null;
 };
 
 /** Paginated list envelope (common contract). */

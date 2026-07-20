@@ -35,9 +35,10 @@ type membershipDTO struct {
 // change json tags here expecting them to reach the client; MarshalJSON is the
 // source of truth for the response shape.
 type userDTO struct {
-	UserID  string `json:"userId"`
-	Account string `json:"account"`
-	Status  string `json:"status"`
+	UserID           string `json:"userId"`
+	Account          string `json:"account"`
+	InvitationStatus string `json:"invitationStatus"`
+	SessionStatus    string `json:"sessionStatus"`
 	// Memberships is the user's DIRECT (explicit) memberships — the
 	// (user, group, role) rows the console can PUT/DELETE.
 	Memberships []membershipDTO `json:"memberships"`
@@ -73,7 +74,8 @@ func (u userDTO) MarshalJSON() ([]byte, error) {
 	return json.Marshal(userWire{
 		UserID:           u.UserID,
 		Account:          u.Account,
-		Status:           u.Status,
+		InvitationStatus: u.InvitationStatus,
+		SessionStatus:    u.SessionStatus,
 		Memberships:      merged,
 		LastAccessAt:     u.LastAccessAt,
 		LastInvitedAt:    u.LastInvitedAt,
@@ -88,7 +90,8 @@ func (u userDTO) MarshalJSON() ([]byte, error) {
 type userWire struct {
 	UserID           string          `json:"userId"`
 	Account          string          `json:"account"`
-	Status           string          `json:"status"`
+	InvitationStatus string          `json:"invitationStatus"`
+	SessionStatus    string          `json:"sessionStatus"`
 	Memberships      []membershipDTO `json:"memberships"`
 	LastAccessAt     *string         `json:"lastAccessAt"`
 	LastInvitedAt    *string         `json:"lastInvitedAt"`
@@ -119,6 +122,15 @@ type tokenLive struct {
 	activatedAt string
 	expires     string
 	expired     bool
+}
+
+// memberStatuses is the two-axis console status: the invitation-code lifecycle
+// and the session-token liveness, derived independently from the member, its
+// latest invite, and its token. session_expired no longer exists — a redeemed
+// member whose token is gone is {invite_redeemed, offline}.
+type memberStatuses struct {
+	invitation string // invite_pending | invite_expired | invite_redeemed
+	session    string // online | offline
 }
 
 func (h *consoleAPI) newIndex() *userIndex {
@@ -198,40 +210,52 @@ func (h *consoleAPI) fillGroupAccess(idx *userIndex) {
 	}
 }
 
-// status derives the console member status enum from the member lifecycle, its
-// latest invite, and whether a session token exists (wireframe SC-11 defs):
-//   - online          = active member whose agent has self-reported terminal
-//     activation (ReportActivation: fully configured + serving)
-//   - invite_redeemed = active member whose token is released but not yet activated
-//   - session_expired = active/disabled member whose token was destroyed
-//   - invite_pending  = invited, latest code sent and not past expiry
-//   - invite_expired  = invited, latest code expired (24h) or voided
-func (idx *userIndex) status(m members.Member) string {
+// statuses derives the two console status axes (SC-11 defs, 2026-07-20 split):
+//
+//	session:    online  = active member, live token, agent self-reported
+//	                      activation (ReportActivation); offline otherwise.
+//	invitation: invite_pending  = latest code is live (unused, not expired);
+//	            invite_expired  = latest code expired/revoked, never redeemed;
+//	            invite_redeemed = the latest code was used (no newer live code).
+//
+// Resend issues a fresh live code, so a redeemed/expired member flips back to
+// invite_pending automatically — no special case here.
+//
+// Step-1 finding (2026-07-20): invites.Store.Unwrap sets the redeemed invite's
+// Status to StatusConsumed (internal/invites/store.go:285), which is durable
+// before Unwrap returns and is never StatusPending again. Real redemption
+// (grpc.go Unwrap) also immediately Activates the member, so a consumed
+// invite is only ever "latest" once the member is already active/disabled.
+// The live-code check below therefore uses invitePendingLive (Status ==
+// StatusPending + not-past-expiry) rather than merely "!inviteExpired", since
+// inviteExpired does not treat StatusConsumed as expired — using it alone
+// would misclassify a solo-redeemed member (no resend) as invite_pending.
+func (idx *userIndex) statuses(m members.Member) memberStatuses {
+	session := "offline"
+	redeemed := false
 	switch m.Status {
 	case members.StatusActive:
-		tl, ok := idx.tokenByEmail[m.Email]
-		if !ok || tl.expired {
-			return "session_expired"
+		redeemed = true
+		if tl, ok := idx.tokenByEmail[m.Email]; ok && !tl.expired && tl.activatedAt != "" {
+			session = "online"
 		}
-		// A live token means the invite was redeemed (Unwrap released it), but
-		// redemption alone is not "online": the agent may still be mid-configure
-		// (fetching the manifest, syncing centroids, warming the embedder) or have
-		// failed right after Unwrap. Only the agent's own ReportActivation — sent
-		// once it reaches terminal active — sets activatedAt, so an empty stamp
-		// means "redeemed, not fully up yet", the intermediate invite_redeemed
-		// (사용됨) state. last_used is too weak a gate: GetAgentManifest stamps it
-		// while the agent is still mid-configure.
-		if tl.activatedAt != "" {
-			return "online"
-		}
-		return "invite_redeemed"
 	case members.StatusDisabled:
-		return "session_expired"
-	default: // registered, invited
-		if inv, ok := idx.latestInvite[m.ID]; ok && idx.inviteExpired(inv) {
-			return "invite_expired"
-		}
-		return "invite_pending"
+		redeemed = true
+	}
+
+	inv, ok := idx.latestInvite[m.ID]
+	switch {
+	case ok && invitePendingLive(inv, idx.now):
+		// A live pending code is the most recent invitation event, even for a
+		// member who previously redeemed (this is the resend case).
+		return memberStatuses{invitation: "invite_pending", session: session}
+	case redeemed:
+		return memberStatuses{invitation: "invite_redeemed", session: session}
+	case ok && idx.inviteExpired(inv):
+		return memberStatuses{invitation: "invite_expired", session: session}
+	default:
+		// Invited with no invite record yet — treat as pending.
+		return memberStatuses{invitation: "invite_pending", session: session}
 	}
 }
 
@@ -286,10 +310,12 @@ func (idx *userIndex) userDTO(m members.Member) userDTO {
 	} else if hasToken && tl.expired && tl.expires != "" && tl.expires != "never" {
 		sessionExpired = wireTimePtr(tl.expires)
 	}
+	st := idx.statuses(m)
 	return userDTO{
 		UserID:               m.ID,
 		Account:              m.Email,
-		Status:               idx.status(m),
+		InvitationStatus:     st.invitation,
+		SessionStatus:        st.session,
 		Memberships:          ms,
 		InheritedMemberships: ims,
 		LastAccessAt:         lastAccess,
@@ -300,15 +326,17 @@ func (idx *userIndex) userDTO(m members.Member) userDTO {
 
 // memberDTO builds the team-member-table row for a membership.
 func (idx *userIndex) memberDTO(m groups.Membership) memberDTO {
-	account, status := "", "invite_pending"
+	account := ""
+	st := memberStatuses{invitation: "invite_pending", session: "offline"}
 	if mem, ok := idx.memberByID[m.User]; ok {
-		account, status = mem.Email, idx.status(mem)
+		account, st = mem.Email, idx.statuses(mem)
 	}
 	return memberDTO{
-		UserID:  m.User,
-		Account: account,
-		Role:    string(m.Role),
-		Status:  status,
+		UserID:           m.User,
+		Account:          account,
+		Role:             string(m.Role),
+		InvitationStatus: st.invitation,
+		SessionStatus:    st.session,
 		// joinedAt == the membership's granted_at, truncated to the wire's
 		// second precision (storage is canonical millisecond RFC3339). A direct
 		// grant always carries a granted_at, so this is never null here.
@@ -321,16 +349,18 @@ func (idx *userIndex) memberDTO(m groups.Membership) memberDTO {
 // read and joinedAt is null, since there is no grant to timestamp. Shown in the
 // team member table alongside direct members without distinction.
 func (idx *userIndex) inheritedMemberDTO(userID string) memberDTO {
-	account, status := "", "invite_pending"
+	account := ""
+	st := memberStatuses{invitation: "invite_pending", session: "offline"}
 	if mem, ok := idx.memberByID[userID]; ok {
-		account, status = mem.Email, idx.status(mem)
+		account, st = mem.Email, idx.statuses(mem)
 	}
 	return memberDTO{
-		UserID:   userID,
-		Account:  account,
-		Role:     string(groups.RoleRead),
-		Status:   status,
-		JoinedAt: nil,
+		UserID:           userID,
+		Account:          account,
+		Role:             string(groups.RoleRead),
+		InvitationStatus: st.invitation,
+		SessionStatus:    st.session,
+		JoinedAt:         nil,
 	}
 }
 
@@ -352,7 +382,7 @@ func (h *consoleAPI) usersList(w http.ResponseWriter, r *http.Request) {
 	// status is an enum (doc §users): reject an out-of-enum value with 400
 	// rather than silently returning an empty list (which reads as "no such
 	// users" and hides the client bug). Empty = no filter.
-	if statusFilter != "" && !validUserStatus(statusFilter) {
+	if statusFilter != "" && !validSessionStatus(statusFilter) {
 		apiErr(w, http.StatusBadRequest, "VALIDATION_ERROR", "unknown status filter: "+statusFilter)
 		return
 	}
@@ -378,7 +408,7 @@ func (h *consoleAPI) usersList(w http.ResponseWriter, r *http.Request) {
 		if search != "" && !strings.Contains(strings.ToLower(u.Account), search) {
 			continue
 		}
-		if statusFilter != "" && u.Status != statusFilter {
+		if statusFilter != "" && u.SessionStatus != statusFilter {
 			continue
 		}
 		if teamFilter != "" && !u.coversTeam(teamFilter) {
@@ -432,14 +462,11 @@ func hasTeam(ms []membershipDTO, teamID string) bool {
 	return false
 }
 
-// validUserStatus reports whether s is one of the doc's member-status enum
-// values (the set idx.status can emit). Kept in lockstep with status().
-func validUserStatus(s string) bool {
-	switch s {
-	case "online", "invite_redeemed", "invite_pending", "invite_expired", "session_expired":
-		return true
-	}
-	return false
+// validSessionStatus reports whether s is a session-status value the derivation
+// can emit (the values the GET /users status filter accepts). Kept in lockstep
+// with statuses().
+func validSessionStatus(s string) bool {
+	return s == "online" || s == "offline"
 }
 
 func (h *consoleAPI) userDetail(w http.ResponseWriter, r *http.Request) {
@@ -533,13 +560,12 @@ func (h *consoleAPI) userSessionDeactivate(w http.ResponseWriter, r *http.Reques
 		apiErr(w, http.StatusNotFound, "USER_NOT_FOUND", "no such user")
 		return
 	}
-	// Both online and invite_redeemed hold a real, released session token
-	// (Unwrap put it in the token store); either can be deactivated. Gating on
-	// the derived status — not mere token-row presence — matters because an
+	// Deactivation requires a live session: gating on the derived session
+	// status — not mere token-row presence — matters because an
 	// invite_pending member's wrapped invite token would otherwise be destroyed
 	// by the revoke below, silently invalidating the invitation code that was
 	// just mailed.
-	if st := h.newIndex().status(*m); st != "online" && st != "invite_redeemed" {
+	if st := h.newIndex().statuses(*m); st.session != "online" {
 		apiErr(w, http.StatusConflict, "SESSION_NOT_ACTIVE", "user has no active session")
 		return
 	}
@@ -561,14 +587,18 @@ func (h *consoleAPI) userSessionDeactivate(w http.ResponseWriter, r *http.Reques
 		slog.Warn("console: session deactivated but the expiry timestamp did not commit", "userId", m.ID, "err", err)
 	}
 	auditAdmin(h.v, "admin.token.revoke", actorFromContext(r.Context()), m.Email)
-	writeJSON(w, http.StatusOK, map[string]string{"userId": m.ID, "status": "session_expired"})
+	writeJSON(w, http.StatusOK, map[string]string{
+		"userId":           m.ID,
+		"invitationStatus": h.newIndex().statuses(*m).invitation,
+		"sessionStatus":    "offline",
+	})
 }
 
 func (h *consoleAPI) userStats(w http.ResponseWriter, r *http.Request) {
 	idx := h.newIndex()
 	pending := 0
 	for _, m := range h.ms.members.List() {
-		if idx.status(m) == "invite_pending" {
+		if idx.statuses(m).invitation == "invite_pending" {
 			pending++
 		}
 	}
@@ -797,7 +827,7 @@ func (h *consoleAPI) createInvitation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Per-status code-send judgment (design doc): online / invite_pending need no
-	// code; new / invite_expired / session_expired get one. See needsCode.
+	// code; new / invite_expired / offline (session ended) get one. See needsCode.
 	codeSent := false
 	if h.needsCode(m) {
 		if err := h.issueCode(r, m); err != nil {
@@ -815,11 +845,13 @@ func (h *consoleAPI) createInvitation(w http.ResponseWriter, r *http.Request) {
 	if fresh, ferr := h.ms.members.Get(m.ID); ferr == nil {
 		m = fresh
 	}
+	st := h.newIndex().statuses(*m)
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"userId":   m.ID,
-		"account":  m.Email,
-		"status":   h.newIndex().status(*m),
-		"codeSent": codeSent,
+		"userId":           m.ID,
+		"account":          m.Email,
+		"invitationStatus": st.invitation,
+		"sessionStatus":    st.session,
+		"codeSent":         codeSent,
 	})
 }
 
@@ -865,7 +897,12 @@ func (h *consoleAPI) resendInvitation(w http.ResponseWriter, r *http.Request) {
 	if fresh, ferr := h.ms.members.Get(m.ID); ferr == nil {
 		m = fresh
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"userId": m.ID, "status": h.newIndex().status(*m)})
+	st := h.newIndex().statuses(*m)
+	writeJSON(w, http.StatusOK, map[string]string{
+		"userId":           m.ID,
+		"invitationStatus": st.invitation,
+		"sessionStatus":    st.session,
+	})
 }
 
 func (h *consoleAPI) cancelInvitation(w http.ResponseWriter, r *http.Request) {
@@ -898,7 +935,12 @@ func (h *consoleAPI) cancelInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	auditAdmin(h.v, "admin.invite.cancel", actorFromContext(r.Context()), m.Email)
-	writeJSON(w, http.StatusOK, map[string]string{"userId": m.ID, "status": "invite_expired"})
+	st := h.newIndex().statuses(*m)
+	writeJSON(w, http.StatusOK, map[string]string{
+		"userId":           m.ID,
+		"invitationStatus": st.invitation, // invite_expired after voiding
+		"sessionStatus":    st.session,
+	})
 }
 
 func (h *consoleAPI) invitationsHistory(w http.ResponseWriter, r *http.Request) {
@@ -994,11 +1036,11 @@ func invitePendingLive(inv invites.InviteView, now time.Time) bool {
 // added to a team / invited, per the design doc's per-status rule:
 //   - online (active + valid token): NO code — already connected.
 //   - invite_pending (a live, unexpired code exists): NO code — can still redeem.
-//   - everyone else (new/registered, invite_expired, session_expired): SEND a code.
+//   - everyone else (new/registered, invite_expired, redeemed-but-offline): SEND a code.
 //
 // This replaces the earlier "any token row exists" gate, which wrongly skipped
 // the code for an invite_expired member (whose evt_ token row lingers even
-// though the emailed code is dead) and for session-expired reconnects.
+// though the emailed code is dead) and for offline (session-ended) reconnects.
 func (h *consoleAPI) needsCode(m *members.Member) bool {
 	if m.Status == members.StatusActive && h.hasValidToken(m.Email) {
 		return false // online

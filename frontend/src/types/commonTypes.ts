@@ -12,9 +12,8 @@ export type TDropdownOption = {
   disabled?: boolean;
 };
 
-/** Member connection status (wireframe v0.4 token model, 5 badges). */
-export type TMemberStatus =
-  "online" | "redeemed" | "pending" | "invite-expired" | "session-expired";
+/** Session chip state — the only status a list view renders. */
+export type TMemberStatus = "online" | "offline";
 
 /**
  * rune workspace lifecycle phase (wireframe SC-03 badge; console API

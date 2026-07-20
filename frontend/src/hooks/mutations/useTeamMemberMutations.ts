@@ -32,7 +32,7 @@ export const useAddTeamMemberMutation = (teamId: string) => {
   return useMutation<
     TTeamMember,
     Response,
-    { account: string; role: TTeamMemberRole }
+    { account: string; role: TTeamMemberRole; username: string }
   >({
     mutationFn: async (body) => {
       const res = await addTeamMember(teamId, body);

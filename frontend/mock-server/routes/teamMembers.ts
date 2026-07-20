@@ -6,6 +6,7 @@ import {
   paginate,
   parseCsvQuery,
   parsePaging,
+  parseUsername,
   sendJson,
 } from "../http.ts";
 import type { BatchResult } from "../http.ts";
@@ -24,15 +25,69 @@ const requireTeam = (teamId: string): void => {
 const userById = (userId: string): User | undefined =>
   state.users.find((u) => u.id === userId);
 
-const memberItem = (m: Membership) => {
+type MemberItem = {
+  userId: string;
+  account: string;
+  username: string;
+  role: Role;
+  invitationStatus: User["invitationStatus"];
+  sessionStatus: User["sessionStatus"];
+  // null for an inherited-read row: no stored membership, no join timestamp
+  // (mirrors the real API's nullable joinedAt).
+  joinedAt: string | null;
+};
+
+const memberItem = (m: Membership): MemberItem => {
   const user = userById(m.userId);
   return {
     userId: m.userId,
     account: user?.account ?? "unknown",
+    username: user?.username ?? "unknown",
     role: m.role,
-    status: user?.status ?? "session_expired",
+    invitationStatus: user?.invitationStatus ?? "invite_redeemed",
+    sessionStatus: user?.sessionStatus ?? "offline",
     joinedAt: m.joinedAt,
   };
+};
+
+/** Proper ancestors of a team (walk the parentId chain up to the root). */
+const ancestorIds = (teamId: string): Set<string> => {
+  const out = new Set<string>();
+  let cur = state.teams.find((t) => t.id === teamId)?.parentId ?? null;
+  while (cur !== null && !out.has(cur)) {
+    out.add(cur);
+    cur = state.teams.find((t) => t.id === cur)?.parentId ?? null;
+  }
+  return out;
+};
+
+/**
+ * inheritedMemberItems mirrors the real API: every user with a membership on
+ * a PROPER ancestor of the team (any role), minus direct members, appears as
+ * an inherited-read row — role "read", joinedAt null.
+ */
+const inheritedMemberItems = (teamId: string): MemberItem[] => {
+  const ancestors = ancestorIds(teamId);
+  const direct = new Set(
+    state.memberships.filter((m) => m.teamId === teamId).map((m) => m.userId),
+  );
+  const inheritorIds = new Set(
+    state.memberships
+      .filter((m) => ancestors.has(m.teamId) && !direct.has(m.userId))
+      .map((m) => m.userId),
+  );
+  return [...inheritorIds].map((userId) => {
+    const user = userById(userId);
+    return {
+      userId,
+      account: user?.account ?? "unknown",
+      username: user?.username ?? "unknown",
+      role: "read" as Role,
+      invitationStatus: user?.invitationStatus ?? "invite_redeemed",
+      sessionStatus: user?.sessionStatus ?? "offline",
+      joinedAt: null,
+    };
+  });
 };
 
 export const listTeamMembers = (ctx: Ctx): void => {
@@ -40,18 +95,26 @@ export const listTeamMembers = (ctx: Ctx): void => {
   const { page, size } = parsePaging(ctx.query);
   const members = state.memberships
     .filter((m) => m.teamId === ctx.params.teamId)
-    .map(memberItem);
+    .map(memberItem)
+    .concat(inheritedMemberItems(ctx.params.teamId))
+    // The real API sorts the combined list by account (console_api.go).
+    .sort((a, b) => a.account.localeCompare(b.account));
   sendJson(ctx.res, 200, paginate(members, page, size));
 };
 
 export const addTeamMember = (ctx: Ctx): void => {
   const { teamId } = ctx.params;
   requireTeam(teamId);
-  const body = (ctx.body ?? {}) as { account?: unknown; role?: unknown };
+  const body = (ctx.body ?? {}) as {
+    account?: unknown;
+    role?: unknown;
+    username?: unknown;
+  };
   const account = typeof body.account === "string" ? body.account.trim() : "";
   const role = body.role;
   if (account === "")
     throw new HttpError(400, "VALIDATION_ERROR", "account is required");
+  const username = parseUsername(body.username);
   if (typeof role !== "string" || !GRANTABLE.includes(role as Role)) {
     if (role === "Admin") {
       throw new HttpError(
@@ -84,10 +147,14 @@ export const addTeamMember = (ctx: Ctx): void => {
   );
   const isNew = !user;
   if (!user) {
+    // username applies at creation; an existing user keeps the stored name
+    // (account is the identifier — the body's username is not an update).
     user = {
       id: nextId("u"),
       account,
-      status: "invite_pending",
+      username,
+      invitationStatus: "invite_pending",
+      sessionStatus: "offline",
       lastAccessAt: null,
       lastInvitedAt: new Date().toISOString(),
       sessionExpiredAt: null,
@@ -105,13 +172,14 @@ export const addTeamMember = (ctx: Ctx): void => {
   }
   const codeSent =
     isNew ||
-    user.status === "session_expired" ||
-    user.status === "invite_expired";
+    (user.invitationStatus !== "invite_pending" &&
+      user.sessionStatus !== "online");
   if (codeSent) {
-    user.status = "invite_pending";
+    user.invitationStatus = "invite_pending";
     user.lastInvitedAt = new Date().toISOString();
     state.invitations.push({
       account: user.account,
+      username: user.username,
       issuedAt: new Date().toISOString(),
       lastAccessAt: null,
     });

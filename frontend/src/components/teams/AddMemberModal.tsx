@@ -7,6 +7,12 @@ import MemberStatus from "@/components/elements/MemberStatus";
 import Notice from "@/components/elements/Notice";
 import ModalLayout from "@/components/layout/ModalLayout";
 import { ROLE_OPTIONS } from "@/components/teams/teamOptions";
+import {
+  isSubmittableUsername,
+  normalizeUsernameInput,
+  USERNAME_MAX_LENGTH,
+  validateUsername,
+} from "@/utils/username";
 import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -17,14 +23,14 @@ interface AddMemberModalProps {
       ALREADY_TEAM_MEMBER and friends) — null/undefined renders nothing. */
   error?: string | null;
   onClose: () => void;
-  onInvite: (account: string, role: string) => void;
+  onInvite: (account: string, role: string, username: string) => void;
 }
 
 /**
- * AddMemberModal is the 멤버 추가 modal (SC-10): account email + role.
- * Already-member detection is the server's call (409 ALREADY_TEAM_MEMBER)
- * — this component only renders whatever error the caller maps from the
- * failed mutation. Mount conditionally.
+ * AddMemberModal is the 멤버 추가 modal (SC-10): account email +
+ * username + role. Already-member detection is the server's call (409
+ * ALREADY_TEAM_MEMBER) — this component only renders whatever error
+ * the caller maps from the failed mutation. Mount conditionally.
  */
 const AddMemberModal = ({
   teamName,
@@ -33,11 +39,17 @@ const AddMemberModal = ({
   onInvite,
 }: AddMemberModalProps) => {
   const [account, setAccount] = useState("");
+  const [username, setUsername] = useState("");
   const [role, setRole] = useState("");
 
   const trimmed = account.trim();
   const invalidFormat = trimmed.length > 0 && !EMAIL_PATTERN.test(trimmed);
-  const canSubmit = trimmed.length > 0 && !invalidFormat && role !== "";
+  const usernameError = validateUsername(username);
+  const canSubmit =
+    trimmed.length > 0 &&
+    !invalidFormat &&
+    isSubmittableUsername(username) &&
+    role !== "";
 
   return (
     <ModalLayout title={MODAL_TITLES.addMember(teamName)} isOpen isWide>
@@ -51,6 +63,15 @@ const AddMemberModal = ({
           value={account}
           setValue={setAccount}
           error={invalidFormat ? "올바른 이메일 형식이 아닙니다." : undefined}
+        />
+        <Input
+          id="add-member-username"
+          labelText="사용자 이름 (username)"
+          placeholder="사용자 이름"
+          maxLength={USERNAME_MAX_LENGTH}
+          value={username}
+          setValue={(value) => setUsername(normalizeUsernameInput(value))}
+          error={usernameError}
         />
         <Dropdown
           label="권한 (role)"
@@ -81,7 +102,7 @@ const AddMemberModal = ({
           btnSize="md"
           btnColor="mintFilled"
           disabled={!canSubmit}
-          handleClick={() => onInvite(trimmed, role)}
+          handleClick={() => onInvite(trimmed, role, username.trim())}
         />
       </div>
     </ModalLayout>

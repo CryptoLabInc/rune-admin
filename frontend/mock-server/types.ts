@@ -3,8 +3,12 @@
 
 export type Role = "Admin" | "edit" | "write" | "read";
 
-export type MemberStatus =
-  "online" | "invite_pending" | "invite_expired" | "session_expired";
+export type TInvitationStatus =
+  | "invite_pending"
+  | "invite_expired"
+  | "invite_redeemed";
+
+export type TSessionStatus = "online" | "offline";
 
 export type WorkspacePhase =
   | "provisioning"
@@ -32,7 +36,10 @@ export type Membership = {
 export type User = {
   id: string;
   account: string;
-  status: MemberStatus;
+  // Display name (not an identifier — account stays unique, API 2026-07-20).
+  username: string;
+  invitationStatus: TInvitationStatus;
+  sessionStatus: TSessionStatus;
   lastAccessAt: string | null;
   lastInvitedAt: string | null;
   sessionExpiredAt: string | null;
@@ -41,6 +48,7 @@ export type User = {
 // One row per invitation-code issuance (SC-16). Multiple rows per account.
 export type InvitationRow = {
   account: string;
+  username: string;
   issuedAt: string;
   lastAccessAt: string | null;
 };
@@ -51,6 +59,10 @@ export type Workspace = {
   endpointUrl: string | null;
   rows: number | null;
   createdAt: string | null;
+  // True when the console reinstall left the workspace pinned to a stale
+  // team_secret (backend detects the fingerprint mismatch). The SPA then
+  // offers the delete-and-recreate flow.
+  orphaned: boolean;
 };
 
 export type Principal = {

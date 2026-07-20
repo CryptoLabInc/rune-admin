@@ -1,8 +1,8 @@
 import { cn } from "@/utils/cn";
 
 const styles = {
-  wrap: "flex w-full flex-col gap-2",
-  label: "text-sm font-semibold text-foreground",
+  wrap: "flex w-full flex-col gap-1",
+  label: "pb-1 text-sm font-semibold text-foreground",
   /* Focus is border-color only — no ring shadow (decided 2026-07-13). */
   input:
     "h-9 w-full appearance-none rounded-md border border-border-strong bg-well/50 px-3 text-base text-foreground transition-[border-color] duration-[160ms] outline-none placeholder:text-faint focus:border-mint/55 disabled:cursor-not-allowed disabled:opacity-50",

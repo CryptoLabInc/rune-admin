@@ -33,6 +33,7 @@ router.post("/__mock/session/login", mock.mockLogin);
 router.post("/__mock/session/logout", mock.mockLogout);
 router.post("/__mock/reset", mock.mockReset);
 router.post("/__mock/workspace/fail", mock.mockWorkspaceFail);
+router.post("/__mock/workspace/orphan", mock.mockWorkspaceOrphan);
 router.get("/__mock/state", mock.mockDump);
 
 // ---- Workspace -------------------------------------------------------------
@@ -167,7 +168,7 @@ server.listen(config.port, () => {
     `  auth        : POST /console/auth/start · GET /console/session · POST /console/auth/logout`,
   );
   console.log(
-    `  dev control : POST /__mock/session/{expire,login,logout} · POST /__mock/reset · POST /__mock/workspace/fail?op=… · GET /__mock/state`,
+    `  dev control : POST /__mock/session/{expire,login,logout} · POST /__mock/reset · POST /__mock/workspace/fail?op=… · POST /__mock/workspace/orphan · GET /__mock/state`,
   );
   console.log(
     `  session     : startLoggedIn=${config.startLoggedIn} ttl=${config.sessionTtlMs}ms sliding=${config.sliding} → callback redirects to ${config.appOrigin}`,

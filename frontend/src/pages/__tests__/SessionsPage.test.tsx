@@ -46,14 +46,19 @@ const NULL_ACCOUNTS = [
   "w@corp.com",
 ];
 
+/** Display name for a fixture account ("k@corp.com" → "k 사용자"). */
+const usernameOf = (account: string) => `${account.split("@")[0]} 사용자`;
+
 const ROWS: TInvitationHistoryRow[] = [
   ...CONNECTED_ACCOUNTS.map((account, i) => ({
     account,
+    username: usernameOf(account),
     issuedAt: issuedAt(i),
     lastAccessAt: at(59 - i), // descending recency in list order
   })),
   ...NULL_ACCOUNTS.map((account, i) => ({
     account,
+    username: usernameOf(account),
     issuedAt: issuedAt(20 + i),
     lastAccessAt: null,
   })),
@@ -67,8 +72,8 @@ const errorRes = () => ({ ok: false }) as unknown as Response;
 /** Re-implements the server sort/paging semantics (SC-16) over ROWS. */
 const historyResponse = (sort: string, page: number, size: number) => {
   const rows = ROWS.slice();
-  if (sort === "account") {
-    rows.sort((a, b) => a.account.localeCompare(b.account));
+  if (sort === "username") {
+    rows.sort((a, b) => a.username.localeCompare(b.username));
   } else if (sort === "issued_at") {
     rows.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
   } else {
@@ -115,7 +120,9 @@ describe("SessionsPage", () => {
     /* k@corp.com holds 3 issuances in the fixture; under the default
        last-access sort two of them land on page 1 (the third never
        connected, so it sinks with the "—" rows). */
-    expect(await screen.findAllByText("k@corp.com")).toHaveLength(2);
+    expect(await screen.findAllByText(usernameOf("k@corp.com"))).toHaveLength(
+      2,
+    );
   });
 
   it("sinks never-connected rows to the bottom under the access sort", async () => {
@@ -124,12 +131,14 @@ describe("SessionsPage", () => {
     const { container } = renderPage();
 
     /* Page 1 = most recently accessed 10 — no "—" cells yet. */
-    await screen.findAllByText("k@corp.com");
+    await screen.findAllByText(usernameOf("k@corp.com"));
     expect(screen.queryByText("—")).not.toBeInTheDocument();
 
     /* Last page = the tail of the null-access block ("—" only). */
     await user.click(screen.getByRole("button", { name: "3" }));
-    expect(await screen.findByText("t@corp.com")).toBeInTheDocument();
+    expect(
+      await screen.findByText(usernameOf("t@corp.com")),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("—")).toHaveLength(5);
 
     /* Short pages render only real rows — the frame height is pinned by
@@ -141,7 +150,7 @@ describe("SessionsPage", () => {
     const spy = mockHistorySuccess();
     const user = userEvent.setup();
     renderPage();
-    await screen.findAllByText("k@corp.com");
+    await screen.findAllByText(usernameOf("k@corp.com"));
 
     await user.click(screen.getByRole("button", { name: "3" }));
     expect(screen.getByRole("button", { name: "3" })).toHaveAttribute(
@@ -150,15 +159,17 @@ describe("SessionsPage", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "정렬" }));
-    await user.click(screen.getByRole("option", { name: "이메일 (account)" }));
+    await user.click(screen.getByRole("option", { name: "멤버 이름" }));
 
-    await waitFor(() => expect(spy).toHaveBeenLastCalledWith("account", 1, 10));
+    await waitFor(() =>
+      expect(spy).toHaveBeenLastCalledWith("username", 1, 10),
+    );
     expect(screen.getByRole("button", { name: "1" })).toHaveAttribute(
       "aria-current",
       "page",
     );
-    /* account asc — a@corp.com leads the first page. */
-    expect(await screen.findByText("a@corp.com")).toBeInTheDocument();
+    /* username asc — a@corp.com's row ("a 사용자") leads the first page. */
+    expect(await screen.findByText(usernameOf("a@corp.com"))).toBeInTheDocument();
   });
 
   it("shows the fixed page-size footer", async () => {

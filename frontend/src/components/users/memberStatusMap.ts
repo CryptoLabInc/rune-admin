@@ -1,11 +1,9 @@
 import type { TMemberStatus } from "@/types/commonTypes";
-import type { TTeamMemberStatus } from "@/types/teamTypes";
+import type { TSessionStatus } from "@/types/teamTypes";
 
-/** API wire status (snake_case) → MemberStatus chip state (kebab-case). */
-export const CHIP_STATUS: Record<TTeamMemberStatus, TMemberStatus> = {
+/** API session status → MemberStatus chip state. Identity today, but kept as a
+    seam so the chip vocabulary can diverge from the wire later. */
+export const CHIP_STATUS: Record<TSessionStatus, TMemberStatus> = {
   online: "online",
-  invite_redeemed: "redeemed",
-  invite_pending: "pending",
-  invite_expired: "invite-expired",
-  session_expired: "session-expired",
+  offline: "offline",
 };

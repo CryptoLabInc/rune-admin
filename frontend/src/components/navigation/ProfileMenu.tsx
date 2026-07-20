@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import Button from "@/components/elements/Button";
+import TextButton from "@/components/elements/TextButton";
 import { BTN_TEXT } from "@/constants/commonConstants";
 
 interface ProfileMenuProps {
@@ -78,17 +78,17 @@ const ProfileMenu = ({ me, onSignOut }: ProfileMenuProps) => {
       {open && (
         <div
           role="menu"
-          className="border-border bg-background absolute top-full right-0 z-20 mt-2 flex w-52 flex-col gap-3 rounded-md border p-3 shadow-md"
+          className="border-border bg-background absolute top-full right-0 z-20 mt-2 flex w-60 flex-col gap-3 rounded-md border p-3 shadow-md"
         >
           <div className="text-foreground text-md truncate font-medium">
             {me.email}
           </div>
-          <div className="text-muted-foreground text-xs">플랜: Free</div>
+          <div className="text-subtle text-sm">플랜: Free</div>
           <hr className="border-border my-2" />
-          <Button
+          <TextButton
             btnText={BTN_TEXT.signOut}
-            btnSize="sm"
-            btnColor="grayOutline"
+            className="self-end"
+            tone="gray"
             handleClick={onSignOut}
           />
         </div>

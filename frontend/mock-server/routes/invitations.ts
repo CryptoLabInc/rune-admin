@@ -1,6 +1,12 @@
 // Invitation endpoints (SC-11·12·13·16): invite, resend (single-target),
 // cancel, and the issuance-history list.
-import { HttpError, paginate, parsePaging, sendJson } from "../http.ts";
+import {
+  HttpError,
+  paginate,
+  parsePaging,
+  parseUsername,
+  sendJson,
+} from "../http.ts";
 import type { Ctx } from "../router.ts";
 import { nextId, state } from "../store.ts";
 import type { Role, User } from "../types.ts";
@@ -10,6 +16,7 @@ const GRANTABLE: Role[] = ["edit", "write", "read"];
 export const invite = (ctx: Ctx): void => {
   const body = (ctx.body ?? {}) as {
     account?: unknown;
+    username?: unknown;
     memberships?: Array<{ teamId?: string; role?: string }>;
   };
   const account = typeof body.account === "string" ? body.account.trim() : "";
@@ -17,6 +24,7 @@ export const invite = (ctx: Ctx): void => {
   if (account === "" || !/.+@.+\..+/.test(account)) {
     throw new HttpError(400, "VALIDATION_ERROR", "valid account is required");
   }
+  const username = parseUsername(body.username);
   if (memberships.length === 0) {
     throw new HttpError(
       400,
@@ -50,10 +58,14 @@ export const invite = (ctx: Ctx): void => {
   );
   const isNew = !user;
   if (!user) {
+    // username applies at creation; an existing user keeps the stored name
+    // (account is the identifier — the body's username is not an update).
     user = {
       id: nextId("u"),
       account,
-      status: "invite_pending",
+      username,
+      invitationStatus: "invite_pending",
+      sessionStatus: "offline",
       lastAccessAt: null,
       lastInvitedAt: new Date().toISOString(),
       sessionExpiredAt: null,
@@ -84,16 +96,18 @@ export const invite = (ctx: Ctx): void => {
     });
   }
 
-  // Per-status judgment: online / another-group-pending users get no new code.
+  // Send a fresh code when the member cannot currently get in: no live pending
+  // code AND not online. (invite_pending has a live code; online is already in.)
   const codeSent =
     isNew ||
-    user.status === "session_expired" ||
-    user.status === "invite_expired";
+    (user.invitationStatus !== "invite_pending" &&
+      user.sessionStatus !== "online");
   if (codeSent) {
-    user.status = "invite_pending";
+    user.invitationStatus = "invite_pending";
     user.lastInvitedAt = new Date().toISOString();
     state.invitations.push({
       account: user.account,
+      username: user.username,
       issuedAt: new Date().toISOString(),
       lastAccessAt: null,
     });
@@ -101,7 +115,9 @@ export const invite = (ctx: Ctx): void => {
   sendJson(ctx.res, 201, {
     userId: user.id,
     account: user.account,
-    status: user.status,
+    username: user.username,
+    invitationStatus: user.invitationStatus,
+    sessionStatus: user.sessionStatus,
     codeSent,
   });
 };
@@ -115,32 +131,40 @@ const requireUserById = (userId: string): User => {
 export const resend = (ctx: Ctx): void => {
   const body = (ctx.body ?? {}) as { userId?: unknown };
   const user = requireUserById(String(body.userId ?? ""));
-  // Resend = issue a new code. session_expired -> new token -> invite_pending;
-  // online stays online. A new history row is always added.
-  if (user.status === "session_expired" || user.status === "invite_expired") {
-    user.status = "invite_pending";
-  }
+  // Resend = issue a new code. The latest code is now a fresh pending one,
+  // so invitationStatus always becomes invite_pending; sessionStatus is
+  // untouched. A new history row is always added.
+  user.invitationStatus = "invite_pending";
   user.lastInvitedAt = new Date().toISOString();
   state.invitations.push({
     account: user.account,
+    username: user.username,
     issuedAt: new Date().toISOString(),
     lastAccessAt: null,
   });
-  sendJson(ctx.res, 200, { userId: user.id, status: user.status });
+  sendJson(ctx.res, 200, {
+    userId: user.id,
+    invitationStatus: user.invitationStatus,
+    sessionStatus: user.sessionStatus,
+  });
 };
 
 export const cancel = (ctx: Ctx): void => {
   const body = (ctx.body ?? {}) as { userId?: unknown };
   const user = requireUserById(String(body.userId ?? ""));
-  if (user.status !== "invite_pending") {
+  if (user.invitationStatus !== "invite_pending") {
     throw new HttpError(
       409,
       "INVITATION_NOT_PENDING",
       "user is not in invite_pending",
     );
   }
-  user.status = "invite_expired";
-  sendJson(ctx.res, 200, { userId: user.id, status: user.status });
+  user.invitationStatus = "invite_expired";
+  sendJson(ctx.res, 200, {
+    userId: user.id,
+    invitationStatus: user.invitationStatus,
+    sessionStatus: user.sessionStatus,
+  });
 };
 
 export const invitationHistory = (ctx: Ctx): void => {

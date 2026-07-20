@@ -53,6 +53,7 @@ export const BTN_TEXT = {
   addTeamRole: "+ 팀/권한 추가",
   removeRow: "✕",
   updateChanges: "변경사항 업데이트",
+  resetChanges: "변경사항 초기화",
   deactivateSession: "세션 비활성화",
   deleteMember: "멤버 삭제",
 } as const;
@@ -95,7 +96,7 @@ export const PATH_LIST = {
 export const NAV_LIST = [
   { title: "팀 관리", url: PATH_LIST.teams },
   { title: "멤버 관리", url: PATH_LIST.users },
-  { title: "세션 관리", url: PATH_LIST.sessions },
+  { title: "세션 기록", url: PATH_LIST.sessions },
 ] as const;
 
 export const QUERY_KEYS = {

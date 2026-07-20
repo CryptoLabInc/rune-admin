@@ -36,8 +36,10 @@ const TEAMS: TTeamTree = [
 const member = (overrides: Partial<TTeamMember> = {}): TTeamMember => ({
   userId: "u_1",
   account: "kim@corp.com",
+  username: "김철수",
   role: "edit",
-  status: "online",
+  invitationStatus: "invite_redeemed",
+  sessionStatus: "online",
   joinedAt: "2026-07-02T00:00:00Z",
   ...overrides,
 });
@@ -88,7 +90,45 @@ describe("TreeDetailView", () => {
       }),
     );
     renderView();
-    expect(await screen.findByText("kim@corp.com")).toBeInTheDocument();
+    const username = await screen.findByText("김철수");
+    const row = username.closest("tr");
+    expect(row).not.toBeNull();
+    expect(row!).toHaveTextContent("온라인");
+  });
+
+  it("renders an inherited-read member (null joinedAt) with an em-dash date", async () => {
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 1,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    // The real API lists inherited-read members with role read and a null
+    // joinedAt (no stored membership row — console_api.go memberDTO).
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({
+        total: 1,
+        page: 1,
+        size: 10,
+        items: [
+          member({
+            account: "jung@corp.com",
+            username: "정다은",
+            role: "read",
+            joinedAt: null,
+          }),
+        ],
+      }),
+    );
+    renderView();
+    const username = await screen.findByText("정다은");
+    const row = username.closest("tr");
+    expect(row).not.toBeNull();
+    expect(row!).toHaveTextContent("—");
   });
 
   it("shows a loading row while the members query is pending", () => {
@@ -170,17 +210,18 @@ describe("TreeDetailView", () => {
             member({
               userId: page === 1 ? "u_1" : "u_9",
               account: page === 1 ? "kim@corp.com" : "lee@corp.com",
+              username: page === 1 ? "김철수" : "이영희",
             }),
           ],
         }),
       );
 
     renderView();
-    expect(await screen.findByText("kim@corp.com")).toBeInTheDocument();
+    expect(await screen.findByText("김철수")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "2" }));
     await waitFor(() => expect(listMembers).toHaveBeenCalledWith("t_1", 2, 10));
-    expect(await screen.findByText("lee@corp.com")).toBeInTheDocument();
+    expect(await screen.findByText("이영희")).toBeInTheDocument();
   });
 
   it("resets to page 1 when the selected team changes", async () => {
@@ -206,6 +247,7 @@ describe("TreeDetailView", () => {
             member({
               userId: page === 1 ? "u_1" : "u_9",
               account: page === 1 ? "kim@corp.com" : "lee@corp.com",
+              username: page === 1 ? "김철수" : "이영희",
             }),
           ],
         }),
@@ -215,7 +257,7 @@ describe("TreeDetailView", () => {
       defaultOptions: { queries: { retry: false } },
     });
     const { rerender } = render(treeDetailViewTree(client, "t_1"));
-    expect(await screen.findByText("kim@corp.com")).toBeInTheDocument();
+    expect(await screen.findByText("김철수")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "2" }));
     await waitFor(() => expect(listMembers).toHaveBeenCalledWith("t_1", 2, 10));
@@ -230,7 +272,7 @@ describe("TreeDetailView", () => {
     await waitFor(() =>
       expect(listMembers).toHaveBeenLastCalledWith("t_2", 1, 10),
     );
-    expect(await screen.findByText("kim@corp.com")).toBeInTheDocument();
+    expect(await screen.findByText("김철수")).toBeInTheDocument();
   });
 
   it("creates a team via the API", async () => {
@@ -444,6 +486,7 @@ describe("TreeDetailView", () => {
     renderView();
     await user.click(screen.getByRole("button", { name: BTN_TEXT.addMember }));
     await user.type(screen.getByLabelText("이메일 (account)"), "kim@corp.com");
+    await user.type(screen.getByLabelText("사용자 이름 (username)"), "김철수");
     await user.click(screen.getByLabelText("권한 (role)"));
     await user.click(screen.getByRole("option", { name: "edit" }));
     await user.click(screen.getByRole("button", { name: BTN_TEXT.invite }));
@@ -480,6 +523,7 @@ describe("TreeDetailView", () => {
     renderView();
     await user.click(screen.getByRole("button", { name: BTN_TEXT.addMember }));
     await user.type(screen.getByLabelText("이메일 (account)"), "kim@corp.com");
+    await user.type(screen.getByLabelText("사용자 이름 (username)"), "김철수");
     await user.click(screen.getByLabelText("권한 (role)"));
     await user.click(screen.getByRole("option", { name: "edit" }));
     await user.click(screen.getByRole("button", { name: BTN_TEXT.invite }));
@@ -512,7 +556,7 @@ describe("TreeDetailView", () => {
     );
     const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     renderView();
-    await screen.findByText("kim@corp.com");
+    await screen.findByText("김철수");
     await user.click(screen.getByLabelText("kim@corp.com role"));
     await user.click(screen.getByRole("option", { name: "read" }));
     await user.click(
@@ -526,6 +570,48 @@ describe("TreeDetailView", () => {
         "success",
       ),
     );
+  });
+
+  it("resets every staged role pick back to the saved value via 변경사항 초기화", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(teamAPIs, "getTeam").mockResolvedValue(
+      jsonRes({
+        id: "t_1",
+        name: "Platform",
+        parentId: null,
+        children: [],
+        memberCount: 1,
+        createdAt: "2026-07-01T00:00:00Z",
+      }),
+    );
+    vi.spyOn(teamMemberAPIs, "listTeamMembers").mockResolvedValue(
+      jsonRes({ total: 1, page: 1, size: 10, items: [member()] }),
+    );
+    const bulk = vi.spyOn(teamMemberAPIs, "bulkRoleChange");
+    renderView();
+    await screen.findByText("김철수");
+
+    const reset = screen.getByRole("button", { name: BTN_TEXT.resetChanges });
+    expect(reset).toBeDisabled(); // nothing staged yet
+
+    await user.click(screen.getByLabelText("kim@corp.com role"));
+    await user.click(screen.getByRole("option", { name: "read" }));
+    expect(screen.getByLabelText("kim@corp.com role")).toHaveTextContent(
+      "read",
+    );
+    await user.click(reset);
+
+    /* The staged pick is gone: the dropdown shows the saved role again
+       and both staged-change buttons drop back to disabled. No server
+       call is involved — reset is purely client-side staging. */
+    expect(screen.getByLabelText("kim@corp.com role")).toHaveTextContent(
+      "edit",
+    );
+    expect(reset).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: BTN_TEXT.updateChanges }),
+    ).toBeDisabled();
+    expect(bulk).not.toHaveBeenCalled();
   });
 
   it("shows a failure notice when the bulk role-change request errors", async () => {
@@ -550,7 +636,7 @@ describe("TreeDetailView", () => {
     } as unknown as Response);
     const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     renderView();
-    await screen.findByText("kim@corp.com");
+    await screen.findByText("김철수");
     await user.click(screen.getByLabelText("kim@corp.com role"));
     await user.click(screen.getByRole("option", { name: "read" }));
     await user.click(
@@ -586,7 +672,7 @@ describe("TreeDetailView", () => {
     );
     const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     renderView();
-    await screen.findByText("kim@corp.com");
+    await screen.findByText("김철수");
     await user.click(
       screen.getByRole("checkbox", { name: "kim@corp.com 선택" }),
     );
@@ -626,7 +712,7 @@ describe("TreeDetailView", () => {
     } as unknown as Response);
     const showNoticeSpy = vi.spyOn(useNoticeStore.getState(), "showNotice");
     renderView();
-    await screen.findByText("kim@corp.com");
+    await screen.findByText("김철수");
     await user.click(
       screen.getByRole("checkbox", { name: "kim@corp.com 선택" }),
     );
@@ -705,7 +791,7 @@ describe("TreeDetailView", () => {
       }),
     );
     renderView();
-    await screen.findByText("kim@corp.com");
+    await screen.findByText("김철수");
     await user.click(
       screen.getByRole("checkbox", { name: "kim@corp.com 선택" }),
     );

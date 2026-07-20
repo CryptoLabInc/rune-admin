@@ -79,13 +79,17 @@ export const BADGE_TONE_VAR = {
   neutral: "bg-muted-foreground/12 text-muted-foreground",
 } as const;
 
-/* Status chips — semantic colors are state, not decoration. */
+/* Session chips — the only status a list view shows. */
 export const MEMBER_STATUS_VAR = {
   online: { label: "온라인", color: "text-mint" },
-  redeemed: { label: "초대 코드 사용됨", color: "text-accent-blue" },
-  pending: { label: "초대 수락 대기", color: "text-warning" },
-  "invite-expired": { label: "초대 코드 만료", color: "text-faint" },
-  "session-expired": { label: "세션 만료", color: "text-negative" },
+  offline: { label: "오프라인", color: "text-faint" },
+} as const;
+
+/* Invitation-status labels — shown only in the member detail drawer. */
+export const INVITATION_STATUS_VAR = {
+  invite_pending: { label: "초대 수락 대기", color: "text-warning" },
+  invite_expired: { label: "초대 코드 만료", color: "text-faint" },
+  invite_redeemed: { label: "초대 코드 사용됨", color: "text-accent-blue" },
 } as const;
 
 export const WORKSPACE_STATUS_VAR = {

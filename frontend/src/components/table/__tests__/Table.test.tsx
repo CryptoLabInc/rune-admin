@@ -17,8 +17,8 @@ const renderTable = (rows: React.ReactNode) =>
       foot={<TableFoot info="총 23명 · 10명/페이지" />}
     >
       <TableHead>
-        <TableHeaderCell>account</TableHeaderCell>
-        <TableHeaderCell>status</TableHeaderCell>
+        <TableHeaderCell>멤버 이름</TableHeaderCell>
+        <TableHeaderCell>멤버 상태</TableHeaderCell>
       </TableHead>
       <tbody>{rows}</tbody>
     </Table>,
@@ -35,7 +35,7 @@ describe("Table", () => {
     expect(screen.getByText("사용자")).toBeInTheDocument();
     expect(screen.getByText("23")).toBeInTheDocument();
     expect(
-      screen.getByRole("columnheader", { name: "account" }),
+      screen.getByRole("columnheader", { name: "멤버 이름" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("cell", { name: "k@corp.com" }),

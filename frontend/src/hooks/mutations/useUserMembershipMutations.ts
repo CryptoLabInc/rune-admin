@@ -9,8 +9,9 @@ import {
 import { QUERY_KEYS } from "@/constants/commonConstants";
 import {
   type TBatchResult,
+  type TInvitationStatus,
+  type TSessionStatus,
   type TTeamMemberRole,
-  type TTeamMemberStatus,
 } from "@/types/teamTypes";
 
 /** Keys touched when a user's membership or session changes: its detail,
@@ -79,7 +80,11 @@ export const useRemoveUserMemberships = (userId: string) => {
 export const useDeactivateUserSession = (userId: string) => {
   const invalidate = useInvalidateUserMembership(userId);
   return useMutation<
-    { userId: string; status: TTeamMemberStatus },
+    {
+      userId: string;
+      invitationStatus: TInvitationStatus;
+      sessionStatus: TSessionStatus;
+    },
     Response,
     void
   >({
@@ -88,7 +93,8 @@ export const useDeactivateUserSession = (userId: string) => {
       if (!res.ok) throw res;
       return (await res.json()) as {
         userId: string;
-        status: TTeamMemberStatus;
+        invitationStatus: TInvitationStatus;
+        sessionStatus: TSessionStatus;
       };
     },
     onSuccess: invalidate,

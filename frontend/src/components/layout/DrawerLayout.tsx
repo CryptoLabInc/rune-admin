@@ -5,10 +5,10 @@ const styles = {
   scrim: "bg-scrim/60 fixed inset-0 z-80 flex justify-end backdrop-blur-[6px]",
   panel:
     "border-muted-foreground/26 animate-drawer-slide flex h-full w-[472px] flex-col border-l bg-[color:color-mix(in_srgb,var(--color-panel-solid)_60%,var(--color-well))] shadow-[-24px_0_70px_rgba(0,0,0,0.38)] motion-reduce:animate-none",
-  header: "relative border-b p-5 pb-4",
+  header: "relative flex flex-col gap-4 border-b p-5 pb-4",
   eyebrow: "text-tag text-mint m-0 mb-2 font-mono tracking-[0.11em]",
   title: "text-xl font-semibold",
-  subtitle: "text-faint mt-2 block font-mono text-xs",
+  subtitle: "text-subtle block font-mono text-sm",
   body: "flex-1 overflow-auto p-5 flex-col gap-6 flex",
   footer:
     "bg-muted-foreground/[2%] grid grid-cols-[minmax(0,92px)_minmax(0,1fr)] gap-2 border-t px-[22px] py-[14px]",

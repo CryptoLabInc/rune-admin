@@ -2,7 +2,7 @@
 // async workspace phase transitions. State resets whenever the process
 // restarts (or via POST /__mock/reset).
 import { config } from "./config.ts";
-import { isoIn } from "./http.ts";
+import { HttpError, isoIn } from "./http.ts";
 import type {
   InvitationRow,
   Membership,
@@ -47,68 +47,32 @@ const seedTeams = (): Team[] => [
 
 type Seed = {
   account: string;
-  status: User["status"];
+  username: string;
+  invitationStatus: User["invitationStatus"];
+  sessionStatus: User["sessionStatus"];
   teams: Array<[string, Membership["role"]]>;
 };
 
 // 14 users with varied statuses + memberships so that pagination (size 10),
-// status filters, and team filters all have something to show.
+// status filters, and team filters all have something to show. Usernames mix
+// hangul and lowercase-latin forms (the two alphabets the rule allows).
 const USER_SEED: Seed[] = [
-  {
-    account: "kim@corp.com",
-    status: "online",
-    teams: [
-      ["t_1", "edit"],
-      ["t_2", "write"],
-    ],
-  },
-  { account: "lee@corp.com", status: "online", teams: [["t_1", "read"]] },
-  {
-    account: "park@corp.com",
-    status: "invite_pending",
-    teams: [["t_2", "read"]],
-  },
-  { account: "choi@corp.com", status: "online", teams: [["t_3", "edit"]] },
-  {
-    account: "jung@corp.com",
-    status: "session_expired",
-    teams: [
-      ["t_1", "write"],
-      ["t_3", "read"],
-    ],
-  },
-  {
-    account: "kang@corp.com",
-    status: "invite_expired",
-    teams: [["t_4", "read"]],
-  },
-  {
-    account: "cho@corp.com",
-    status: "online",
-    teams: [
-      ["t_4", "edit"],
-      ["t_5", "edit"],
-    ],
-  },
-  {
-    account: "yoon@corp.com",
-    status: "invite_pending",
-    teams: [["t_5", "read"]],
-  },
-  { account: "jang@corp.com", status: "online", teams: [["t_2", "read"]] },
-  { account: "lim@corp.com", status: "online", teams: [["t_3", "write"]] },
-  {
-    account: "han@corp.com",
-    status: "session_expired",
-    teams: [["t_1", "read"]],
-  },
-  {
-    account: "oh@corp.com",
-    status: "invite_pending",
-    teams: [["t_4", "write"]],
-  },
-  { account: "seo@corp.com", status: "online", teams: [["t_5", "read"]] },
-  { account: "shin@corp.com", status: "online", teams: [] }, // zero-team user (allowed)
+  { account: "kim@corp.com", username: "김철수", invitationStatus: "invite_redeemed", sessionStatus: "online", teams: [["t_1", "edit"], ["t_2", "write"]] },
+  { account: "lee@corp.com", username: "lee young hee", invitationStatus: "invite_redeemed", sessionStatus: "online", teams: [["t_1", "read"]] },
+  { account: "park@corp.com", username: "박민준", invitationStatus: "invite_pending", sessionStatus: "offline", teams: [["t_2", "read"]] },
+  { account: "choi@corp.com", username: "최지우", invitationStatus: "invite_redeemed", sessionStatus: "online", teams: [["t_3", "edit"]] },
+  { account: "jung@corp.com", username: "정다은", invitationStatus: "invite_redeemed", sessionStatus: "offline", teams: [["t_1", "write"], ["t_3", "read"]] },
+  { account: "kang@corp.com", username: "강호진", invitationStatus: "invite_expired", sessionStatus: "offline", teams: [["t_4", "read"]] },
+  { account: "cho@corp.com", username: "cho min soo", invitationStatus: "invite_redeemed", sessionStatus: "online", teams: [["t_4", "edit"], ["t_5", "edit"]] },
+  { account: "yoon@corp.com", username: "윤아름", invitationStatus: "invite_pending", sessionStatus: "offline", teams: [["t_5", "read"]] },
+  { account: "jang@corp.com", username: "장원석", invitationStatus: "invite_redeemed", sessionStatus: "online", teams: [["t_2", "read"]] },
+  { account: "lim@corp.com", username: "임재현", invitationStatus: "invite_redeemed", sessionStatus: "online", teams: [["t_3", "write"]] },
+  { account: "han@corp.com", username: "한지민", invitationStatus: "invite_redeemed", sessionStatus: "offline", teams: [["t_1", "read"]] },
+  { account: "oh@corp.com", username: "오세영", invitationStatus: "invite_pending", sessionStatus: "offline", teams: [["t_4", "write"]] },
+  // invite_redeemed + offline: code used (token released) but the agent has
+  // never authenticated — the "초대 코드 사용됨 · 연결 대기 중" state.
+  { account: "seo@corp.com", username: "서준호", invitationStatus: "invite_redeemed", sessionStatus: "offline", teams: [["t_5", "read"]] },
+  { account: "shin@corp.com", username: "신동혁", invitationStatus: "invite_redeemed", sessionStatus: "online", teams: [] },
 ];
 
 const seedUsersAndMemberships = (): {
@@ -122,13 +86,23 @@ const seedUsersAndMemberships = (): {
     users.push({
       id,
       account: s.account,
-      status: s.status,
-      lastAccessAt: s.status === "online" ? daysAgo(i % 5) : null,
+      username: s.username,
+      invitationStatus: s.invitationStatus,
+      sessionStatus: s.sessionStatus,
+      lastAccessAt: s.sessionStatus === "online" ? daysAgo(i % 5) : null,
+      // Any offline member that once redeemed but is not currently online may
+      // carry an invited stamp; pending/expired always do.
       lastInvitedAt:
-        s.status === "invite_pending" || s.status === "invite_expired"
+        s.invitationStatus === "invite_pending" ||
+        s.invitationStatus === "invite_expired" ||
+        s.invitationStatus === "invite_redeemed"
           ? daysAgo((i % 4) + 1)
           : null,
-      sessionExpiredAt: s.status === "session_expired" ? daysAgo(i % 3) : null,
+      // A redeemed member that is now offline models a destroyed session.
+      sessionExpiredAt:
+        s.invitationStatus === "invite_redeemed" && s.sessionStatus === "offline"
+          ? daysAgo(i % 3)
+          : null,
     });
     for (const [teamId, role] of s.teams)
       memberships.push({
@@ -142,11 +116,36 @@ const seedUsersAndMemberships = (): {
 };
 
 const seedInvitations = (): InvitationRow[] => [
-  { account: "park@corp.com", issuedAt: daysAgo(3), lastAccessAt: daysAgo(2) },
-  { account: "yoon@corp.com", issuedAt: daysAgo(2), lastAccessAt: null },
-  { account: "oh@corp.com", issuedAt: daysAgo(1), lastAccessAt: null },
-  { account: "kang@corp.com", issuedAt: daysAgo(6), lastAccessAt: daysAgo(5) },
-  { account: "park@corp.com", issuedAt: daysAgo(1), lastAccessAt: null }, // second issuance
+  {
+    account: "park@corp.com",
+    username: "박민준",
+    issuedAt: daysAgo(3),
+    lastAccessAt: daysAgo(2),
+  },
+  {
+    account: "yoon@corp.com",
+    username: "윤아름",
+    issuedAt: daysAgo(2),
+    lastAccessAt: null,
+  },
+  {
+    account: "oh@corp.com",
+    username: "오세영",
+    issuedAt: daysAgo(1),
+    lastAccessAt: null,
+  },
+  {
+    account: "kang@corp.com",
+    username: "강호진",
+    issuedAt: daysAgo(6),
+    lastAccessAt: daysAgo(5),
+  },
+  {
+    account: "park@corp.com",
+    username: "박민준",
+    issuedAt: daysAgo(1),
+    lastAccessAt: null,
+  }, // second issuance
 ];
 
 const freshSession = (): Session =>
@@ -170,8 +169,9 @@ const buildState = (): State => {
       exists: true,
       phase: "running",
       endpointUrl: "https://mock-abc123.workspace.runespace.cloud:443",
-      rows: 1204,
+      rows: 840,
       createdAt: daysAgo(12),
+      orphaned: false,
     },
     workspaceFail: new Map(),
     session: freshSession(),
@@ -258,6 +258,18 @@ export const consumeWorkspaceFail = (
   if (!armed) return null;
   state.workspaceFail.delete(op);
   return armed;
+};
+
+/**
+ * markWorkspaceOrphaned simulates a console reinstall: the workspace's stored
+ * team_secret fingerprint no longer matches, so GET /workspace reports
+ * orphaned=true until the delete-and-recreate flow runs.
+ */
+export const markWorkspaceOrphaned = (): void => {
+  if (!state.workspace.exists) {
+    throw new HttpError(404, "WORKSPACE_NOT_FOUND", "no workspace exists");
+  }
+  state.workspace.orphaned = true;
 };
 
 // ---- workspace phase transitions -------------------------------------------

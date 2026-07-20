@@ -9,6 +9,7 @@ import {
   getSession,
   login,
   logout,
+  markWorkspaceOrphaned,
   resetState,
   state,
 } from "../store.ts";
@@ -59,6 +60,20 @@ export const mockWorkspaceFail = (ctx: Ctx): void => {
   const code = ctx.query.get("code") ?? "CLOUD_UPSTREAM_ERROR";
   armWorkspaceFail(op, status, code);
   sendJson(ctx.res, 200, { ok: true, armed: { op, status, code } });
+};
+
+/**
+ * mockWorkspaceOrphan flags the current workspace as orphaned (team_secret
+ * fingerprint mismatch after a console reinstall) so the frontend can
+ * reproduce the delete-and-recreate flow. Cleared by the recreate itself
+ * (POST /api/v1/workspace) or POST /__mock/reset.
+ */
+export const mockWorkspaceOrphan = (ctx: Ctx): void => {
+  markWorkspaceOrphaned();
+  sendJson(ctx.res, 200, {
+    ok: true,
+    note: "workspace flagged orphaned; recreate or reset to clear",
+  });
 };
 
 /**

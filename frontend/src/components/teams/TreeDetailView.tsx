@@ -34,14 +34,11 @@ import {
 import { useTeamMembersQuery } from "@/hooks/queries/useTeamMembersQuery";
 import { useTeamQuery } from "@/hooks/queries/useTeamQuery";
 import { parseErrorCode } from "@/api/parseError";
+import { CHIP_STATUS } from "@/components/users/memberStatusMap";
 import { formatDate } from "@/utils/formatDate";
 import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
-import type { TMemberStatus, TTeamNode } from "@/types/commonTypes";
-import type {
-  TTeamMemberRole,
-  TTeamMemberStatus,
-  TTeamTree,
-} from "@/types/teamTypes";
+import type { TTeamNode } from "@/types/commonTypes";
+import type { TTeamMemberRole, TTeamTree } from "@/types/teamTypes";
 import { useNoticeStore } from "@/stores/noticeStore";
 
 const styles = {
@@ -56,21 +53,12 @@ const styles = {
   teamMeta: "text-sm text-muted-foreground mt-1.5",
   membersRow: "flex items-center gap-2",
   membersTitle: "text-md flex-1 font-semibold",
-  /* The detail panel is narrower than the users page — typical corp
-     emails fit the 36% column; longer ones truncate with an ellipsis
-     and keep the full address in the title tooltip. */
-  accountCell: "max-w-[280px] truncate cursor-default",
+  /* The detail panel is narrower than the users page — typical names
+     fit the 36% column; longer ones truncate with an ellipsis and
+     keep the full name in the title tooltip. */
+  usernameCell: "max-w-[280px] truncate cursor-default",
   timeCell: "text-faint font-mono text-xs whitespace-nowrap",
   pendingActions: "flex flex-wrap items-center gap-2",
-};
-
-/** API wire status (snake_case) → MemberStatus chip state (kebab-case). */
-const CHIP_STATUS: Record<TTeamMemberStatus, TMemberStatus> = {
-  online: "online",
-  invite_redeemed: "redeemed",
-  invite_pending: "pending",
-  invite_expired: "invite-expired",
-  session_expired: "session-expired",
 };
 
 type TActiveModal =
@@ -367,10 +355,10 @@ const TreeDetailView = ({
       },
     );
   };
-  const handleInvite = (account: string, role: string) => {
+  const handleInvite = (account: string, role: string, username: string) => {
     setAddError(null);
     addMember.mutate(
-      { account, role: role as TTeamMemberRole },
+      { account, role: role as TTeamMemberRole, username },
       {
         onSuccess: () => {
           closeModal();
@@ -528,6 +516,16 @@ const TreeDetailView = ({
         <div className={styles.membersRow}>
           <h3 className={styles.membersTitle}>멤버 ({total})</h3>{" "}
           <div className={styles.pendingActions}>
+            {/* Drops every staged (not yet applied) dropdown pick back to
+                its saved role — the committed savedRoles baseline stays. */}
+            <Button
+              btnText={BTN_TEXT.resetChanges}
+              btnSize="sm"
+              btnColor="grayOutline"
+              className="w-fit"
+              disabled={pendingRoles.size === 0}
+              handleClick={() => setPendingRoles(new Map())}
+            />
             <Button
               btnText={BTN_TEXT.updateChanges}
               btnSize="sm"
@@ -582,9 +580,9 @@ const TreeDetailView = ({
             </TableHeaderCell>
             {/* Fixed column widths — auto layout would resize per
                 page's content and shift the headers while paginating. */}
-            <TableHeaderCell className="w-[36%]">account</TableHeaderCell>
-            <TableHeaderCell className="w-[18%]">status</TableHeaderCell>
-            <TableHeaderCell className="w-[28%]">role</TableHeaderCell>
+            <TableHeaderCell className="w-[36%]">멤버 이름</TableHeaderCell>
+            <TableHeaderCell className="w-[18%]">멤버 상태</TableHeaderCell>
+            <TableHeaderCell className="w-[28%]">역할</TableHeaderCell>
             <TableHeaderCell className="w-[18%]">합류일</TableHeaderCell>
           </TableHead>
           <tbody>
@@ -625,11 +623,11 @@ const TreeDetailView = ({
                       ariaLabel={`${member.account} 선택`}
                     />
                   </TableCell>
-                  <TableCell className={styles.accountCell}>
-                    <span title={member.account}>{member.account}</span>
+                  <TableCell className={styles.usernameCell}>
+                    <span title={member.username}>{member.username}</span>
                   </TableCell>
                   <TableCell>
-                    <MemberStatus status={CHIP_STATUS[member.status]} />
+                    <MemberStatus status={CHIP_STATUS[member.sessionStatus]} />
                   </TableCell>
                   <TableCell>
                     <Dropdown

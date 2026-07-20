@@ -41,7 +41,7 @@ const RemoveMembershipModal = ({
         <table className={styles.table}>
           <thead>
             <tr>
-              <th className={styles.th}>account</th>
+              <th className={styles.th}>멤버 이름</th>
               <th className={styles.th}>팀</th>
               <th className={styles.th}>권한</th>
             </tr>

@@ -5,6 +5,7 @@ import Button from "@/components/elements/Button";
 import Checkbox from "@/components/elements/Checkbox";
 import Dropdown from "@/components/elements/Dropdown";
 import MemberStatus from "@/components/elements/MemberStatus";
+import StatusBadge from "@/components/elements/StatusBadge";
 import DrawerLayout from "@/components/layout/DrawerLayout";
 import Table from "@/components/table/Table";
 import TableCell from "@/components/table/TableCell";
@@ -23,6 +24,7 @@ import SessionDeactivateModal from "@/components/users/SessionDeactivateModal";
 import { parseErrorCode } from "@/api/parseError";
 import { formatDate, formatDateTime } from "@/utils/formatDate";
 import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
+import { INVITATION_STATUS_VAR } from "@/constants/styleConstants";
 import type { TBatchResult, TTeamTree } from "@/types/teamTypes";
 import type { TUserListItem } from "@/types/userTypes";
 import { useNoticeStore } from "@/stores/noticeStore";
@@ -36,25 +38,23 @@ const styles = {
   selectedCount: "text-accent-blue text-tag font-mono",
   /* Action bar below the table: 변경사항 업데이트 · 제거하기 · 팀 추가하기. */
   bulkRow: "pt-2 flex justify-end gap-2",
-  /* Right-aligned action block; 멤버 삭제 (danger) sits on the second
-     row in the third column, directly below 세션 비활성화 — kept away
-     from the footer's 닫기 to avoid a destructive mis-click. */
+  /* Team+role picker row opened by [팀 추가하기]. */
   addRow:
     "bg-muted-foreground/[2%] mb-2 flex items-center gap-2 rounded-md border p-2",
 };
 
-/** Per-status header timestamp (SC-13 no.1 — D13). */
+/** Per-status header timestamp (SC-13 no.1 — D13). Session takes priority:
+    an online member shows last access; otherwise the invitation axis drives it. */
 const subtitleFor = (user: TUserListItem): string => {
-  switch (user.status) {
-    case "online":
-      return `최근 접속 ${formatDate(user.lastAccessAt)}`;
+  if (user.sessionStatus === "online") {
+    return `최근 접속 ${formatDate(user.lastAccessAt)}`;
+  }
+  switch (user.invitationStatus) {
     case "invite_redeemed":
-      return "초대코드 사용됨 · 연결 대기 중";
+      return "초대 코드 사용됨 · 연결 대기 중";
     case "invite_pending":
     case "invite_expired":
       return `최근 초대 코드 발송 ${formatDateTime(user.lastInvitedAt)}`;
-    case "session_expired":
-      return `세션 만료 ${formatDateTime(user.sessionExpiredAt)}`;
   }
 };
 
@@ -242,16 +242,9 @@ const MemberDetailDrawer = ({
     <>
       <DrawerLayout
         isOpen
-        title={user.account}
-        headerAction={
-          <Button
-            btnText={BTN_TEXT.deleteMember}
-            btnSize="sm"
-            btnColor="redFilled"
-            className="w-fit"
-            handleClick={() => setOpenModal("delete")}
-          />
-        }
+        title={user.username}
+        subtitle={user.account}
+        headerAction={<MemberStatus status={CHIP_STATUS[user.sessionStatus]} />}
         onClose={onClose}
         footer={
           <div className="col-span-2 flex justify-end">
@@ -267,7 +260,10 @@ const MemberDetailDrawer = ({
       >
         <div className="flex flex-col gap-2">
           <div className={styles.statusRow}>
-            <MemberStatus status={CHIP_STATUS[user.status]} />
+            <StatusBadge
+              label={INVITATION_STATUS_VAR[user.invitationStatus].label}
+              color={INVITATION_STATUS_VAR[user.invitationStatus].color}
+            />
             <span className={styles.accessTime}>{subtitleFor(user)}</span>
           </div>
 
@@ -288,18 +284,8 @@ const MemberDetailDrawer = ({
                 btnSize="sm"
                 btnColor="grayOutline"
                 className="w-fit"
-                disabled={user.status !== "invite_pending"}
+                disabled={user.invitationStatus !== "invite_pending"}
                 handleClick={() => setOpenModal("cancel-invitation")}
-              />
-              {/* Destroys the session token → 세션 만료 (D12; confirm
-              dialog follows). Disabled once already expired (D13). */}
-              <Button
-                btnText={BTN_TEXT.deactivateSession}
-                btnSize="sm"
-                btnColor="redOutline"
-                className="w-fit"
-                disabled={user.status === "session_expired"}
-                handleClick={() => setOpenModal("deactivate")}
               />
             </div>
           </div>
@@ -309,7 +295,7 @@ const MemberDetailDrawer = ({
 
         <section className="flex flex-col gap-4">
           <div className={styles.sectionHead}>
-            <b className="text-sm">소속 팀 ({memberships.length})</b>
+            <b className="text-md">소속 팀 ({memberships.length})</b>
             {selected.length > 0 && (
               <span className={styles.selectedCount}>
                 {selected.length} selected
@@ -361,8 +347,23 @@ const MemberDetailDrawer = ({
             </tbody>
           </Table>
 
-          {/* Action bar: 변경사항 업데이트 · 제거하기 · 팀 추가하기 (SC-13). */}
+          {/* Action bar: 변경사항 초기화 · 변경사항 업데이트 · 제거하기 ·
+              팀 추가하기 (SC-13). */}
           <div className={styles.bulkRow}>
+            {/* Drops every staged (not yet applied) role pick back to its
+                saved value — checkboxes and committed roles stay. */}
+            <Button
+              btnText={BTN_TEXT.resetChanges}
+              btnSize="sm"
+              btnColor="grayOutline"
+              className="w-fit"
+              disabled={changes.length === 0}
+              handleClick={() =>
+                setMemberships((prev) =>
+                  prev.map((m) => ({ ...m, role: m.baseRole })),
+                )
+              }
+            />
             <Button
               btnText={BTN_TEXT.updateChanges}
               btnSize="sm"
@@ -426,6 +427,38 @@ const MemberDetailDrawer = ({
               />
             </div>
           )}
+        </section>
+
+        <hr />
+
+        <section className="flex flex-col gap-4">
+          <div className={styles.sectionHead}>
+            <b className="text-md">멤버 관리</b>
+          </div>
+
+          {/* Account-level actions: 세션 비활성화 · 멤버 삭제 (SC-15) —
+              moved out of the header/status rows so they live with member
+              management, still away from the footer's 닫기. */}
+          <div className={styles.bulkRow}>
+            {/* Destroys the session token → 세션 만료 (D12; confirm
+                dialog follows). Enabled only while sessionStatus is
+                "online" (D13). */}
+            <Button
+              btnText={BTN_TEXT.deactivateSession}
+              btnSize="sm"
+              btnColor="redOutline"
+              className="w-fit"
+              disabled={user.sessionStatus !== "online"}
+              handleClick={() => setOpenModal("deactivate")}
+            />
+            <Button
+              btnText={BTN_TEXT.deleteMember}
+              btnSize="sm"
+              btnColor="redFilled"
+              className="w-fit"
+              handleClick={() => setOpenModal("delete")}
+            />
+          </div>
         </section>
       </DrawerLayout>
 

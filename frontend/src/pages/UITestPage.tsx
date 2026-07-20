@@ -12,8 +12,8 @@ import Notice from "@/components/elements/Notice";
 import Pagination from "@/components/elements/Pagination";
 import Radio from "@/components/elements/Radio";
 import SearchInput from "@/components/elements/SearchInput";
-import WorkspaceStatus from "@/components/elements/WorkspaceStatus";
 import TextButton from "@/components/elements/TextButton";
+import WorkspaceStatus from "@/components/elements/WorkspaceStatus";
 import DrawerLayout from "@/components/layout/DrawerLayout";
 import ModalLayout from "@/components/layout/ModalLayout";
 import Table from "@/components/table/Table";
@@ -30,15 +30,17 @@ import { cn } from "@/utils/cn";
 import { BTN_TEXT } from "@/constants/commonConstants";
 import {
   BTN_HOT_VAR,
+  INVITATION_STATUS_VAR,
   MEMBER_STATUS_VAR,
   WORKSPACE_STATUS_VAR,
 } from "@/constants/styleConstants";
 import type {
   TMemberStatus,
-  TWorkspaceStatus,
   TTeamNode,
+  TWorkspaceStatus,
 } from "@/types/commonTypes";
 import type { TBTNColor } from "@/types/styleTypes";
+import type { TInvitationStatus } from "@/types/teamTypes";
 import { useToastStore } from "@/stores/toastStore";
 
 type TUITestModal = "alert" | "confirm" | "wide" | "scroll" | null;
@@ -86,7 +88,7 @@ const TABLE_ROWS: {
   },
   {
     account: "a@corp.com",
-    status: "pending",
+    status: "offline",
     teams: "A · read",
     role: "read",
     invitedAt: "2026-07-05 18:20",
@@ -101,7 +103,7 @@ const TABLE_ROWS: {
   },
   {
     account: "c@corp.com",
-    status: "session-expired",
+    status: "offline",
     teams: "c · read",
     role: "read",
     invitedAt: "2026-07-01 10:10",
@@ -534,16 +536,36 @@ const UITestPage = () => {
         </div>
       </Section>
 
-      <Section title="MemberStatus / WorkspaceStatus" note="시맨틱 컬러 = 상태">
+      <Section
+        title="MemberStatus / WorkspaceStatus"
+        note="시맨틱 컬러 = 상태 (세션: 온라인/오프라인)"
+      >
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
           {(Object.keys(MEMBER_STATUS_VAR) as TMemberStatus[]).map((s) => (
             <MemberStatus key={s} status={s} />
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-          {(Object.keys(WORKSPACE_STATUS_VAR) as TWorkspaceStatus[]).map((s) => (
-            <WorkspaceStatus key={s} status={s} />
-          ))}
+          {(Object.keys(WORKSPACE_STATUS_VAR) as TWorkspaceStatus[]).map(
+            (s) => (
+              <WorkspaceStatus key={s} status={s} />
+            ),
+          )}
+        </div>
+      </Section>
+
+      <Section
+        title="InvitationStatus"
+        note="초대 코드 라벨 — 멤버 상세 드로어에만 노출"
+      >
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+          {(Object.keys(INVITATION_STATUS_VAR) as TInvitationStatus[]).map(
+            (s) => (
+              <span key={s} className={INVITATION_STATUS_VAR[s].color}>
+                {INVITATION_STATUS_VAR[s].label}
+              </span>
+            ),
+          )}
         </div>
       </Section>
 
@@ -595,10 +617,10 @@ const UITestPage = () => {
                 ariaLabel="전체 선택"
               />
             </TableHeaderCell>
-            <TableHeaderCell>account</TableHeaderCell>
-            <TableHeaderCell>status</TableHeaderCell>
-            <TableHeaderCell>teams (role)</TableHeaderCell>
-            <TableHeaderCell>role</TableHeaderCell>
+            <TableHeaderCell>멤버 이름</TableHeaderCell>
+            <TableHeaderCell>멤버 상태</TableHeaderCell>
+            <TableHeaderCell>팀 (권한)</TableHeaderCell>
+            <TableHeaderCell>권한</TableHeaderCell>
             <TableHeaderCell>최근 초대 코드 발송</TableHeaderCell>
           </TableHead>
           <tbody>
@@ -669,8 +691,8 @@ const UITestPage = () => {
           }
         >
           <TableHead>
-            <TableHeaderCell>account</TableHeaderCell>
-            <TableHeaderCell>발급 시간</TableHeaderCell>
+            <TableHeaderCell>멤버 이름</TableHeaderCell>
+            <TableHeaderCell>초대 코드 발송 시간</TableHeaderCell>
             <TableHeaderCell>최근 접속 시간</TableHeaderCell>
           </TableHead>
           <tbody>

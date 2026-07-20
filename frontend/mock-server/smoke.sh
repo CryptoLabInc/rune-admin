@@ -49,6 +49,10 @@ check "POST /__mock/workspace/fail?op=stop"  200 -X POST "$BASE/__mock/workspace
 check "POST /workspace/stop (injected 502)"  502 -X POST "$BASE/api/v1/workspace/stop"
 check "POST /__mock/workspace/fail bad op"   400 -X POST "$BASE/__mock/workspace/fail?op=bogus"
 
+echo "== workspace orphan flag =="
+check "POST /__mock/workspace/orphan"        200 -X POST "$BASE/__mock/workspace/orphan"
+curl -s -X POST "$BASE/__mock/reset" >/dev/null
+
 echo "== teams =="
 check "GET  /api/v1/teams/tree"              200 "$BASE/api/v1/teams/tree"
 check "GET  /api/v1/teams/t_1"               200 "$BASE/api/v1/teams/t_1"
@@ -73,7 +77,7 @@ check "POST /api/v1/users/u_2/members/roles" 201 -X POST -H 'Content-Type: appli
 
 echo "== invitations =="
 check "POST /api/v1/invitations"             201 -X POST -H 'Content-Type: application/json' \
-      -d '{"account":"fresh@corp.com","memberships":[{"teamId":"t_1","role":"read"}]}' "$BASE/api/v1/invitations"
+      -d '{"account":"fresh@corp.com","username":"김신입","memberships":[{"teamId":"t_1","role":"read"}]}' "$BASE/api/v1/invitations"
 check "POST /api/v1/invitations/resend"      200 -X POST -H 'Content-Type: application/json' \
       -d '{"userId":"u_3"}' "$BASE/api/v1/invitations/resend"
 check "GET  /api/v1/invitations?view=history" 200 "$BASE/api/v1/invitations?view=history"

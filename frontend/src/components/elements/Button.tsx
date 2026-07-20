@@ -50,6 +50,7 @@ const Button = ({
       onClick={handleClick}
       disabled={disabled}
     >
+      {/* <span>{btnText}</span> */}
       {btnText}
     </button>
   );

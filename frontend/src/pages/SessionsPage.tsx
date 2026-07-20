@@ -18,7 +18,7 @@ import type { TDropdownOption } from "@/types/commonTypes";
 
 const styles = {
   page: "flex flex-col gap-3.5 p-4",
-  accountCell: "max-w-[240px] truncate",
+  usernameCell: "max-w-[240px] truncate",
   timeCell: "text-muted-foreground font-mono text-xs",
 };
 
@@ -26,7 +26,7 @@ const styles = {
    sort query params (console API design §6). No status filter or
    issuance button: issuance lives in user/team management. */
 const SORT_OPTIONS: TDropdownOption[] = [
-  { value: "account", label: "이메일 (account)" },
+  { value: "username", label: "멤버 이름" },
   { value: "issued_at", label: "최근 발급 시간" },
   { value: "last_access", label: "최근 접속 시간" },
 ];
@@ -74,7 +74,7 @@ const SessionsPage = () => {
   /* ── SC-16 state B — 조회 실패 ──────────────────────────────────── */
   if (historyQuery.isError) {
     return (
-      <section className={styles.page} aria-label="세션 관리">
+      <section className={styles.page} aria-label="세션 기록">
         <Feedback
           state="error"
           /* Taller, fully centered variant — the SC-16 state B canvas
@@ -99,7 +99,7 @@ const SessionsPage = () => {
 
   /* ── SC-16 state A — 기본 ───────────────────────────────────────── */
   return (
-    <section className={styles.page} aria-label="세션 관리">
+    <section className={styles.page} aria-label="세션 기록">
       <Table
         fluid
         /* Fixed page height: thead 34px + 10 rows × 36px (h-9). Short
@@ -161,15 +161,15 @@ const SessionsPage = () => {
             </tr>
           )}
           {rows.map((row) => (
-            /* Reissues are separate rows (D11) — account alone is not
-               unique, account+issuedAt is. */
+            /* Reissues are separate rows (D11) — username alone is not
+               unique, username+issuedAt is. */
             <TableRow
-              key={`${row.account}-${row.issuedAt}`}
+              key={`${row.username}-${row.issuedAt}`}
               hoverable={false}
               className="h-9"
             >
-              <TableCell className={styles.accountCell}>
-                <span title={row.account}>{row.account}</span>
+              <TableCell className={styles.usernameCell}>
+                <span title={row.username}>{row.username}</span>
               </TableCell>
               <TableCell className={styles.timeCell}>
                 {formatDateTime(row.issuedAt)}

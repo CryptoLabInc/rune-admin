@@ -25,8 +25,8 @@ export const config = {
    * Vite dev server. Set to the mock's own origin to drive the flow directly.
    */
   appOrigin: str("MOCK_APP_ORIGIN", "http://localhost:5173"),
-  /** Console session lifetime, in ms (default 30 min). */
-  sessionTtlMs: num("MOCK_SESSION_TTL_MS", 30 * 60 * 1000),
+  /** Console session lifetime, in ms (default 1 h). */
+  sessionTtlMs: num("MOCK_SESSION_TTL_MS", 60 * 60 * 1000),
   /** Whether the server boots with an established session (dev convenience). */
   startLoggedIn: bool("MOCK_START_LOGGED_IN", true),
   /** Sliding expiry: extend the session on each authenticated API call. */

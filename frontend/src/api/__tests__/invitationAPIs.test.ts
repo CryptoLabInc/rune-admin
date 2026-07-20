@@ -16,6 +16,7 @@ describe("invitationAPIs", () => {
     const f = spyFetch();
     await postInvitation({
       account: "user@example.com",
+      username: "김철수",
       memberships: [{ teamId: "t_1", role: "write" }],
     });
     const [url, opts] = f.mock.calls[0];
@@ -23,6 +24,7 @@ describe("invitationAPIs", () => {
     expect(opts).toMatchObject({ method: "POST" });
     expect(JSON.parse(opts!.body as string)).toEqual({
       account: "user@example.com",
+      username: "김철수",
       memberships: [{ teamId: "t_1", role: "write" }],
     });
   });

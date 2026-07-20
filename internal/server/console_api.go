@@ -361,10 +361,11 @@ func (h *consoleAPI) renameTeam(w http.ResponseWriter, r *http.Request) {
 // ── team members (team-screen axis) ─────────────────────────────────────
 
 type memberDTO struct {
-	UserID  string `json:"userId"`
-	Account string `json:"account"`
-	Role    string `json:"role"`
-	Status  string `json:"status"`
+	UserID           string `json:"userId"`
+	Account          string `json:"account"`
+	Role             string `json:"role"`
+	InvitationStatus string `json:"invitationStatus"`
+	SessionStatus    string `json:"sessionStatus"`
 	// JoinedAt is the membership's granted_at. It is a pointer because an
 	// inherited-read member has no stored row and thus no join timestamp, so
 	// that row serializes joinedAt as null; a direct member always carries a

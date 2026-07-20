@@ -266,6 +266,57 @@ describe("AddMemberModal", () => {
     expect(submit).toBeDisabled();
   });
 
+  it("normalizes the username input and requires it before submitting", async () => {
+    const user = userEvent.setup();
+    const onInvite = vi.fn();
+    render(
+      <AddMemberModal
+        teamName="백엔드"
+        onClose={() => {}}
+        onInvite={onInvite}
+      />,
+    );
+    const submit = screen.getByRole("button", { name: BTN_TEXT.invite });
+
+    await user.type(screen.getByLabelText("이메일 (account)"), "kim@corp.com");
+    await user.click(screen.getByLabelText("권한 (role)"));
+    await user.click(screen.getByRole("option", { name: "edit" }));
+    /* Email + role alone are not enough — username is required. */
+    expect(submit).toBeDisabled();
+
+    /* Uppercase lowers, repeated spaces collapse to one on input. */
+    const username = screen.getByLabelText("사용자 이름 (username)");
+    await user.type(username, "Kim  Cheolsu");
+    expect(username).toHaveValue("kim cheolsu");
+
+    await user.click(submit);
+    expect(onInvite).toHaveBeenCalledWith(
+      "kim@corp.com",
+      "edit",
+      "kim cheolsu",
+    );
+  });
+
+  it("flags a username with characters outside 한글/영문 소문자", async () => {
+    const user = userEvent.setup();
+    render(
+      <AddMemberModal
+        teamName="백엔드"
+        onClose={() => {}}
+        onInvite={() => {}}
+      />,
+    );
+    await user.type(screen.getByLabelText("사용자 이름 (username)"), "kim2");
+    expect(
+      screen.getByText(
+        "한글, 영문 소문자, 단어 사이 공백 1칸만 입력할 수 있습니다.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: BTN_TEXT.invite }),
+    ).toBeDisabled();
+  });
+
   it("renders the server-mapped error passed in via the error prop", () => {
     render(
       <AddMemberModal

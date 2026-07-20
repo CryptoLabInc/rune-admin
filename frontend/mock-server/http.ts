@@ -100,6 +100,28 @@ export const paginate = <T>(
   };
 };
 
+/** Username rule (common contract, 2026-07-20): 한글·영문 소문자만,
+    단어 사이 공백 1칸(양끝 금지), 1~50자. */
+const USERNAME_PATTERN = /^[a-z가-힣]+( [a-z가-힣]+)*$/;
+
+/** parseUsername validates the display-name field shared by the
+    member-management bodies; throws the common 400 on violation. */
+export const parseUsername = (value: unknown): string => {
+  const username = typeof value === "string" ? value : "";
+  if (
+    username === "" ||
+    username.length > 50 ||
+    !USERNAME_PATTERN.test(username)
+  ) {
+    throw new HttpError(
+      400,
+      "VALIDATION_ERROR",
+      "username must be 1-50 chars of lowercase latin/hangul words separated by single spaces",
+    );
+  }
+  return username;
+};
+
 export type BatchFailure = { id: string; code: string; message: string };
 export type BatchResult = { succeeded: string[]; failed: BatchFailure[] };
 

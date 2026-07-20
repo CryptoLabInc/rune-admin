@@ -1,4 +1,4 @@
-import { cn } from "@/utils/cn";
+import StatusBadge from "@/components/elements/StatusBadge";
 import { MEMBER_STATUS_VAR } from "@/constants/styleConstants";
 import type { TMemberStatus } from "@/types/commonTypes";
 
@@ -8,21 +8,17 @@ interface MemberStatusProps {
 }
 
 /**
- * MemberStatus is the member connection status chip (dot + Korean
- * label), ported from UIKIT MemberStatus.
+ * MemberStatus is the member session-status chip (dot + Korean label).
+ * A thin wrapper over StatusBadge keyed by the session status, so it
+ * shares one badge style with the invitation-status chip.
  */
 const MemberStatus = ({ status, className }: MemberStatusProps) => {
   return (
-    <span
-      className={cn(
-        "inline-flex h-8 w-fit cursor-pointer items-center gap-2 p-1 text-sm whitespace-nowrap",
-        MEMBER_STATUS_VAR[status].color,
-        className,
-      )}
-    >
-      <span aria-hidden="true" className="size-1 rounded-full bg-current" />
-      {MEMBER_STATUS_VAR[status].label}
-    </span>
+    <StatusBadge
+      label={MEMBER_STATUS_VAR[status].label}
+      color={MEMBER_STATUS_VAR[status].color}
+      className={className}
+    />
   );
 };
 

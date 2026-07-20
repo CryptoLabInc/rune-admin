@@ -130,9 +130,13 @@ func TestConsoleUsersListPagingAndStatus(t *testing.T) {
 	if env.Total != 3 || len(env.Items) != 2 {
 		t.Fatalf("paging: total=%d items=%d, want 3 and 2", env.Total, len(env.Items))
 	}
-	// A freshly registered member with no invite/token derives invite_pending.
-	if env.Items[0]["status"] != "invite_pending" {
-		t.Errorf("status = %v, want invite_pending", env.Items[0]["status"])
+	// A freshly registered member with no invite/token derives invite_pending
+	// and, having no session, offline.
+	if env.Items[0]["invitationStatus"] != "invite_pending" {
+		t.Errorf("invitationStatus = %v, want invite_pending", env.Items[0]["invitationStatus"])
+	}
+	if env.Items[0]["sessionStatus"] != "offline" {
+		t.Errorf("sessionStatus = %v, want offline", env.Items[0]["sessionStatus"])
 	}
 
 	// Page past the end → 200 with empty items (not an error).
@@ -154,8 +158,9 @@ func TestConsoleUsersListStatusEnumValidation(t *testing.T) {
 	if _, err := f.members.Add("u@x.com", ""); err != nil {
 		t.Fatal(err)
 	}
-	// A valid enum value filters normally.
-	if status, body := f.do(t, http.MethodGet, "/users?status=invite_pending", ""); status != http.StatusOK {
+	// A valid enum value filters normally. The `status` query param filters on
+	// the session axis (online/offline), not the invitation axis.
+	if status, body := f.do(t, http.MethodGet, "/users?status=offline", ""); status != http.StatusOK {
 		t.Fatalf("valid status filter: %d %s", status, body)
 	}
 	// An unknown value is rejected with 400 VALIDATION_ERROR.
@@ -654,25 +659,34 @@ func TestConsoleUserLiveness(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Active + valid token + reported activation => online with a lastAccessAt.
+	// Active + valid token + reported activation => sessionStatus online, with
+	// invitationStatus still invite_redeemed (the code was already used) and a
+	// lastAccessAt.
 	_, body := f.do(t, http.MethodGet, "/users/"+m.ID, "")
 	var u map[string]any
 	_ = json.Unmarshal(body, &u)
-	if u["status"] != "online" {
-		t.Fatalf("status = %v, want online (body=%s)", u["status"], body)
+	if u["sessionStatus"] != "online" {
+		t.Fatalf("sessionStatus = %v, want online (body=%s)", u["sessionStatus"], body)
+	}
+	if u["invitationStatus"] != "invite_redeemed" {
+		t.Fatalf("invitationStatus = %v, want invite_redeemed (body=%s)", u["invitationStatus"], body)
 	}
 	if u["lastAccessAt"] == nil {
 		t.Errorf("lastAccessAt is null, want a timestamp (body=%s)", body)
 	}
 
-	// Deactivate the session → session_expired with a sessionExpiredAt.
+	// Deactivate the session → sessionStatus offline (invitationStatus stays
+	// invite_redeemed — the code lifecycle doesn't reverse) with a sessionExpiredAt.
 	if status, b := f.do(t, http.MethodDelete, "/users/"+m.ID+"/session", ""); status != http.StatusOK {
 		t.Fatalf("deactivate: %d %s", status, b)
 	}
 	_, body = f.do(t, http.MethodGet, "/users/"+m.ID, "")
 	_ = json.Unmarshal(body, &u)
-	if u["status"] != "session_expired" {
-		t.Fatalf("status after deactivate = %v, want session_expired (body=%s)", u["status"], body)
+	if u["sessionStatus"] != "offline" {
+		t.Fatalf("sessionStatus after deactivate = %v, want offline (body=%s)", u["sessionStatus"], body)
+	}
+	if u["invitationStatus"] != "invite_redeemed" {
+		t.Fatalf("invitationStatus after deactivate = %v, want invite_redeemed (body=%s)", u["invitationStatus"], body)
 	}
 	if u["sessionExpiredAt"] == nil {
 		t.Errorf("sessionExpiredAt is null after deactivate (body=%s)", body)
@@ -685,8 +699,11 @@ func TestConsoleUserLiveness(t *testing.T) {
 // TestConsoleUserRedeemedNotOnline pins the intermediate invite_redeemed
 // (사용됨) state: right after Unwrap the member is active and holds the
 // released session token, but the agent has not authenticated yet (no
-// GetAgentManifest), so it must NOT read as online. Its session is still
-// deactivatable, since the token is real.
+// GetAgentManifest), so it must NOT read as online — invitationStatus is
+// invite_redeemed and sessionStatus is offline. Per the design doc,
+// deactivateSession is gated strictly on sessionStatus === "online", so a
+// merely-redeemed (never-activated) session is NOT deactivatable even though
+// its token row is real.
 func TestConsoleUserRedeemedNotOnline(t *testing.T) {
 	f := newConsoleAPIFixture(t)
 	m, err := f.members.Add("redeemed@corp.com", "")
@@ -706,20 +723,24 @@ func TestConsoleUserRedeemedNotOnline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// active + live token + never used => invite_redeemed, not online.
+	// active + live token + never used => invite_redeemed, offline (not online).
 	_, body := f.do(t, http.MethodGet, "/users/"+m.ID, "")
 	var u map[string]any
 	_ = json.Unmarshal(body, &u)
-	if u["status"] != "invite_redeemed" {
-		t.Fatalf("status = %v, want invite_redeemed (body=%s)", u["status"], body)
+	if u["invitationStatus"] != "invite_redeemed" {
+		t.Fatalf("invitationStatus = %v, want invite_redeemed (body=%s)", u["invitationStatus"], body)
+	}
+	if u["sessionStatus"] != "offline" {
+		t.Fatalf("sessionStatus = %v, want offline (body=%s)", u["sessionStatus"], body)
 	}
 	if u["lastAccessAt"] != nil {
 		t.Errorf("lastAccessAt = %v, want null for a redeemed member (body=%s)", u["lastAccessAt"], body)
 	}
 
-	// The released token is real, so deactivating the session is allowed.
-	if status, b := f.do(t, http.MethodDelete, "/users/"+m.ID+"/session", ""); status != http.StatusOK {
-		t.Fatalf("deactivate redeemed session = %d %s, want 200", status, b)
+	// sessionStatus is offline (never activated), so deactivation is refused —
+	// there is no active session to destroy.
+	if status, b := f.do(t, http.MethodDelete, "/users/"+m.ID+"/session", ""); status != http.StatusConflict || !strings.Contains(string(b), "SESSION_NOT_ACTIVE") {
+		t.Fatalf("deactivate redeemed-but-offline session = %d %s, want 409 SESSION_NOT_ACTIVE", status, b)
 	}
 }
 
@@ -761,12 +782,12 @@ func TestConsoleRevokedInviteRendersInviteExpired(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Live code → invite_pending.
+	// Live code → invitationStatus invite_pending.
 	status, body := f.do(t, http.MethodGet, "/users/"+m.ID, "")
 	var u map[string]any
 	_ = json.Unmarshal(body, &u)
-	if status != http.StatusOK || u["status"] != "invite_pending" {
-		t.Fatalf("before cancel: status=%d userStatus=%v (body=%s)", status, u["status"], body)
+	if status != http.StatusOK || u["invitationStatus"] != "invite_pending" {
+		t.Fatalf("before cancel: status=%d invitationStatus=%v (body=%s)", status, u["invitationStatus"], body)
 	}
 
 	// Cancel via the endpoint (which drives RevokePending → 'revoked').
@@ -778,12 +799,12 @@ func TestConsoleRevokedInviteRendersInviteExpired(t *testing.T) {
 		t.Fatalf("stored invite after cancel = %+v, want status revoked", got)
 	}
 
-	// The revoked code now renders invite_expired, consistently with the
-	// cancel response above.
+	// The revoked code now renders invitationStatus invite_expired,
+	// consistently with the cancel response above.
 	status, body = f.do(t, http.MethodGet, "/users/"+m.ID, "")
 	_ = json.Unmarshal(body, &u)
-	if status != http.StatusOK || u["status"] != "invite_expired" {
-		t.Fatalf("after cancel: status=%d userStatus=%v, want invite_expired (body=%s)", status, u["status"], body)
+	if status != http.StatusOK || u["invitationStatus"] != "invite_expired" {
+		t.Fatalf("after cancel: status=%d invitationStatus=%v, want invite_expired (body=%s)", status, u["invitationStatus"], body)
 	}
 }
 
@@ -811,13 +832,13 @@ func TestConsoleNeedsCode(t *testing.T) {
 	if h.needsCode(on) {
 		t.Error("online member should NOT need a code")
 	}
-	// session_expired (active, token destroyed) → send (reconnect).
+	// invite_redeemed but offline (active, token destroyed) → send (reconnect).
 	se, _ := f.members.Add("se@x.com", "")
 	_ = f.members.MarkInvited(se.ID)
 	_ = f.members.Activate(se.ID)
 	se, _ = f.members.Get(se.ID)
 	if !h.needsCode(se) {
-		t.Error("session_expired member should need a code")
+		t.Error("redeemed-but-offline member should need a code")
 	}
 	// invite_expired (invited, code expired, but the invite-time token LINGERS) →
 	// send. This is the #3/#5 bug: the old any-token gate skipped the code here.
@@ -845,13 +866,13 @@ func TestConsoleNeedsCode(t *testing.T) {
 	}
 }
 
-func TestConsoleResendSessionExpiredBecomesPending(t *testing.T) {
+func TestConsoleResendRedeemedBecomesPending(t *testing.T) {
 	f := newConsoleAPIFixture(t)
 	m, err := f.members.Add("se@corp.com", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// active with no token = session_expired.
+	// active with no token = invite_redeemed, offline.
 	_ = f.members.MarkInvited(m.ID)
 	_ = f.members.Activate(m.ID)
 	_ = f.members.SetSessionExpired(m.ID)
@@ -862,8 +883,8 @@ func TestConsoleResendSessionExpiredBecomesPending(t *testing.T) {
 	}
 	var res map[string]string
 	_ = json.Unmarshal(body, &res)
-	if res["status"] != "invite_pending" {
-		t.Fatalf("resend on session_expired → status %q, want invite_pending (body=%s)", res["status"], body)
+	if res["invitationStatus"] != "invite_pending" {
+		t.Fatalf("resend on invite_redeemed(offline) → invitationStatus %q, want invite_pending (body=%s)", res["invitationStatus"], body)
 	}
 }
 

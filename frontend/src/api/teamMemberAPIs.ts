@@ -11,7 +11,7 @@ export const listTeamMembers = async (
 /** addTeamMember adds an existing user to a team (POST). */
 export const addTeamMember = async (
   teamId: string,
-  body: { account: string; role: TTeamMemberRole },
+  body: { account: string; role: TTeamMemberRole; username: string },
 ) =>
   await serviceFetch(`teams/${teamId}/members`, {
     method: "POST",

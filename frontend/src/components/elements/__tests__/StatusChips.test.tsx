@@ -5,9 +5,12 @@ import MemberStatus from "@/components/elements/MemberStatus";
 import WorkspaceStatus from "@/components/elements/WorkspaceStatus";
 
 describe("MemberStatus", () => {
-  it("renders the Korean label for each state", () => {
-    render(<MemberStatus status="invite-expired" />);
-    expect(screen.getByText("초대 코드 만료")).toBeInTheDocument();
+  it.each([
+    ["online", "온라인"],
+    ["offline", "오프라인"],
+  ] as const)("renders the Korean label for %s", (status, label) => {
+    render(<MemberStatus status={status} />);
+    expect(screen.getByText(label)).toBeInTheDocument();
   });
 
   it("merges an external className", () => {
