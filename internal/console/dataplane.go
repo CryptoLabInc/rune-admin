@@ -106,17 +106,8 @@ type Dataplane struct {
 	retryBase, retryMax time.Duration
 }
 
-const dataplaneSchema = `
-CREATE TABLE IF NOT EXISTS dataplane_credential (
-  id            INTEGER PRIMARY KEY CHECK (id = 1),
-  refresh_token TEXT NOT NULL,
-  runespace_id  TEXT NOT NULL,
-  addr          TEXT NOT NULL,
-  created_at    TEXT NOT NULL
-);`
-
 func newDataplane(db *sql.DB, cl *cloud.Client, conn DataplaneConnector, log *slog.Logger, teamHash string) (*Dataplane, error) {
-	if _, err := db.Exec(dataplaneSchema); err != nil {
+	if err := EnsureDBSchema(db); err != nil {
 		return nil, err
 	}
 	return &Dataplane{

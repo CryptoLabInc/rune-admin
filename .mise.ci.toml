@@ -3,4 +3,4 @@
 
 # Only install tools required for build and test; skip deployment tools.
 [settings]
-enable_tools = ["go", "buf"]
+enable_tools = ["go", "buf", "node", "pnpm"]

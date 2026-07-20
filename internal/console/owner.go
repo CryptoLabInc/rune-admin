@@ -19,14 +19,6 @@ type ownerStore struct {
 	log *slog.Logger
 }
 
-const ownerSchema = `
-CREATE TABLE IF NOT EXISTS console_owner (
-  id       INTEGER PRIMARY KEY CHECK (id = 1),
-  email    TEXT NOT NULL,
-  me       BLOB,
-  bound_at TEXT NOT NULL
-);`
-
 // owner is the bound console administrator.
 type owner struct {
 	Email   string
@@ -36,7 +28,7 @@ type owner struct {
 
 // newOwnerStore ensures the schema and returns the store.
 func newOwnerStore(db *sql.DB, log *slog.Logger) (*ownerStore, error) {
-	if _, err := db.Exec(ownerSchema); err != nil {
+	if err := EnsureDBSchema(db); err != nil {
 		return nil, err
 	}
 	return &ownerStore{db: db, log: log}, nil

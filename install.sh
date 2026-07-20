@@ -759,6 +759,19 @@ preflight() {
 
   [[ "$(id -u)" -eq 0 ]] || die "This installer must be run as root (use sudo)."
 
+  if [[ "$OS_SLUG" = linux ]]; then
+    local libc_version libc_major libc_minor
+    libc_version=$(getconf GNU_LIBC_VERSION 2>/dev/null || true)
+    if [[ ! "$libc_version" =~ ^glibc[[:space:]]+([0-9]+)\.([0-9]+) ]]; then
+      die "Unsupported Linux C library. Rune-Console requires glibc 2.35 or newer."
+    fi
+    libc_major=${BASH_REMATCH[1]}
+    libc_minor=${BASH_REMATCH[2]}
+    if (( libc_major < 2 || (libc_major == 2 && libc_minor < 35) )); then
+      die "Unsupported ${libc_version}. Rune-Console requires glibc 2.35 or newer."
+    fi
+  fi
+
   # openssl is always needed: the console serves TLS with a self-signed CA
   # that this installer generates on first run.
   local tools=(curl openssl)
@@ -840,6 +853,10 @@ preflight() {
     info "Latest version: ${VERSION}"
   fi
 
+  if [[ -z "$LOCAL_BINARY" && ! "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+    die "Invalid release version: ${VERSION}. Expected vMAJOR.MINOR.PATCH[-PRERELEASE]."
+  fi
+
   # Already-installed version check (skip if --force or using a local binary)
   if [[ "$FORCE" -eq 0 && -z "$LOCAL_BINARY" && -x "$BINARY_DEST" ]]; then
     local installed_ver
@@ -909,8 +926,11 @@ download_and_verify() {
 
   info "Extracting binary..."
   tar -xzf "$SCRATCH/${archive}" -C "$SCRATCH" ./runeconsole
-  "$SCRATCH/runeconsole" version >/dev/null 2>&1 \
+  local candidate_version
+  candidate_version=$("$SCRATCH/runeconsole" version 2>/dev/null) \
     || die "Extracted binary failed smoke test."
+  [[ "$candidate_version" == "runeconsole ${VERSION} ("* ]] \
+    || die "Extracted binary version does not match ${VERSION}."
 }
 
 # ── Phase 4: System setup ──────────────────────────────────────────────────────
@@ -1010,6 +1030,16 @@ setup_system() {
   chmod 0700 "${INSTALL_PREFIX}/rune-console-keys"
   [[ "$SKIP_SERVICE" -eq 0 ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "${INSTALL_PREFIX}/rune-console-keys"
 
+  # The updater will recursively restore only roots explicitly marked as
+  # Rune-Console-owned. Keep this content in sync with updater.ManagedRootMarkerContent.
+  local managed_dir marker
+  for managed_dir in "${INSTALL_PREFIX}/configs" "${INSTALL_PREFIX}/rune-console-keys"; do
+    marker="${managed_dir}/.runeconsole-managed"
+    printf 'runeconsole-managed-v1\n' > "$marker"
+    chmod 0600 "$marker"
+    [[ "$SKIP_SERVICE" -eq 0 ]] && chown "${SERVICE_USER}:${SERVICE_USER}" "$marker"
+  done
+
   success "Directories created under ${INSTALL_PREFIX}/"
 
   install -m 0755 "$SCRATCH/runeconsole" "$BINARY_DEST"
@@ -1100,6 +1130,8 @@ collect_and_write_config() {
 
     info "Writing ${conf_file}..."
     printf '%s\n' \
+      "config_version: 1" \
+      "" \
       "server:" \
       "  grpc:" \
       "    host: 0.0.0.0" \
@@ -1296,6 +1328,7 @@ post_install() {
   printf 'Next steps:\n'
   printf '  Open the console:  http://127.0.0.1:8787\n'
   printf '  View logs:         runeconsole logs\n'
+  printf '  Update safely:     sudo runeconsole update\n'
   if [[ "$OS_SLUG" = linux ]]; then
     printf '  Manage daemon:     sudo systemctl start|stop|restart runeconsole\n'
   else
@@ -1310,13 +1343,24 @@ post_install() {
   printf '\n'
   warn "BACKUP: Keep these safe — they cannot be recovered if lost:"
   warn "  Rune-Console Keys: ${INSTALL_PREFIX}/rune-console-keys/"
-  warn "  Config:          ${INSTALL_PREFIX}/configs/runeconsole.conf"
+  warn "  Config + SQLite:   ${INSTALL_PREFIX}/configs/"
+  warn "  TLS material:      ${INSTALL_PREFIX}/certs/"
 }
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 resolve_target
 [[ "$UNINSTALL" -eq 1 ]] && { run_uninstall; exit 0; }
 [[ "$TARGET" != "local" ]] && csp_dispatch
+
+if [[ "$OS_SLUG" = darwin && "$ARCH_SLUG" = amd64 ]]; then
+  die "Local macOS Intel installations are not supported by runespace-sdk v1.0.0. Use Apple Silicon or Linux."
+fi
+if [[ "$OS_SLUG" = darwin ]]; then
+  MACOS_MAJOR=$(sw_vers -productVersion | cut -d. -f1)
+  if [[ ! "$MACOS_MAJOR" =~ ^[0-9]+$ ]] || (( MACOS_MAJOR < 15 )); then
+    die "Unsupported macOS version. Apple Silicon macOS 15 or newer is required."
+  fi
+fi
 
 preflight
 download_and_verify

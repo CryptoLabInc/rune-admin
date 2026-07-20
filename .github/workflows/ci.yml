@@ -2,23 +2,21 @@ name: Pull Request
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, "release/**"]
     paths-ignore:
       - "docs/**"
       - "*.md"
       - "deployment/**"
       - "LICENSE"
       - ".githooks/**"
-      - ".github/workflows/**"
   push:
-    branches: [main]
+    branches: [main, "release/**"]
     paths-ignore:
       - "docs/**"
       - "*.md"
       - "deployment/**"
       - "LICENSE"
       - ".githooks/**"
-      - ".github/workflows/**"
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
@@ -30,9 +28,11 @@ jobs:
     env:
       MISE_ENV: ci
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
       - run: mise run setup
+      - name: Verify generated protobuf files are committed
+        run: git diff --exit-code -- pkg/consolepb
       - name: Check (gofmt + vet + unit tests)
         run: mise run check
       - name: Build

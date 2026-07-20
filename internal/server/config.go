@@ -22,12 +22,24 @@ var ConfigLookupPaths = []string{
 	"./runeconsole.conf",
 }
 
+const (
+	// InitialConfigVersion is the implicit version of an unversioned development
+	// config created before the first production release. This must remain 1
+	// even after CurrentConfigVersion advances.
+	InitialConfigVersion = 1
+	// CurrentConfigVersion is the newest on-disk runeconsole.conf contract this
+	// binary understands. Bump it only with an explicit config migration.
+	CurrentConfigVersion = 1
+)
+
 // 0640: group-readable so runeconsole group members can run CLI commands without sudo.
 const expectedSecretMode fs.FileMode = 0o640
 
 // Config is the in-memory shape of runeconsole.conf. Field names follow the
 // YAML schema exactly so the loader can decode without an intermediate type.
 type Config struct {
+	ConfigVersion int `yaml:"config_version"`
+
 	Server  ServerConfig  `yaml:"server"`
 	Cloud   CloudConfig   `yaml:"cloud"`
 	Keys    KeysConfig    `yaml:"keys"`
@@ -169,6 +181,16 @@ func LoadConfig(override string) (*Config, error) {
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("parse config %s: %w (searched: %s)", path, err, strings.Join(searched, ", "))
+	}
+	// Configs created manually during development before the first production
+	// release did not carry a version. They have the exact v1 shape, so treating
+	// an omitted value as v1 is safe and keeps tests/custom installs working.
+	if cfg.ConfigVersion == 0 {
+		cfg.ConfigVersion = InitialConfigVersion
+	}
+	if cfg.ConfigVersion != CurrentConfigVersion {
+		return nil, fmt.Errorf("config %s has unsupported config_version %d (this binary supports %d)",
+			path, cfg.ConfigVersion, CurrentConfigVersion)
 	}
 	cfg.Source = path
 

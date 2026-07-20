@@ -51,6 +51,9 @@ func TestLoadConfigMinimalValid(t *testing.T) {
 	if cfg.Tokens.TeamSecret != "inline-team-secret-deadbeef" {
 		t.Errorf("team_secret = %q, want inline value", cfg.Tokens.TeamSecret)
 	}
+	if cfg.ConfigVersion != CurrentConfigVersion {
+		t.Errorf("config version = %d, want %d", cfg.ConfigVersion, CurrentConfigVersion)
+	}
 	if cfg.Source != path {
 		// Source may be absolute even if path is already absolute (it should match).
 		abs, _ := filepath.Abs(path)
@@ -61,6 +64,27 @@ func TestLoadConfigMinimalValid(t *testing.T) {
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("Validate: %v", err)
 	}
+}
+
+func TestLoadConfigVersionContract(t *testing.T) {
+	t.Run("explicit current version", func(t *testing.T) {
+		body := "config_version: 1\n" + minimalValidConfig(t)
+		cfg, err := LoadConfig(writeConfig(t, body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.ConfigVersion != CurrentConfigVersion {
+			t.Fatalf("config version = %d, want %d", cfg.ConfigVersion, CurrentConfigVersion)
+		}
+	})
+
+	t.Run("newer config is refused on downgrade", func(t *testing.T) {
+		body := "config_version: 2\n" + minimalValidConfig(t)
+		_, err := LoadConfig(writeConfig(t, body))
+		if err == nil || !strings.Contains(err.Error(), "unsupported config_version 2") {
+			t.Fatalf("LoadConfig error = %v, want unsupported version", err)
+		}
+	})
 }
 
 func TestLoadConfigMissingNamesAllPaths(t *testing.T) {
