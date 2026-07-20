@@ -30,8 +30,9 @@ type SelfInviteIssuer struct {
 }
 
 // NewSelfInviteIssuer wires the issuer to the token store (via the Console),
-// the member registry, and the invite wrap store. role is the token role bound
-// to the issued invite; conn is the endpoint/CA info baked into the mail.
+// the member registry, and the invite wrap store. role is the role label
+// recorded on the issued invite (echoed by LookupWrap); conn is the
+// endpoint/CA info baked into the mail.
 func NewSelfInviteIssuer(v *Console, m *members.Store, i *invites.Store, conn InviteConnInfo, ttl time.Duration, role string) *SelfInviteIssuer {
 	return &SelfInviteIssuer{console: v, members: m, invites: i, conn: conn, ttl: ttl, role: role}
 }
@@ -65,10 +66,10 @@ func (s *SelfInviteIssuer) IssueSelfInvite(email, displayName string) (invites.C
 		m, newMember = added, true
 	}
 
-	tok, err := s.console.Tokens().AddToken(email, s.role, nil)
+	tok, err := s.console.Tokens().AddToken(email, nil)
 	if err != nil {
 		s.dropIfNew(m.ID, newMember)
-		return invites.ClearBundle{}, InviteConnInfo{}, fmt.Errorf("mint token (role %q): %w", s.role, err)
+		return invites.ClearBundle{}, InviteConnInfo{}, fmt.Errorf("mint token: %w", err)
 	}
 
 	bundle, err := s.invites.Issue(invites.IssueParams{

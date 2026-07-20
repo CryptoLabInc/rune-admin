@@ -25,7 +25,7 @@ type Invite struct {
 	MemberID     string `yaml:"member_id"`     // links to members.Member.ID
 	Email        string `yaml:"email"`         // member email at issue time
 	TokenValue   string `yaml:"token_value"`   // sealed plaintext; "" once consumed
-	Role         string `yaml:"role"`          // token role bound to the invite
+	Role         string `yaml:"role"`          // role label recorded on the invite (echoed by LookupWrap)
 	LeaseID      string `yaml:"lease_id"`      // durable ref for ReportCompromise
 	CreationPath string `yaml:"creation_path"` // wrap-path binding (§8.3)
 	CreatedAt    string `yaml:"created_at"`    // canonical storedb.TimeFormat (RFC3339 UTC ms)

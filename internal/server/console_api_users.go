@@ -1023,7 +1023,7 @@ func (h *consoleAPI) issueCode(r *http.Request, m *members.Member) error {
 		}
 		tokenValue = t.Token
 	} else {
-		t, err := h.v.Tokens().AddToken(m.Email, consoleInviteTokenRole, nil)
+		t, err := h.v.Tokens().AddToken(m.Email, nil)
 		if err != nil {
 			return fmt.Errorf("mint token: %w", err)
 		}

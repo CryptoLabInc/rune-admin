@@ -41,7 +41,7 @@ func TestMemberStatusGateOnDataplane(t *testing.T) {
 	if _, err := reg.Update(dis.ID, nil, &disabledStatus); err != nil {
 		t.Fatal(err)
 	}
-	tokDis, err := v.Tokens().AddToken("dis@corp.com", "member", nil)
+	tokDis, err := v.Tokens().AddToken("dis@corp.com", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestMemberStatusGateOnDataplane(t *testing.T) {
 	if err := reg.Activate(act.ID); err != nil {
 		t.Fatal(err)
 	}
-	tokAct, err := v.Tokens().AddToken("act@corp.com", "member", nil)
+	tokAct, err := v.Tokens().AddToken("act@corp.com", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

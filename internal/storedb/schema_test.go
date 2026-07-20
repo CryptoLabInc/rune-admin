@@ -53,7 +53,7 @@ func TestEnsureSchemaIdempotent(t *testing.T) {
 
 	for _, table := range []string{
 		"schema_migrations", "members", "invites",
-		"roles", "tokens", "groups", "memberships", "read_exclusions",
+		"tokens", "groups", "memberships", "read_exclusions",
 	} {
 		var name string
 		err := database.QueryRow(

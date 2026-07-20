@@ -423,7 +423,7 @@ func (s *ConsoleGRPC) GetAgentManifest(ctx context.Context, req *pb.GetAgentMani
 		s.emit(ctx, "get_agent_manifest", user, nil, resultCount, statusStr, errDetail, time.Since(start))
 	}()
 
-	username, role, err := s.v.tokens.Validate(req.GetToken())
+	username, err := s.v.tokens.Validate(req.GetToken())
 	if err != nil {
 		st, msg := mapTokenError(err)
 		statusStr, errDetail = errStatus(err)
@@ -431,12 +431,6 @@ func (s *ConsoleGRPC) GetAgentManifest(ctx context.Context, req *pb.GetAgentMani
 	}
 	user = username
 	if _, _, err := s.v.resolveMemberAccess(username); err != nil {
-		statusStr = "denied"
-		ed := err.Error()
-		errDetail = &ed
-		return &pb.GetAgentManifestResponse{Error: err.Error()}, status.Error(codes.PermissionDenied, err.Error())
-	}
-	if err := role.CheckScope("get_public_key"); err != nil {
 		statusStr = "denied"
 		ed := err.Error()
 		errDetail = &ed
@@ -481,7 +475,7 @@ func (s *ConsoleGRPC) ReportActivation(ctx context.Context, req *pb.ReportActiva
 		s.emit(ctx, "report_activation", user, nil, 0, statusStr, errDetail, time.Since(start))
 	}()
 
-	username, _, err := s.v.tokens.Validate(req.GetToken())
+	username, err := s.v.tokens.Validate(req.GetToken())
 	if err != nil {
 		st, msg := mapTokenError(err)
 		statusStr, errDetail = errStatus(err)
@@ -574,9 +568,9 @@ func (s *ConsoleGRPC) Insert(ctx context.Context, req *pb.InsertRequest) (*pb.In
 		s.emit(ctx, "insert", user, nil, resultCount, statusStr, errDetail, time.Since(start))
 	}()
 
-	// Validate still enforces identity + rate limit; the token role no longer
-	// gates capture — the group RBAC judge does (plan §6-D3 single judge).
-	username, _, err := s.v.tokens.Validate(req.GetToken())
+	// Validate authenticates identity only; the group RBAC judge gates capture
+	// (plan §6-D3 single judge).
+	username, err := s.v.tokens.Validate(req.GetToken())
 	if err != nil {
 		st, msg := mapTokenError(err)
 		statusStr, errDetail = errStatus(err)
@@ -659,7 +653,7 @@ func (s *ConsoleGRPC) GetCentroids(req *pb.GetCentroidsRequest, stream pb.Consol
 		s.emit(ctx, "get_centroids", user, nil, resultCount, statusStr, errDetail, time.Since(start))
 	}()
 
-	username, _, err := s.v.tokens.Validate(req.GetToken())
+	username, err := s.v.tokens.Validate(req.GetToken())
 	if err != nil {
 		st, msg := mapTokenError(err)
 		statusStr, errDetail = errStatus(err)
@@ -731,10 +725,10 @@ func (s *ConsoleGRPC) Search(ctx context.Context, req *pb.SearchRequest) (*pb.Se
 		s.emit(ctx, "search", user, &topK, resultCount, statusStr, errDetail, time.Since(start))
 	}()
 
-	// Validate still enforces identity + rate limit; recall itself is open to
-	// any valid token (read is the lowest role). What the caller SEES is bounded
-	// by their recall scope, computed below (plan §6-D3 single judge).
-	username, _, err := s.v.tokens.Validate(req.GetToken())
+	// Validate authenticates identity only; recall itself is open to any valid
+	// token (read is the lowest role). What the caller SEES is bounded by their
+	// recall scope, computed below (plan §6-D3 single judge).
+	username, err := s.v.tokens.Validate(req.GetToken())
 	if err != nil {
 		st, msg := mapTokenError(err)
 		statusStr, errDetail = errStatus(err)
@@ -749,13 +743,6 @@ func (s *ConsoleGRPC) Search(ctx context.Context, req *pb.SearchRequest) (*pb.Se
 		return &pb.SearchResponse{Error: err.Error()}, status.Error(codes.PermissionDenied, err.Error())
 	}
 
-	// top_k cap migrated to the judge (plan §5: read=10, write and above=50).
-	if limit := s.v.groups.TopKLimit(key); int(topK) > limit {
-		statusStr = "denied"
-		msg := fmt.Sprintf("top_k %d exceeds limit %d for your role", topK, limit)
-		errDetail = &msg
-		return &pb.SearchResponse{Error: msg}, status.Error(codes.InvalidArgument, msg)
-	}
 	eng, ok := s.v.getEngine()
 	if !ok {
 		statusStr = "error"
@@ -808,7 +795,7 @@ func (s *ConsoleGRPC) GetPermissions(ctx context.Context, req *pb.GetPermissions
 		s.emit(ctx, "get_permissions", user, nil, resultCount, statusStr, errDetail, time.Since(start))
 	}()
 
-	username, _, err := s.v.tokens.Validate(req.GetToken())
+	username, err := s.v.tokens.Validate(req.GetToken())
 	if err != nil {
 		st, msg := mapTokenError(err)
 		statusStr, errDetail = errStatus(err)
@@ -1055,28 +1042,10 @@ func (s *ConsoleGRPC) Unwrap(ctx context.Context, req *pb.UnwrapRequest) (*pb.Un
 
 // ── error mapping & audit helpers ────────────────────────────────
 
-// mapTokenError maps tokens.ErrXxx → (gRPC code, user-facing message).
+// mapTokenError maps tokens.ErrXxx → (gRPC code, user-facing message). Every
+// token error is an authentication failure; authorization is the group RBAC
+// judge's job and surfaces its own PermissionDenied.
 func mapTokenError(err error) (codes.Code, string) {
-	var nf tokens.ErrTokenNotFound
-	if errors.As(err, &nf) {
-		return codes.Unauthenticated, err.Error()
-	}
-	var exp tokens.ErrTokenExpired
-	if errors.As(err, &exp) {
-		return codes.Unauthenticated, err.Error()
-	}
-	var rl tokens.ErrRateLimit
-	if errors.As(err, &rl) {
-		return codes.ResourceExhausted, err.Error()
-	}
-	var sc tokens.ErrScope
-	if errors.As(err, &sc) {
-		return codes.PermissionDenied, err.Error()
-	}
-	var tk tokens.ErrTopKExceeded
-	if errors.As(err, &tk) {
-		return codes.InvalidArgument, err.Error()
-	}
 	return codes.Unauthenticated, err.Error()
 }
 
@@ -1115,10 +1084,7 @@ func errStatus(err error) (string, *string) {
 	msg := err.Error()
 	switch {
 	case errors.As(err, new(tokens.ErrTokenNotFound)),
-		errors.As(err, new(tokens.ErrTokenExpired)),
-		errors.As(err, new(tokens.ErrRateLimit)),
-		errors.As(err, new(tokens.ErrScope)),
-		errors.As(err, new(tokens.ErrTopKExceeded)):
+		errors.As(err, new(tokens.ErrTokenExpired)):
 		return "denied", &msg
 	}
 	return "error", &msg

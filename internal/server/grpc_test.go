@@ -26,9 +26,6 @@ func TestMapTokenErrorCodes(t *testing.T) {
 	}{
 		{tokens.ErrTokenNotFound{}, codes.Unauthenticated},
 		{tokens.ErrTokenExpired{User: "x"}, codes.Unauthenticated},
-		{tokens.ErrRateLimit{RetryAfter: 5}, codes.ResourceExhausted},
-		{tokens.ErrScope{Method: "m", RoleName: "r"}, codes.PermissionDenied},
-		{tokens.ErrTopKExceeded{Requested: 50, MaxTopK: 10, RoleName: "member"}, codes.InvalidArgument},
 		{errors.New("random"), codes.Unauthenticated},
 	}
 	for _, c := range cases {
@@ -88,24 +85,6 @@ func TestSearchInvalidToken(t *testing.T) {
 	})
 	if status.Code(err) != codes.Unauthenticated {
 		t.Errorf("code = %v, want Unauthenticated", status.Code(err))
-	}
-}
-
-func TestSearchTopKExceeded(t *testing.T) {
-	srv := NewConsoleGRPC(newTestConsole(t))
-	// top_k is now capped by the group judge (plan §5), not the token role.
-	// The demo token user has no group membership → read cap (10); request 11
-	// → rejected before the engine is touched.
-	_, err := srv.Search(context.Background(), &pb.SearchRequest{
-		Token:  tokens.DemoToken,
-		Vector: []float32{0.1, 0.2},
-		TopK:   11,
-	})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("code = %v, want InvalidArgument", status.Code(err))
-	}
-	if !strings.Contains(err.Error(), "exceeds limit 10") {
-		t.Errorf("err = %v, want 'exceeds limit 10'", err)
 	}
 }
 

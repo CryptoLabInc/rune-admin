@@ -30,17 +30,6 @@ import (
 // cycle validation walks at most this many parent hops (plan §6-D2).
 const MaxTreeDepth = 8
 
-// Limits carries the judge's configurable knobs (plan §5: top_k caps
-// migrate to the 4-role model — read inherits the old member cap,
-// write and above inherit the old admin cap).
-type Limits struct {
-	TopKRead  int
-	TopKWrite int
-}
-
-// DefaultLimits returns the plan §5 defaults.
-func DefaultLimits() Limits { return Limits{TopKRead: 10, TopKWrite: 50} }
-
 // Store is the in-memory group/membership state behind a sync.RWMutex over
 // an optional SQLite write-through persistence sink. Reads — including the
 // judge hot paths — are pure map lookups with zero SQL; every mutator
@@ -63,7 +52,6 @@ type Store struct {
 	// modeling it as a set is what would let a second one quietly appear.
 	// Empty means no admin is established (a console-less daemon).
 	orgAdmin string
-	limits   Limits
 
 	// validatePerson is the pluggable person-key contract; nil means the
 	// default (validateUserEmail). Read without locking — see
@@ -77,9 +65,9 @@ type Store struct {
 	now func() time.Time
 }
 
-// NewStore returns an empty in-memory group store with default limits and
-// the real UTC clock. Persistence is attached separately (LoadFromDB);
-// without it every mutation stays in memory only.
+// NewStore returns an empty in-memory group store with the real UTC clock.
+// Persistence is attached separately (LoadFromDB); without it every mutation
+// stays in memory only.
 func NewStore() *Store {
 	return &Store{
 		groups:      make(map[string]*Group),
@@ -87,7 +75,6 @@ func NewStore() *Store {
 		children:    make(map[string][]string),
 		memberships: make(map[string]map[string]*Membership),
 		excluded:    make(map[string]map[string]*ReadExclusion),
-		limits:      DefaultLimits(),
 		now:         func() time.Time { return time.Now().UTC() },
 	}
 }
@@ -139,18 +126,6 @@ func (s *Store) IsOrgAdmin(user string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return user != "" && s.orgAdmin == user
-}
-
-// SetLimits overrides the judge knobs. Zero fields keep their defaults.
-func (s *Store) SetLimits(l Limits) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if l.TopKRead > 0 {
-		s.limits.TopKRead = l.TopKRead
-	}
-	if l.TopKWrite > 0 {
-		s.limits.TopKWrite = l.TopKWrite
-	}
 }
 
 // LoadFromDB attaches database (the unified store database, opened with

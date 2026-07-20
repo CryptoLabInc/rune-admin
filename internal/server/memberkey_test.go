@@ -110,7 +110,7 @@ func TestDataplaneResolvesEmailToMemberUUID(t *testing.T) {
 	if _, err := v.Groups().Grant(alice.ID, g.ID, groups.RoleWrite, "local-admin:test"); err != nil {
 		t.Fatal(err)
 	}
-	tok, err := v.Tokens().AddToken("alice@corp.com", "member", nil)
+	tok, err := v.Tokens().AddToken("alice@corp.com", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestDataplaneRejectsMemberIDAsTokenIdentity(t *testing.T) {
 	}
 
 	// Attacker mints a token whose User is Alice's UUID (no '@', not an email).
-	tok, err := v.Tokens().AddToken(alice.ID, "member", nil)
+	tok, err := v.Tokens().AddToken(alice.ID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestGetPermissionsMemberKeyed(t *testing.T) {
 	if _, err := v.Groups().Grant(alice.ID, g.ID, groups.RoleWrite, "local-admin:test"); err != nil {
 		t.Fatal(err)
 	}
-	tokAlice, err := v.Tokens().AddToken("alice@corp.com", "member", nil)
+	tokAlice, err := v.Tokens().AddToken("alice@corp.com", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func TestGetPermissionsMemberKeyed(t *testing.T) {
 	// gated on IsOrgAdmin alone. The admin is a management identity that is not
 	// auto-seeded into the member registry, so an unregistered admin email must
 	// still get the org-wide listing, with UUIDs mapped back to emails.
-	tokAdmin, err := v.Tokens().AddToken("admin@corp.com", "admin", nil)
+	tokAdmin, err := v.Tokens().AddToken("admin@corp.com", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

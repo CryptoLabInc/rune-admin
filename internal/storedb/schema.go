@@ -123,33 +123,14 @@ BEGIN
   SELECT RAISE(ABORT, 'invalid invite status transition');
 END;
 
--- roles + tokens (internal/tokens). scope = JSON TEXT array (only collection
--- field; linear-scan set semantics in Go — a child table adds review surface
--- for zero queries). rate_limit stays the 'N/Ws' API/file contract string.
--- admin/member are SEED ROWS inserted by tokens.LoadFromDB when absent, so
--- default-role presence is a boot invariant of the database itself;
--- read-time defaults (top_k 0->5, rate_limit ''->'30/60s') materialize at
--- write time.
-CREATE TABLE IF NOT EXISTS roles (
-  name       TEXT PRIMARY KEY,
-  scope      TEXT NOT NULL DEFAULT '[]',
-  top_k      INTEGER NOT NULL DEFAULT 5,
-  rate_limit TEXT NOT NULL DEFAULT '30/60s'
-);
--- Default-role undeletability and DeleteRole's referenced-by-token RESTRICT
--- stay in Go (now inside one transaction). No is_default column:
--- isDefaultRoleName is two constants; a column invites drift from the
--- code-level DefaultRoles().
-
--- NO FK on tokens.role: a dangling role must keep listing as '?' and real
--- data dirs may contain it. NO FK on tokens.user: email in console flows,
--- freeform for admin/demo tokens. Secrets stay PLAINTEXT this release
--- (hashing is a named follow-up) — the DB inherits the 0600 fail-closed
--- posture instead.
+-- tokens (internal/tokens). A token is pure identity: it authenticates a
+-- user, and authorization is the group RBAC judge's job (memberships). NO FK
+-- on tokens.user: email in console flows, freeform for admin/demo tokens.
+-- Secrets stay PLAINTEXT this release (hashing is a named follow-up) — the DB
+-- inherits the 0600 fail-closed posture instead.
 CREATE TABLE IF NOT EXISTS tokens (
   user         TEXT PRIMARY KEY,       -- one token per user (hard invariant, tokensByUser)
   token        TEXT NOT NULL UNIQUE,   -- plaintext 'evt_'+32hex; Validate's lookup key
-  role         TEXT NOT NULL,          -- soft ref -> roles.name
   issued_at    TEXT NOT NULL,          -- date-only 'YYYY-MM-DD' (NOT RFC3339 — day-granularity expiry is a contract)
   expires      TEXT,                   -- date-only; NULL = never; deliberately NO format CHECK (unparseable == never)
   last_used    TEXT,                   -- canonical TimeFormat (RFC3339 UTC ms); newly durable, written async + throttled, never inside Validate's lock

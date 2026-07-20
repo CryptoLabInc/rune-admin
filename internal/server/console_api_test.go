@@ -612,7 +612,7 @@ func TestConsoleSessionDeactivateRequiresActiveSession(t *testing.T) {
 	}
 	// Simulate the invite-time wrapped token: a token row exists, but the
 	// member is not active, so the derived status is invite_pending.
-	tok, err := f.v.Tokens().AddToken("pend@corp.com", "member", nil)
+	tok, err := f.v.Tokens().AddToken("pend@corp.com", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -622,7 +622,7 @@ func TestConsoleSessionDeactivateRequiresActiveSession(t *testing.T) {
 		t.Fatalf("deactivate on invite_pending = %d %s, want 409 SESSION_NOT_ACTIVE", status, body)
 	}
 	// The wrapped invite token must survive the refused deactivate.
-	if _, _, err := f.v.Tokens().Validate(tok.Token); err != nil {
+	if _, err := f.v.Tokens().Validate(tok.Token); err != nil {
 		t.Errorf("invite token was destroyed by the refused deactivate: %v", err)
 	}
 }
@@ -643,11 +643,11 @@ func TestConsoleUserLiveness(t *testing.T) {
 	// Mint a session token and use it once — Validate stamps LastUsed (drives
 	// lastAccessAt). Then report activation — MarkActivated stamps activated_at,
 	// the gate that flips the member from invite_redeemed to online.
-	tok, err := f.v.Tokens().AddToken("live@corp.com", "member", nil)
+	tok, err := f.v.Tokens().AddToken("live@corp.com", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := f.v.Tokens().Validate(tok.Token); err != nil {
+	if _, err := f.v.Tokens().Validate(tok.Token); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.v.Tokens().MarkActivated("live@corp.com"); err != nil {
@@ -702,7 +702,7 @@ func TestConsoleUserRedeemedNotOnline(t *testing.T) {
 	// Mint the released session token but NEVER Validate it — this is the state
 	// immediately after Unwrap: the agent holds the token but has not made an
 	// authenticated call, so LastUsed is empty.
-	if _, err := f.v.Tokens().AddToken("redeemed@corp.com", "member", nil); err != nil {
+	if _, err := f.v.Tokens().AddToken("redeemed@corp.com", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -804,7 +804,7 @@ func TestConsoleNeedsCode(t *testing.T) {
 	on, _ := f.members.Add("on@x.com", "")
 	_ = f.members.MarkInvited(on.ID)
 	_ = f.members.Activate(on.ID)
-	if _, err := f.v.Tokens().AddToken("on@x.com", "member", nil); err != nil {
+	if _, err := f.v.Tokens().AddToken("on@x.com", nil); err != nil {
 		t.Fatal(err)
 	}
 	on, _ = f.members.Get(on.ID)
@@ -823,7 +823,7 @@ func TestConsoleNeedsCode(t *testing.T) {
 	// send. This is the #3/#5 bug: the old any-token gate skipped the code here.
 	ie, _ := f.members.Add("ie@x.com", "")
 	_ = f.members.MarkInvited(ie.ID)
-	if _, err := f.v.Tokens().AddToken("ie@x.com", "member", nil); err != nil {
+	if _, err := f.v.Tokens().AddToken("ie@x.com", nil); err != nil {
 		t.Fatal(err)
 	}
 	b, err := f.invites.Issue(invites.IssueParams{MemberID: ie.ID, Email: "ie@x.com", Role: "member", TokenValue: "evt_ie", CreationPath: inviteCreationPath, TTL: 30 * time.Minute})

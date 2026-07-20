@@ -86,12 +86,12 @@ func TestSearchFailOpenNoMembership(t *testing.T) {
 	v.engine = fake // same-package test replaces the nil engine with the fake
 	srv := NewConsoleGRPC(v)
 
-	// DemoToken's user has no group membership (see TestSearchTopKExceeded), so
-	// RecallScope is empty — exactly the fail-OPEN trigger.
+	// DemoToken's user has no group membership, so RecallScope is empty —
+	// exactly the fail-OPEN trigger.
 	_, err := srv.Search(context.Background(), &pb.SearchRequest{
 		Token:  tokens.DemoToken,
 		Vector: []float32{0.1, 0.2},
-		TopK:   5, // within the read cap (10)
+		TopK:   5,
 	})
 	if err != nil {
 		t.Fatalf("Search returned error: %v", err)

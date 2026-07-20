@@ -236,12 +236,11 @@ const (
 	// the person-key validator the daemon injects into the group store.
 	seedMemberID = "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
 
-	// The token is 'evt_' + 32 hex (36 chars, the proto's fixed length) and
-	// names a role that is NOT a built-in: tokens.LoadFromDB seeds admin and
-	// member itself, so a custom role proves the roles TABLE was read too
-	// (Validate is fail-closed — a token whose role is missing is refused).
+	// The token is 'evt_' + 32 hex (36 chars, the proto's fixed length). A
+	// token is pure identity now; Validate is fail-closed on an unknown secret.
 	seedTokenValue = "evt_0123456789abcdef0123456789abcdef"
-	seedRoleName   = "e2e-seeded-role"
+	// seedRoleName is the role label the invite carries (LookupWrap echoes it).
+	seedRoleName = "e2e-seeded-role"
 
 	// Two groups, parent and child, with the membership held on the PARENT:
 	// the reachable tree then spans both, which can only be built if both
@@ -287,11 +286,9 @@ func seedStoreDB(t *testing.T, path string) {
 		stmt string
 		args []any
 	}{
-		{"role", `INSERT INTO roles (name, scope, top_k, rate_limit) VALUES (?, ?, ?, ?)`,
-			[]any{seedRoleName, `["get_public_key"]`, 5, "30/60s"}},
-		{"token", `INSERT INTO tokens (user, token, role, issued_at, expires, last_used)
-		           VALUES (?, ?, ?, ?, NULL, NULL)`, // NULL expires = never expires
-			[]any{seedMemberEmail, seedTokenValue, seedRoleName, now.Format("2006-01-02")}}, // issued_at is date-only by contract
+		{"token", `INSERT INTO tokens (user, token, issued_at, expires, last_used)
+		           VALUES (?, ?, ?, NULL, NULL)`, // NULL expires = never expires
+			[]any{seedMemberEmail, seedTokenValue, now.Format("2006-01-02")}}, // issued_at is date-only by contract
 		{"member", `INSERT INTO members (id, email, display_name, status, disabled_from, created_at, session_expired_at)
 		            VALUES (?, ?, ?, 'invited', NULL, ?, NULL)`, // 'invited' so Unwrap's activation has a legal hop
 			[]any{seedMemberID, seedMemberEmail, "Seed Member", created}},
@@ -376,8 +373,7 @@ func assertRedemptionPersisted(t *testing.T, path string) {
 // tests, so losing any one of those four calls is otherwise invisible — this
 // is the test that fails. Coverage, per store:
 //
-//   - tokens   — GetPermissions authenticates the seeded token against the
-//     seeded (non-built-in) role.
+//   - tokens   — GetPermissions authenticates the seeded token (identity only).
 //   - groups   — the same call returns the seeded membership and the
 //     parent+child tree it reaches.
 //   - members  — the same call only finds that membership if the token's email
@@ -477,7 +473,7 @@ func TestDaemonBootsServesSeededStoresAndShutsDownCleanly(t *testing.T) {
 		resp, err := client.GetPermissions(ctx,
 			&pb.GetPermissionsRequest{Token: seedTokenValue}, grpc.WaitForReady(true))
 		if err != nil {
-			t.Fatalf("GetPermissions: %v — the token store did not authenticate the seeded token against its seeded role (tokens.LoadFromDB)", err)
+			t.Fatalf("GetPermissions: %v — the token store did not authenticate the seeded token (tokens.LoadFromDB)", err)
 		}
 		if got := resp.GetMe(); got != seedMemberEmail {
 			t.Errorf("me = %q, want %q", got, seedMemberEmail)

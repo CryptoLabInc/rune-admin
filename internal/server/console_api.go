@@ -15,11 +15,10 @@ import (
 	"github.com/CryptoLabInc/rune-console/internal/members"
 )
 
-// consoleInviteTokenRole is the token role bound to invites issued through the
-// console domain API (same plain-teammate role the self-invite uses:
-// get_public_key + decrypt scopes). The invite body carries per-team GROUP
-// roles; the wrapped evt_ token needs a separate TOKEN role, and "member" is
-// the seeded default.
+// consoleInviteTokenRole is the role label recorded on invites issued through
+// the console domain API and echoed back by LookupWrap. Tokens are pure
+// identity (authorization is the group RBAC judge); this is a legacy invite
+// field kept at the "member" default. Per-team GROUP roles live on memberships.
 const consoleInviteTokenRole = "member"
 
 // actorCtxKey carries the authenticated console operator's email (parsed from

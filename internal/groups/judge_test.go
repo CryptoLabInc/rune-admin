@@ -566,34 +566,6 @@ func TestCanGrantOrgAdminOnly(t *testing.T) {
 	}
 }
 
-func TestTopKLimit(t *testing.T) {
-	s, hq, _, search := testTree(t)
-	mustGrant(t, s, "reader@corp.com", search.ID, RoleRead)
-	mustGrant(t, s, "writer@corp.com", hq.ID, RoleWrite)
-	mustGrant(t, s, "editor@corp.com", search.ID, RoleEdit)
-	mustGrant(t, s, "mixed@corp.com", hq.ID, RoleRead)
-	mustGrant(t, s, "mixed@corp.com", search.ID, RoleWrite)
-	cases := []struct {
-		user string
-		want int
-	}{
-		{"reader@corp.com", 10},
-		{"writer@corp.com", 50},
-		{"editor@corp.com", 50},
-		{"mixed@corp.com", 50}, // best membership role wins
-		{"nobody@corp.com", 10},
-	}
-	for _, c := range cases {
-		if got := s.TopKLimit(c.user); got != c.want {
-			t.Errorf("TopKLimit(%s) = %d, want %d", c.user, got, c.want)
-		}
-	}
-	s.SetLimits(Limits{TopKRead: 7, TopKWrite: 99})
-	if s.TopKLimit("reader@corp.com") != 7 || s.TopKLimit("writer@corp.com") != 99 {
-		t.Error("SetLimits not applied")
-	}
-}
-
 func TestDescendantsWithDepth(t *testing.T) {
 	s, hq, dev, search := testTree(t)
 	ops, err := s.CreateGroup("a-ops", hq.ID) // second child to check sibling ordering

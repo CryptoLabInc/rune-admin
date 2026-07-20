@@ -158,8 +158,7 @@ func runDaemonStart(ctx context.Context) error {
 	// Self-invite issuer for the console↔rune-mcp connection test: the BFF's
 	// POST /api/v1/invite mints a fresh wrapped token for the operator and mails
 	// the registration string via the cloud public API. selfInviteRole is the
-	// token role bound to the invite (a plain teammate role — get_public_key +
-	// decrypt scopes, enough to fetch the manifest and run insert/search).
+	// role label recorded on the invite (tokens are pure identity now).
 	const selfInviteRole = "member"
 	selfInviter := server.NewSelfInviteIssuer(v, memberStore, inviteStore, inviteConn, cfg.InviteTTL(), selfInviteRole)
 

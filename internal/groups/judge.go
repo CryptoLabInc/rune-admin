@@ -465,22 +465,6 @@ func (s *Store) CanGrant(actor, targetUser, groupRef string, role Role) error {
 	return nil
 }
 
-// TopKLimit returns the per-recall result cap for the user (plan §5:
-// read=10, write and above=50, both configurable via Limits). A user
-// with no memberships gets the read cap. Because inheritance only flows
-// downward, the user's best effective role anywhere equals their best
-// membership role.
-func (s *Store) TopKLimit(user string) int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for _, m := range s.memberships[user] {
-		if m.Role.AtLeast(RoleWrite) {
-			return s.limits.TopKWrite
-		}
-	}
-	return s.limits.TopKRead
-}
-
 // DescendantsWithDepth returns the subtree rooted at groupRef in DFS
 // order: the group itself at depth 0, descendants at their relative
 // depth (requirement 12: depth-annotated subtree listing).

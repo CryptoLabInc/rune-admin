@@ -35,7 +35,7 @@ func newTestDB(t *testing.T) *sql.DB {
 }
 
 // newDBStore builds a store attached to database (the daemon construction
-// shape: NewStore + LoadFromDB, which also seeds the default roles).
+// shape: NewStore + LoadFromDB).
 func newDBStore(t *testing.T, database *sql.DB) *Store {
 	t.Helper()
 	s := NewStore()
@@ -46,8 +46,6 @@ func newDBStore(t *testing.T, database *sql.DB) *Store {
 }
 
 // newTestStore builds a DB-backed store on a fresh database, returning both.
-// LoadFromDB seeds the default admin/member roles, replacing the old
-// fixture's direct map write.
 func newTestStore(t *testing.T) (*Store, *sql.DB) {
 	t.Helper()
 	database := newTestDB(t)
@@ -71,7 +69,7 @@ func tokenRowCount(t *testing.T, database *sql.DB, user string) int {
 
 func TestAddAndValidateToken(t *testing.T) {
 	s, _ := newTestStore(t)
-	tok, err := s.AddToken("alice", "member", intp(90))
+	tok, err := s.AddToken("alice", intp(90))
 	if err != nil {
 		t.Fatalf("AddToken: %v", err)
 	}
@@ -84,22 +82,19 @@ func TestAddAndValidateToken(t *testing.T) {
 	if len(tok.Token) != 36 {
 		t.Errorf("token length = %d, want 36", len(tok.Token))
 	}
-	if tok.Role != "member" {
-		t.Errorf("role = %q, want member", tok.Role)
-	}
 
-	user, role, err := s.Validate(tok.Token)
+	user, err := s.Validate(tok.Token)
 	if err != nil {
 		t.Fatalf("Validate: %v", err)
 	}
-	if user != "alice" || role.Name != "member" {
-		t.Errorf("got (%q, %q), want (alice, member)", user, role.Name)
+	if user != "alice" {
+		t.Errorf("user = %q, want alice", user)
 	}
 }
 
 func TestInvalidTokenRaises(t *testing.T) {
 	s, _ := newTestStore(t)
-	_, _, err := s.Validate("nonexistent_token")
+	_, err := s.Validate("nonexistent_token")
 	if !errors.Is(err, ErrTokenNotFound{}) {
 		t.Errorf("err = %v, want ErrTokenNotFound", err)
 	}
@@ -112,13 +107,13 @@ func TestExpiredTokenRaises(t *testing.T) {
 	// clock past the one-day expiry instead.
 	base := time.Date(2026, 7, 16, 9, 0, 0, 0, time.UTC)
 	s.now = func() time.Time { return base }
-	tok, err := s.AddToken("bob", "member", intp(1))
+	tok, err := s.AddToken("bob", intp(1))
 	if err != nil {
 		t.Fatalf("AddToken: %v", err)
 	}
 	s.now = func() time.Time { return base.AddDate(0, 0, 3) }
 
-	_, _, err = s.Validate(tok.Token)
+	_, err = s.Validate(tok.Token)
 	var exp ErrTokenExpired
 	if !errors.As(err, &exp) {
 		t.Fatalf("err = %v, want ErrTokenExpired", err)
@@ -130,7 +125,7 @@ func TestExpiredTokenRaises(t *testing.T) {
 
 func TestRevokeToken(t *testing.T) {
 	s, database := newTestStore(t)
-	tok, _ := s.AddToken("charlie", "member", nil)
+	tok, _ := s.AddToken("charlie", nil)
 	revoked, err := s.RevokeToken("charlie")
 	if err != nil {
 		t.Fatalf("RevokeToken: %v", err)
@@ -138,7 +133,7 @@ func TestRevokeToken(t *testing.T) {
 	if !revoked {
 		t.Fatal("RevokeToken returned false")
 	}
-	_, _, err = s.Validate(tok.Token)
+	_, err = s.Validate(tok.Token)
 	if !errors.Is(err, ErrTokenNotFound{}) {
 		t.Errorf("err after revoke = %v, want ErrTokenNotFound", err)
 	}
@@ -160,10 +155,10 @@ func TestRevokeNonexistentReturnsFalse(t *testing.T) {
 
 func TestDuplicateUserRejected(t *testing.T) {
 	s, database := newTestStore(t)
-	if _, err := s.AddToken("alice", "member", nil); err != nil {
+	if _, err := s.AddToken("alice", nil); err != nil {
 		t.Fatalf("first AddToken: %v", err)
 	}
-	_, err := s.AddToken("alice", "member", nil)
+	_, err := s.AddToken("alice", nil)
 	if err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("err = %v, want 'already exists'", err)
 	}
@@ -174,17 +169,9 @@ func TestDuplicateUserRejected(t *testing.T) {
 	}
 }
 
-func TestInvalidRoleRejected(t *testing.T) {
-	s, _ := newTestStore(t)
-	_, err := s.AddToken("alice", "nonexistent_role", nil)
-	if err == nil || !strings.Contains(err.Error(), "does not exist") {
-		t.Errorf("err = %v, want 'does not exist'", err)
-	}
-}
-
 func TestListTokensHidesValues(t *testing.T) {
 	s, _ := newTestStore(t)
-	if _, err := s.AddToken("alice", "member", intp(30)); err != nil {
+	if _, err := s.AddToken("alice", intp(30)); err != nil {
 		t.Fatalf("AddToken: %v", err)
 	}
 	res := s.ListTokens()
@@ -199,7 +186,7 @@ func TestListTokensHidesValues(t *testing.T) {
 
 func TestGetUsername(t *testing.T) {
 	s, _ := newTestStore(t)
-	tok, err := s.AddToken("alice", "member", nil)
+	tok, err := s.AddToken("alice", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,43 +198,9 @@ func TestGetUsername(t *testing.T) {
 	}
 }
 
-func TestRateLimitingPerUser(t *testing.T) {
-	s, _ := newTestStore(t)
-	if _, err := s.AddRole("limited", []string{"get_public_key"}, 5, "2/60s"); err != nil {
-		t.Fatalf("AddRole: %v", err)
-	}
-	tok, err := s.AddToken("ratelimited_user", "limited", nil)
-	if err != nil {
-		t.Fatalf("AddToken: %v", err)
-	}
-	if _, _, err := s.Validate(tok.Token); err != nil {
-		t.Fatalf("first Validate: %v", err)
-	}
-	if _, _, err := s.Validate(tok.Token); err != nil {
-		t.Fatalf("second Validate: %v", err)
-	}
-	_, _, err = s.Validate(tok.Token)
-	var rl ErrRateLimit
-	if !errors.As(err, &rl) {
-		t.Fatalf("third Validate err = %v, want ErrRateLimit", err)
-	}
-}
-
-func TestTopKFromRole(t *testing.T) {
-	s, _ := newTestStore(t)
-	tok, _ := s.AddToken("alice", "member", nil)
-	_, role, err := s.Validate(tok.Token)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if role.TopK != 10 {
-		t.Errorf("top_k = %d, want 10", role.TopK)
-	}
-}
-
 func TestNeverExpiresToken(t *testing.T) {
 	s, database := newTestStore(t)
-	tok, err := s.AddToken("permanent_user", "admin", nil)
+	tok, err := s.AddToken("permanent_user", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +210,7 @@ func TestNeverExpiresToken(t *testing.T) {
 	if tok.IsExpired() {
 		t.Error("IsExpired = true, want false")
 	}
-	user, _, err := s.Validate(tok.Token)
+	user, err := s.Validate(tok.Token)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,39 +227,23 @@ func TestNeverExpiresToken(t *testing.T) {
 	}
 }
 
-// TestPersistAndReload: a role and a token written through one store are
-// served by a second store loaded from the same database path (restart
-// shape). Replaces the YAML round-trip test.
+// TestPersistAndReload: a token written through one store is served by a
+// second store loaded from the same database path (restart shape).
 func TestPersistAndReload(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "runeconsole.db")
 	s1 := newDBStore(t, openTestDB(t, path))
-	if _, err := s1.AddRole("researcher", []string{"get_public_key", "decrypt_scores"}, 3, "10/60s"); err != nil {
-		t.Fatalf("AddRole: %v", err)
-	}
-	tok, err := s1.AddToken("alice", "member", intp(90))
+	tok, err := s1.AddToken("alice", intp(90))
 	if err != nil {
 		t.Fatalf("AddToken: %v", err)
 	}
 
 	s2 := newDBStore(t, openTestDB(t, path))
-	user, role, err := s2.Validate(tok.Token)
+	user, err := s2.Validate(tok.Token)
 	if err != nil {
 		t.Fatalf("reload Validate: %v", err)
 	}
-	if user != "alice" || role.Name != "member" {
-		t.Errorf("got (%q, %q), want (alice, member)", user, role.Name)
-	}
-
-	roles := s2.ListRoles()
-	found := false
-	for _, r := range roles {
-		if r.Name == "researcher" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("researcher role missing after reload")
+	if user != "alice" {
+		t.Errorf("user = %q, want alice", user)
 	}
 }
 
@@ -314,13 +251,13 @@ func TestPersistAndReload(t *testing.T) {
 
 func TestRotateToken(t *testing.T) {
 	s, _ := newTestStore(t)
-	old, _ := s.AddToken("alice", "member", nil)
+	old, _ := s.AddToken("alice", nil)
 	newTok, err := s.RotateToken("alice")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if newTok.User != "alice" || newTok.Role != "member" {
-		t.Errorf("got (%q, %q), want (alice, member)", newTok.User, newTok.Role)
+	if newTok.User != "alice" {
+		t.Errorf("user = %q, want alice", newTok.User)
 	}
 	if !strings.HasPrefix(newTok.Token, "evt_") {
 		t.Errorf("token = %q, want evt_ prefix", newTok.Token)
@@ -332,7 +269,7 @@ func TestRotateToken(t *testing.T) {
 
 func TestRotatePreservesExpiry(t *testing.T) {
 	s, _ := newTestStore(t)
-	if _, err := s.AddToken("alice", "member", intp(90)); err != nil {
+	if _, err := s.AddToken("alice", intp(90)); err != nil {
 		t.Fatal(err)
 	}
 	newTok, err := s.RotateToken("alice")
@@ -354,30 +291,30 @@ func TestRotatePreservesExpiry(t *testing.T) {
 
 func TestRotateInvalidatesOldToken(t *testing.T) {
 	s, _ := newTestStore(t)
-	old, _ := s.AddToken("alice", "member", nil)
+	old, _ := s.AddToken("alice", nil)
 	if _, err := s.RotateToken("alice"); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Validate(old.Token); !errors.Is(err, ErrTokenNotFound{}) {
+	if _, err := s.Validate(old.Token); !errors.Is(err, ErrTokenNotFound{}) {
 		t.Errorf("err = %v, want ErrTokenNotFound", err)
 	}
 }
 
 func TestRotateNewTokenValidates(t *testing.T) {
 	s, _ := newTestStore(t)
-	if _, err := s.AddToken("alice", "member", nil); err != nil {
+	if _, err := s.AddToken("alice", nil); err != nil {
 		t.Fatal(err)
 	}
 	newTok, err := s.RotateToken("alice")
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, role, err := s.Validate(newTok.Token)
+	user, err := s.Validate(newTok.Token)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if user != "alice" || role.Name != "member" {
-		t.Errorf("got (%q, %q), want (alice, member)", user, role.Name)
+	if user != "alice" {
+		t.Errorf("user = %q, want alice", user)
 	}
 }
 
@@ -391,8 +328,8 @@ func TestRotateNonexistentUserRaises(t *testing.T) {
 
 func TestRotateAll(t *testing.T) {
 	s, _ := newTestStore(t)
-	tokA, _ := s.AddToken("alice", "member", nil)
-	tokB, _ := s.AddToken("bob", "admin", nil)
+	tokA, _ := s.AddToken("alice", nil)
+	tokB, _ := s.AddToken("bob", nil)
 	res, err := s.RotateAllTokens()
 	if err != nil {
 		t.Fatal(err)
@@ -407,21 +344,21 @@ func TestRotateAll(t *testing.T) {
 	if !got["alice"] || !got["bob"] {
 		t.Errorf("got users = %v, want alice + bob", got)
 	}
-	if _, _, err := s.Validate(tokA.Token); !errors.Is(err, ErrTokenNotFound{}) {
+	if _, err := s.Validate(tokA.Token); !errors.Is(err, ErrTokenNotFound{}) {
 		t.Errorf("alice old token still valid")
 	}
-	if _, _, err := s.Validate(tokB.Token); !errors.Is(err, ErrTokenNotFound{}) {
+	if _, err := s.Validate(tokB.Token); !errors.Is(err, ErrTokenNotFound{}) {
 		t.Errorf("bob old token still valid")
 	}
 }
 
 // TestRotatePersists: a rotation committed through one store is what a
 // restart serves — the old secret is gone from the database, the new one
-// validates. Replaces the YAML reload test.
+// validates.
 func TestRotatePersists(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "runeconsole.db")
 	s1 := newDBStore(t, openTestDB(t, path))
-	old, err := s1.AddToken("alice", "member", intp(30))
+	old, err := s1.AddToken("alice", intp(30))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -431,280 +368,15 @@ func TestRotatePersists(t *testing.T) {
 	}
 
 	s2 := newDBStore(t, openTestDB(t, path))
-	user, role, err := s2.Validate(newTok.Token)
+	user, err := s2.Validate(newTok.Token)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if user != "alice" || role.Name != "member" {
-		t.Errorf("got (%q, %q), want (alice, member)", user, role.Name)
+	if user != "alice" {
+		t.Errorf("user = %q, want alice", user)
 	}
-	if _, _, err := s2.Validate(old.Token); !errors.Is(err, ErrTokenNotFound{}) {
+	if _, err := s2.Validate(old.Token); !errors.Is(err, ErrTokenNotFound{}) {
 		t.Errorf("old secret still validates after reload: %v", err)
-	}
-}
-
-// ── role CRUD ──────────────────────────────────────────────────────
-
-func TestCreateRole(t *testing.T) {
-	s, _ := newTestStore(t)
-	r, err := s.AddRole("researcher", []string{"get_public_key", "decrypt_scores"}, 3, "10/60s")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r.Name != "researcher" || r.TopK != 3 {
-		t.Errorf("got (%q, %d), want (researcher, 3)", r.Name, r.TopK)
-	}
-	if err := r.CheckScope("get_public_key"); err != nil {
-		t.Errorf("CheckScope(get_public_key): %v", err)
-	}
-}
-
-func TestCreateDuplicateRoleRejected(t *testing.T) {
-	s, _ := newTestStore(t)
-	_, err := s.AddRole("admin", []string{"get_public_key"}, 5, "30/60s")
-	if err == nil || !strings.Contains(err.Error(), "already exists") {
-		t.Errorf("err = %v, want 'already exists'", err)
-	}
-}
-
-func TestUpdateRole(t *testing.T) {
-	s, _ := newTestStore(t)
-	r, err := s.UpdateRole("member", UpdateRoleOpts{TopK: intp(8)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r.TopK != 8 || r.Name != "member" {
-		t.Errorf("got (%q, %d), want (member, 8)", r.Name, r.TopK)
-	}
-}
-
-func TestUpdateNonexistentRoleRejected(t *testing.T) {
-	s, _ := newTestStore(t)
-	_, err := s.UpdateRole("nonexistent", UpdateRoleOpts{TopK: intp(5)})
-	if err == nil || !strings.Contains(err.Error(), "does not exist") {
-		t.Errorf("err = %v, want 'does not exist'", err)
-	}
-}
-
-func TestDeleteCustomRole(t *testing.T) {
-	s, database := newTestStore(t)
-	if _, err := s.AddRole("temp", []string{"get_public_key"}, 1, "5/60s"); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.DeleteRole("temp"); err != nil {
-		t.Fatal(err)
-	}
-	for _, r := range s.ListRoles() {
-		if r.Name == "temp" {
-			t.Error("temp role still present after delete")
-		}
-	}
-	var n int
-	if err := database.QueryRow(`SELECT COUNT(*) FROM roles WHERE name = 'temp'`).Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Errorf("role rows after delete = %d, want 0", n)
-	}
-}
-
-func TestDeleteDefaultRoleRejected(t *testing.T) {
-	s, _ := newTestStore(t)
-	for _, name := range []string{"admin", "member"} {
-		err := s.DeleteRole(name)
-		if err == nil || !strings.Contains(err.Error(), "Cannot delete default") {
-			t.Errorf("delete %s: err = %v, want 'Cannot delete default'", name, err)
-		}
-	}
-}
-
-// TestDeleteDefaultRoleGuardPrecedesExistence pins the guard ORDER: the
-// default-name check runs before the existence check, so deleting "admin" on
-// a completely empty store still reports "Cannot delete default", never
-// "does not exist".
-func TestDeleteDefaultRoleGuardPrecedesExistence(t *testing.T) {
-	s := NewStore() // sink-less AND role-less
-	err := s.DeleteRole("admin")
-	if err == nil || !strings.Contains(err.Error(), "Cannot delete default") {
-		t.Errorf("err = %v, want 'Cannot delete default' even with no roles loaded", err)
-	}
-}
-
-func TestDeleteRoleWithActiveTokensRejected(t *testing.T) {
-	s, _ := newTestStore(t)
-	if _, err := s.AddRole("temp", []string{"get_public_key"}, 1, "5/60s"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.AddToken("user1", "temp", nil); err != nil {
-		t.Fatal(err)
-	}
-	err := s.DeleteRole("temp")
-	if err == nil || !strings.Contains(err.Error(), "token for user") {
-		t.Errorf("err = %v, want 'token for user'", err)
-	}
-}
-
-func TestListRoles(t *testing.T) {
-	s, _ := newTestStore(t)
-	roles := s.ListRoles()
-	if len(roles) < 2 {
-		t.Fatalf("len = %d, want >= 2", len(roles))
-	}
-	names := map[string]bool{}
-	for _, r := range roles {
-		names[r.Name] = true
-	}
-	if !names["admin"] || !names["member"] {
-		t.Errorf("missing default roles, got %v", names)
-	}
-}
-
-// TestDefaultRolesSeededWhenAbsentAndOverridesKept pins the boot seeding
-// contract: a fresh database gets admin/member as rows, and a stored
-// operator override of a default role is respected (seed rows are inserted
-// only when absent — never an unconditional merge).
-func TestDefaultRolesSeededWhenAbsentAndOverridesKept(t *testing.T) {
-	// Fresh database: LoadFromDB materializes both defaults as rows.
-	_, database := newTestStore(t)
-	var n int
-	if err := database.QueryRow(`SELECT COUNT(*) FROM roles WHERE name IN ('admin','member')`).Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n != 2 {
-		t.Errorf("seeded default role rows = %d, want 2", n)
-	}
-
-	// Pre-existing override: an operator-modified admin row survives boot.
-	database2 := newTestDB(t)
-	if _, err := database2.Exec(
-		`INSERT INTO roles (name, scope, top_k, rate_limit) VALUES ('admin', '["get_public_key"]', 99, '1/60s')`); err != nil {
-		t.Fatal(err)
-	}
-	s2 := newDBStore(t, database2)
-	for _, r := range s2.ListRoles() {
-		if r.Name == "admin" && r.TopK != 99 {
-			t.Errorf("admin override lost at boot: top_k = %d, want 99", r.TopK)
-		}
-	}
-}
-
-// TestAddRoleMaterializesWriteTimeDefaults pins the branch decision that the
-// legacy read-time role defaults materialize at write: a role added with
-// top_k 0 and an empty rate_limit reads back 5 / "30/60s" immediately AND
-// after a restart — the old "0 until reboot, then silently 5" flip is gone.
-func TestAddRoleMaterializesWriteTimeDefaults(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "runeconsole.db")
-	s1 := newDBStore(t, openTestDB(t, path))
-	r, err := s1.AddRole("zeroed", []string{"get_public_key"}, 0, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r.TopK != 5 || r.RateLimit != "30/60s" {
-		t.Errorf("AddRole returned (%d, %q), want (5, 30/60s)", r.TopK, r.RateLimit)
-	}
-	assertRole := func(s *Store, when string) {
-		t.Helper()
-		for _, ri := range s.ListRoles() {
-			if ri.Name != "zeroed" {
-				continue
-			}
-			if ri.TopK != 5 || ri.RateLimit != "30/60s" {
-				t.Errorf("%s: role = (%d, %q), want (5, 30/60s)", when, ri.TopK, ri.RateLimit)
-			}
-			return
-		}
-		t.Errorf("%s: role zeroed missing", when)
-	}
-	assertRole(s1, "before reopen")
-	assertRole(newDBStore(t, openTestDB(t, path)), "after reopen")
-}
-
-// TestUpdateRoleMaterializesZeroTopK: UpdateRole had the same load-time
-// dependency for top_k 0 (stored 0, flipped to 5 on the next boot), so it
-// materializes the default at write exactly like AddRole.
-func TestUpdateRoleMaterializesZeroTopK(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "runeconsole.db")
-	s1 := newDBStore(t, openTestDB(t, path))
-	if _, err := s1.AddRole("patchy", []string{"get_public_key"}, 3, "10/60s"); err != nil {
-		t.Fatal(err)
-	}
-	r, err := s1.UpdateRole("patchy", UpdateRoleOpts{TopK: intp(0)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r.TopK != 5 {
-		t.Errorf("UpdateRole(top_k 0) = %d, want 5", r.TopK)
-	}
-	s2 := newDBStore(t, openTestDB(t, path))
-	for _, ri := range s2.ListRoles() {
-		if ri.Name == "patchy" && ri.TopK != 5 {
-			t.Errorf("after reopen top_k = %d, want 5", ri.TopK)
-		}
-	}
-}
-
-func TestUpdateRoleClearsRateLimiters(t *testing.T) {
-	s, _ := newTestStore(t)
-	tok, _ := s.AddToken("alice", "member", nil)
-	if _, _, err := s.Validate(tok.Token); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := s.rateLimiters["alice"]; !ok {
-		t.Fatal("rate limiter not created on validate")
-	}
-	rl := "100/60s"
-	if _, err := s.UpdateRole("member", UpdateRoleOpts{RateLimit: &rl}); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := s.rateLimiters["alice"]; ok {
-		t.Error("rate limiter not cleared after rate_limit change")
-	}
-}
-
-func TestRoleRateLimitParsed(t *testing.T) {
-	r := &Role{Name: "test", RateLimit: "30/60s"}
-	maxReq, window, err := r.RateLimitParsed()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if maxReq != 30 {
-		t.Errorf("max = %d, want 30", maxReq)
-	}
-	if window != 60*time.Second {
-		t.Errorf("window = %v, want 60s", window)
-	}
-}
-
-// ── scope check ────────────────────────────────────────────────────
-
-func TestScopeAllowsValidMethod(t *testing.T) {
-	r := &Role{Name: "member", Scope: []string{"get_public_key", "decrypt_scores"}}
-	if err := r.CheckScope("get_public_key"); err != nil {
-		t.Errorf("err = %v, want nil", err)
-	}
-}
-
-func TestScopeRejectsInvalidMethod(t *testing.T) {
-	r := &Role{Name: "limited", Scope: []string{"get_public_key"}}
-	err := r.CheckScope("decrypt_scores")
-	var se ErrScope
-	if !errors.As(err, &se) {
-		t.Fatalf("err = %v, want ErrScope", err)
-	}
-	if se.Method != "decrypt_scores" || se.RoleName != "limited" {
-		t.Errorf("got (%q, %q), want (decrypt_scores, limited)", se.Method, se.RoleName)
-	}
-}
-
-// ── TopKExceeded ───────────────────────────────────────────────────
-
-func TestTopKExceededMessage(t *testing.T) {
-	err := ErrTopKExceeded{Requested: 15, MaxTopK: 10, RoleName: "admin"}
-	msg := err.Error()
-	for _, want := range []string{"15", "10", "admin"} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("msg = %q, missing %q", msg, want)
-		}
 	}
 }
 
@@ -713,41 +385,29 @@ func TestTopKExceededMessage(t *testing.T) {
 func TestLoadDefaultsWithDemoToken(t *testing.T) {
 	s := NewStore()
 	s.LoadDefaultsWithDemoToken()
-	user, role, err := s.Validate(DemoToken)
+	user, err := s.Validate(DemoToken)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if user != "demo" || role.Name != "admin" {
-		t.Errorf("got (%q, %q), want (demo, admin)", user, role.Name)
+	if user != "demo" {
+		t.Errorf("user = %q, want demo", user)
 	}
 }
 
 // ── copy-out contract (no live pointers escape) ───────────────────
 
 // TestReturnedValuesAreCopies pins the value-copy contract: mutating what
-// Validate/AddToken/RotateToken hand back must never change store state
-// (grpc handlers read the returned role after the store lock is released,
-// while UpdateRole mutates the live record under it).
+// AddToken/RotateToken hand back must never change store state.
 func TestReturnedValuesAreCopies(t *testing.T) {
 	s, _ := newTestStore(t)
-	tok, err := s.AddToken("alice", "member", intp(30))
+	tok, err := s.AddToken("alice", intp(30))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Sabotage the returned token: the store must not notice.
 	tok.Expires = "1999-01-01"
-	if _, _, err := s.Validate(tok.Token); err != nil {
+	if _, err := s.Validate(tok.Token); err != nil {
 		t.Errorf("Validate after mutating returned token: %v (live pointer escaped AddToken)", err)
-	}
-
-	_, role, err := s.Validate(tok.Token)
-	if err != nil {
-		t.Fatal(err)
-	}
-	role.TopK = 999
-	role.Scope[0] = "mutated"
-	if _, fresh, _ := s.Validate(tok.Token); fresh.TopK == 999 || fresh.Scope[0] == "mutated" {
-		t.Error("mutating Validate's returned role changed store state (live pointer escaped)")
 	}
 
 	rot, err := s.RotateToken("alice")
@@ -755,60 +415,8 @@ func TestReturnedValuesAreCopies(t *testing.T) {
 		t.Fatal(err)
 	}
 	rot.Expires = "1999-01-01"
-	if _, _, err := s.Validate(rot.Token); err != nil {
+	if _, err := s.Validate(rot.Token); err != nil {
 		t.Errorf("Validate after mutating rotated token: %v (live pointer escaped RotateToken)", err)
-	}
-}
-
-// ── dangling role (no FK on tokens.role by design) ────────────────
-
-// danglingRoleStore loads a store from a database holding a token whose role
-// row does not exist — the state a hand-edited legacy file could produce and
-// the reason tokens.role has no FK.
-func danglingRoleStore(t *testing.T) (*Store, string) {
-	t.Helper()
-	database := newTestDB(t)
-	const secret = "evt_dddddddddddddddddddddddddddddddd"
-	if _, err := database.Exec(
-		`INSERT INTO tokens (user, token, role, issued_at, expires, last_used)
-		 VALUES ('ghosted', ?, 'ghost', '2026-01-01', NULL, NULL)`, secret); err != nil {
-		t.Fatal(err)
-	}
-	return newDBStore(t, database), secret
-}
-
-// TestDanglingRoleListsAsQuestionMarksAndFailsClosed pins the tolerate-and-
-// display pair: a token whose role is missing stays visible in listings with
-// TopK/RateLimit rendered as "?", while Validate refuses it with
-// ErrTokenNotFound (fail-closed, indistinguishable from "no such token").
-func TestDanglingRoleListsAsQuestionMarksAndFailsClosed(t *testing.T) {
-	s, secret := danglingRoleStore(t)
-	infos := s.ListTokens()
-	if len(infos) != 1 {
-		t.Fatalf("ListTokens len = %d, want 1", len(infos))
-	}
-	if infos[0].Role != "ghost" || infos[0].TopK != "?" || infos[0].RateLimit != "?" {
-		t.Errorf("dangling-role row = %+v, want role ghost with '?' attributes", infos[0])
-	}
-	if _, _, err := s.Validate(secret); !errors.Is(err, ErrTokenNotFound{}) {
-		t.Errorf("Validate = %v, want ErrTokenNotFound (fail closed)", err)
-	}
-}
-
-// TestRotateTokenKeepsDanglingRole pins the deliberate legacy gap: rotation
-// preserves the role name without checking it still exists, and the rotated
-// token keeps failing Validate closed.
-func TestRotateTokenKeepsDanglingRole(t *testing.T) {
-	s, _ := danglingRoleStore(t)
-	rot, err := s.RotateToken("ghosted")
-	if err != nil {
-		t.Fatalf("RotateToken over a dangling role: %v (legacy behavior allows it)", err)
-	}
-	if rot.Role != "ghost" {
-		t.Errorf("rotated role = %q, want ghost", rot.Role)
-	}
-	if _, _, err := s.Validate(rot.Token); !errors.Is(err, ErrTokenNotFound{}) {
-		t.Errorf("rotated dangling-role token Validate = %v, want ErrTokenNotFound", err)
 	}
 }
 
@@ -820,7 +428,7 @@ func TestRotateTokenKeepsDanglingRole(t *testing.T) {
 // the database file's 0600 fail-closed posture.
 func TestMintedTokenPlaintextStoredInDB(t *testing.T) {
 	s, database := newTestStore(t)
-	tok, err := s.AddToken("alice", "member", intp(7))
+	tok, err := s.AddToken("alice", intp(7))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -844,12 +452,12 @@ func TestValidateStampsLastUsedThrottled(t *testing.T) {
 	s := newDBStore(t, openTestDB(t, path))
 	base := time.Date(2026, 7, 16, 9, 0, 0, 0, time.UTC)
 	s.now = func() time.Time { return base }
-	tok, err := s.AddToken("alice", "member", nil)
+	tok, err := s.AddToken("alice", nil)
 	if err != nil {
 		t.Fatalf("AddToken: %v", err)
 	}
 
-	if _, _, err := s.Validate(tok.Token); err != nil {
+	if _, err := s.Validate(tok.Token); err != nil {
 		t.Fatalf("validate 1: %v", err)
 	}
 	if got := s.tokensByUser["alice"].LastUsed; got != storedb.FormatTime(base) {
@@ -858,7 +466,7 @@ func TestValidateStampsLastUsedThrottled(t *testing.T) {
 
 	// Within the throttle window: not rewritten.
 	s.now = func() time.Time { return base.Add(lastUsedThrottle / 2) }
-	if _, _, err := s.Validate(tok.Token); err != nil {
+	if _, err := s.Validate(tok.Token); err != nil {
 		t.Fatalf("validate 2: %v", err)
 	}
 	if got := s.tokensByUser["alice"].LastUsed; got != storedb.FormatTime(base) {
@@ -868,7 +476,7 @@ func TestValidateStampsLastUsedThrottled(t *testing.T) {
 	// Past the throttle window: updated.
 	later := base.Add(lastUsedThrottle + time.Second)
 	s.now = func() time.Time { return later }
-	if _, _, err := s.Validate(tok.Token); err != nil {
+	if _, err := s.Validate(tok.Token); err != nil {
 		t.Fatalf("validate 3: %v", err)
 	}
 	if got := s.tokensByUser["alice"].LastUsed; got != storedb.FormatTime(later) {
@@ -906,7 +514,7 @@ func TestValidateStampsLastUsedThrottled(t *testing.T) {
 // interval persists again.
 func TestLastUsedWriterThrottlesPerToken(t *testing.T) {
 	s, database := newTestStore(t)
-	tok, err := s.AddToken("alice", "member", nil)
+	tok, err := s.AddToken("alice", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -943,7 +551,7 @@ func TestLastUsedWriterThrottlesPerToken(t *testing.T) {
 // secret must not backdate the rotated row.
 func TestStaleLastUsedStampAfterRotationIsDropped(t *testing.T) {
 	s, database := newTestStore(t)
-	old, err := s.AddToken("alice", "member", nil)
+	old, err := s.AddToken("alice", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
