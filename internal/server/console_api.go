@@ -363,6 +363,7 @@ func (h *consoleAPI) renameTeam(w http.ResponseWriter, r *http.Request) {
 type memberDTO struct {
 	UserID           string `json:"userId"`
 	Account          string `json:"account"`
+	Username         string `json:"username"`
 	Role             string `json:"role"`
 	InvitationStatus string `json:"invitationStatus"`
 	SessionStatus    string `json:"sessionStatus"`
@@ -411,8 +412,9 @@ func (h *consoleAPI) teamMembers(w http.ResponseWriter, r *http.Request) {
 
 func (h *consoleAPI) addTeamMember(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Account string `json:"account"`
-		Role    string `json:"role"`
+		Account  string `json:"account"`
+		Username string `json:"username"`
+		Role     string `json:"role"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		apiErr(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
@@ -430,14 +432,20 @@ func (h *consoleAPI) addTeamMember(w http.ResponseWriter, r *http.Request) {
 	}
 	// The org admin (Owner) may hold a normal team membership like anyone else:
 	// admin-ness is an independent axis (IsOrgAdmin governs grant authority), not
-	// a bar to membership. But the admin is not auto-seeded a member row, so
-	// adding the owner's own email through this "add existing member" path 404s
-	// (USER_NOT_FOUND) until they have been invited (the invite flow creates the
-	// row). Memory access is still governed by the granted role.
+	// a bar to membership. An unknown account is created on the spot (mirroring
+	// the invite flow), stamping the supplied username as its display name — the
+	// team screen's "add member" is a create-or-attach, not existing-only.
 	m, err := h.ms.members.GetByEmail(body.Account)
+	newMember := false
 	if err != nil {
-		apiErr(w, http.StatusNotFound, "USER_NOT_FOUND", "no registered user for account "+body.Account)
-		return
+		created, aerr := h.ms.members.Add(body.Account, body.Username)
+		if aerr != nil {
+			// GetByEmail missed, so a failed Add means a malformed account
+			// (ErrInvalidEmail) — report it in the console error shape.
+			apiErr(w, http.StatusBadRequest, "VALIDATION_ERROR", aerr.Error())
+			return
+		}
+		m, newMember = created, true
 	}
 	if _, exists, _ := h.v.Groups().DirectRole(m.ID, ref); exists {
 		apiErr(w, http.StatusConflict, "ALREADY_TEAM_MEMBER", "user is already a member of this team")
@@ -445,6 +453,9 @@ func (h *consoleAPI) addTeamMember(w http.ResponseWriter, r *http.Request) {
 	}
 	mem, err := h.v.Groups().Grant(m.ID, ref, role, localAdminActor(actorFromContext(r.Context())))
 	if err != nil {
+		if newMember {
+			_ = h.ms.members.Remove(m.ID)
+		}
 		writeGroupAPIErr(w, err)
 		return
 	}
@@ -455,6 +466,9 @@ func (h *consoleAPI) addTeamMember(w http.ResponseWriter, r *http.Request) {
 	if h.needsCode(m) {
 		if ierr := h.issueCode(r, m); ierr != nil {
 			_, _ = h.v.Groups().RevokeDirectGrant(m.ID, ref)
+			if newMember {
+				_ = h.ms.members.Remove(m.ID)
+			}
 			slog.Error("console: invite code send failed on add-member (membership rolled back)",
 				"account", body.Account, "team", ref, "err", ierr)
 			apiErr(w, http.StatusBadGateway, "MAIL_UPSTREAM_ERROR", "failed to send the invitation code email")

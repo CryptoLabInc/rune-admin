@@ -37,6 +37,7 @@ type membershipDTO struct {
 type userDTO struct {
 	UserID           string `json:"userId"`
 	Account          string `json:"account"`
+	Username         string `json:"username"`
 	InvitationStatus string `json:"invitationStatus"`
 	SessionStatus    string `json:"sessionStatus"`
 	// Memberships is the user's DIRECT (explicit) memberships — the
@@ -74,6 +75,7 @@ func (u userDTO) MarshalJSON() ([]byte, error) {
 	return json.Marshal(userWire{
 		UserID:           u.UserID,
 		Account:          u.Account,
+		Username:         u.Username,
 		InvitationStatus: u.InvitationStatus,
 		SessionStatus:    u.SessionStatus,
 		Memberships:      merged,
@@ -90,6 +92,7 @@ func (u userDTO) MarshalJSON() ([]byte, error) {
 type userWire struct {
 	UserID           string          `json:"userId"`
 	Account          string          `json:"account"`
+	Username         string          `json:"username"`
 	InvitationStatus string          `json:"invitationStatus"`
 	SessionStatus    string          `json:"sessionStatus"`
 	Memberships      []membershipDTO `json:"memberships"`
@@ -314,6 +317,7 @@ func (idx *userIndex) userDTO(m members.Member) userDTO {
 	return userDTO{
 		UserID:               m.ID,
 		Account:              m.Email,
+		Username:             m.DisplayName,
 		InvitationStatus:     st.invitation,
 		SessionStatus:        st.session,
 		Memberships:          ms,
@@ -326,14 +330,15 @@ func (idx *userIndex) userDTO(m members.Member) userDTO {
 
 // memberDTO builds the team-member-table row for a membership.
 func (idx *userIndex) memberDTO(m groups.Membership) memberDTO {
-	account := ""
+	account, username := "", ""
 	st := memberStatuses{invitation: "invite_pending", session: "offline"}
 	if mem, ok := idx.memberByID[m.User]; ok {
-		account, st = mem.Email, idx.statuses(mem)
+		account, username, st = mem.Email, mem.DisplayName, idx.statuses(mem)
 	}
 	return memberDTO{
 		UserID:           m.User,
 		Account:          account,
+		Username:         username,
 		Role:             string(m.Role),
 		InvitationStatus: st.invitation,
 		SessionStatus:    st.session,
@@ -349,14 +354,15 @@ func (idx *userIndex) memberDTO(m groups.Membership) memberDTO {
 // read and joinedAt is null, since there is no grant to timestamp. Shown in the
 // team member table alongside direct members without distinction.
 func (idx *userIndex) inheritedMemberDTO(userID string) memberDTO {
-	account := ""
+	account, username := "", ""
 	st := memberStatuses{invitation: "invite_pending", session: "offline"}
 	if mem, ok := idx.memberByID[userID]; ok {
-		account, st = mem.Email, idx.statuses(mem)
+		account, username, st = mem.Email, mem.DisplayName, idx.statuses(mem)
 	}
 	return memberDTO{
 		UserID:           userID,
 		Account:          account,
+		Username:         username,
 		Role:             string(groups.RoleRead),
 		InvitationStatus: st.invitation,
 		SessionStatus:    st.session,
@@ -387,15 +393,15 @@ func (h *consoleAPI) usersList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// sort is an enum (doc §users): last_invited (default) | account. Reject an
-	// out-of-enum value with 400 rather than silently ignoring it (which makes
-	// the client's sort dropdown appear to do nothing), mirroring the
+	// sort is an enum (doc §users): last_invited (default) | username | account.
+	// Reject an out-of-enum value with 400 rather than silently ignoring it (which
+	// makes the client's sort dropdown appear to do nothing), mirroring the
 	// status-filter check above and the invitationsHistory sort validation.
 	sortKey := strings.TrimSpace(q.Get("sort"))
 	if sortKey == "" {
 		sortKey = "last_invited"
 	}
-	if sortKey != "last_invited" && sortKey != "account" {
+	if sortKey != "last_invited" && sortKey != "username" && sortKey != "account" {
 		apiErr(w, http.StatusBadRequest, "VALIDATION_ERROR", "unknown sort: "+sortKey)
 		return
 	}
@@ -405,7 +411,9 @@ func (h *consoleAPI) usersList(w http.ResponseWriter, r *http.Request) {
 	items := make([]userDTO, 0, len(idx.memberByID))
 	for _, m := range h.ms.members.List() {
 		u := idx.userDTO(m)
-		if search != "" && !strings.Contains(strings.ToLower(u.Account), search) {
+		if search != "" &&
+			!strings.Contains(strings.ToLower(u.Account), search) &&
+			!strings.Contains(strings.ToLower(u.Username), search) {
 			continue
 		}
 		if statusFilter != "" && u.SessionStatus != statusFilter {
@@ -417,6 +425,15 @@ func (h *consoleAPI) usersList(w http.ResponseWriter, r *http.Request) {
 		items = append(items, u)
 	}
 	switch sortKey {
+	case "username":
+		// Display name ascending; account tiebreak so equal/empty names stay
+		// deterministic.
+		sort.SliceStable(items, func(i, j int) bool {
+			if items[i].Username != items[j].Username {
+				return items[i].Username < items[j].Username
+			}
+			return items[i].Account < items[j].Account
+		})
 	case "account":
 		// Account ascending (byte order — deterministic and stable).
 		sort.SliceStable(items, func(i, j int) bool {
@@ -756,6 +773,7 @@ func (h *consoleAPI) userMembershipsRemoveBatch(w http.ResponseWriter, r *http.R
 func (h *consoleAPI) createInvitation(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Account     string `json:"account"`
+		Username    string `json:"username"`
 		Memberships []struct {
 			TeamID string `json:"teamId"`
 			Role   string `json:"role"`
@@ -793,7 +811,7 @@ func (h *consoleAPI) createInvitation(w http.ResponseWriter, r *http.Request) {
 	m, gerr := h.ms.members.GetByEmail(body.Account)
 	newMember := false
 	if gerr != nil {
-		created, aerr := h.ms.members.Add(body.Account, "")
+		created, aerr := h.ms.members.Add(body.Account, body.Username)
 		if aerr != nil {
 			// GetByEmail missed, so a failed Add means a malformed account
 			// (ErrInvalidEmail) — report it in the console error shape.
@@ -849,6 +867,7 @@ func (h *consoleAPI) createInvitation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"userId":           m.ID,
 		"account":          m.Email,
+		"username":         m.DisplayName,
 		"invitationStatus": st.invitation,
 		"sessionStatus":    st.session,
 		"codeSent":         codeSent,
@@ -951,6 +970,7 @@ func (h *consoleAPI) invitationsHistory(w http.ResponseWriter, r *http.Request) 
 	}
 	type historyRow struct {
 		Account      string  `json:"account"`
+		Username     string  `json:"username"`
 		IssuedAt     string  `json:"issuedAt"`
 		LastAccessAt *string `json:"lastAccessAt"`
 	}
@@ -964,19 +984,29 @@ func (h *consoleAPI) invitationsHistory(w http.ResponseWriter, r *http.Request) 
 		if tl, ok := idx.tokenByEmail[inv.Email]; ok && tl.lastUsed != "" {
 			la = wireTimePtr(tl.lastUsed)
 		}
-		rows = append(rows, historyRow{Account: inv.Email, IssuedAt: wireTime(inv.CreatedAt), LastAccessAt: la})
+		rows = append(rows, historyRow{
+			Account:      inv.Email,
+			Username:     idx.memberByID[inv.MemberID].DisplayName,
+			IssuedAt:     wireTime(inv.CreatedAt),
+			LastAccessAt: la,
+		})
 	}
 	// ?sort (design doc §invitations): last_access (DEFAULT — most-recent
 	// access first, rows with no access sink to the bottom) | issued_at
-	// (newest first) | account (A→Z). An empty param takes the last_access
-	// default; List() already yields issued_at desc.
+	// (newest first) | username (A→Z by display name, account tiebreak). An empty
+	// param takes the last_access default; List() already yields issued_at desc.
 	sortKey := r.URL.Query().Get("sort")
 	if sortKey == "" {
 		sortKey = "last_access"
 	}
 	switch sortKey {
-	case "account":
-		sort.SliceStable(rows, func(i, j int) bool { return rows[i].Account < rows[j].Account })
+	case "username":
+		sort.SliceStable(rows, func(i, j int) bool {
+			if rows[i].Username != rows[j].Username {
+				return rows[i].Username < rows[j].Username
+			}
+			return rows[i].Account < rows[j].Account
+		})
 	case "issued_at":
 		// already issued_at desc from List() — no-op
 	case "last_access":
