@@ -1274,7 +1274,8 @@ install_service() {
       "PrivateTmp=true" \
       "ProtectSystem=strict" \
       "ProtectHome=true" \
-      "ReadWritePaths=${INSTALL_PREFIX} ${UPDATE_INBOX_DIR} ${UPDATE_STAGING_DIR}" \
+      "# Keep staging and inbox on one sandbox mount: request publication uses link(2)." \
+      "ReadWritePaths=${INSTALL_PREFIX} ${UPDATE_STATE_DIR}" \
       "ProtectKernelTunables=true" \
       "ProtectKernelModules=true" \
       "ProtectControlGroups=true" \
