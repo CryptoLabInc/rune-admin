@@ -367,11 +367,10 @@ type memberDTO struct {
 	Role             string `json:"role"`
 	InvitationStatus string `json:"invitationStatus"`
 	SessionStatus    string `json:"sessionStatus"`
-	// JoinedAt is the membership's granted_at. It is a pointer because an
-	// inherited-read member has no stored row and thus no join timestamp, so
-	// that row serializes joinedAt as null; a direct member always carries a
-	// real value. (Same nullable-timestamp convention as userDTO's stamps.)
-	JoinedAt *string `json:"joinedAt"`
+	// JoinedAt is the direct membership's granted_at, or for inherited read,
+	// the granted_at of the nearest direct ancestor membership that supplies
+	// the access. Every listed member therefore has a concrete join timestamp.
+	JoinedAt string `json:"joinedAt"`
 }
 
 func (h *consoleAPI) teamMembers(w http.ResponseWriter, r *http.Request) {
@@ -389,21 +388,10 @@ func (h *consoleAPI) teamMembers(w http.ResponseWriter, r *http.Request) {
 	}
 	idx := h.newIndex()
 	items := make([]memberDTO, 0)
-	// Direct members: the stored (user, group, role) rows on this team.
-	for _, m := range h.v.Groups().ListMemberships() {
-		if m.GroupID != gid {
-			continue
-		}
-		items = append(items, idx.memberDTO(m))
-	}
-	// Inherited-read members: users who reach this team only by downward
-	// inheritance from an ancestor membership (no stored row on this team).
-	// Groups().Inheritors computes this in the store (one ancestor-chain walk)
-	// and already excludes anyone direct on this team, so the two sets never
-	// overlap. Listed alongside direct members without distinction (API design
-	// decision), rendered as read with a null joinedAt.
-	for _, uid := range h.v.Groups().Inheritors(gid) {
-		items = append(items, idx.inheritedMemberDTO(uid))
+	// Direct and inherited rows are derived under one store read lock. Inherited
+	// rows carry the nearest source membership's granted_at as their joinedAt.
+	for _, member := range h.v.Groups().ConsoleTeamMembers(gid) {
+		items = append(items, idx.consoleTeamMemberDTO(member))
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Account < items[j].Account })
 	pageItems, total := pageSlice(items, page, size)

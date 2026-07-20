@@ -1243,20 +1243,24 @@ func TestUserDTOTimestampsRenderSecondPrecision(t *testing.T) {
 		User: m.ID, GroupID: "g1", Role: groups.RoleRead,
 		GrantedAt: "2026-07-07T08:12:00.900Z",
 	})
-	if dto.JoinedAt == nil || *dto.JoinedAt != "2026-07-07T08:12:00Z" {
+	if dto.JoinedAt != "2026-07-07T08:12:00Z" {
 		t.Errorf("joinedAt = %v, want 2026-07-07T08:12:00Z", dto.JoinedAt)
 	}
-	// An inherited-read member has no grant row, so joinedAt is null.
-	if inh := idx.inheritedMemberDTO(m.ID); inh.JoinedAt != nil {
-		t.Errorf("inherited joinedAt = %v, want nil", *inh.JoinedAt)
+	// An inherited-read row carries its nearest source membership's timestamp.
+	inh := idx.consoleTeamMemberDTO(groups.ConsoleTeamMember{
+		User: m.ID, Role: groups.RoleRead, SourceGroupID: "parent",
+		GrantedAt: "2026-07-06T03:04:05.678Z", Inherited: true,
+	})
+	if inh.JoinedAt != "2026-07-06T03:04:05Z" {
+		t.Errorf("inherited joinedAt = %v, want source timestamp 2026-07-06T03:04:05Z", inh.JoinedAt)
 	}
 }
 
 // TestConsoleTeamMembersIncludeInherited proves the team-member listing surfaces
 // inherited-read users (parent-group members) alongside direct members, rendered
-// as read with a null joinedAt, and that the team role batch PROMOTES such an
-// inherited user by creating a first-time direct grant — the whole point of the
-// inherited-inclusion change, driven end-to-end over HTTP.
+// as read with the source membership's joinedAt. It also proves team detail/tree
+// counts match that effective list and that the team role batch PROMOTES an
+// inherited user via a first-time direct grant, driven end-to-end over HTTP.
 func TestConsoleTeamMembersIncludeInherited(t *testing.T) {
 	f := newConsoleAPIFixture(t)
 	gs := f.v.Groups()
@@ -1274,22 +1278,24 @@ func TestConsoleTeamMembersIncludeInherited(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Grant(direct.ID, teamA.ID, groups.RoleWrite, "actor"); err != nil {
+	directGrant, err := gs.Grant(direct.ID, teamA.ID, groups.RoleWrite, "actor")
+	if err != nil {
 		t.Fatal(err)
 	}
 	boss, err := f.members.Add("boss@x.com", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Grant(boss.ID, hq.ID, groups.RoleEdit, "actor"); err != nil {
+	bossGrant, err := gs.Grant(boss.ID, hq.ID, groups.RoleEdit, "actor")
+	if err != nil {
 		t.Fatal(err)
 	}
 
 	type row struct {
-		UserID   string  `json:"userId"`
-		Account  string  `json:"account"`
-		Role     string  `json:"role"`
-		JoinedAt *string `json:"joinedAt"`
+		UserID   string `json:"userId"`
+		Account  string `json:"account"`
+		Role     string `json:"role"`
+		JoinedAt string `json:"joinedAt"`
 	}
 	rowsByUser := func() (int, map[string]row) {
 		_, body := f.do(t, http.MethodGet, "/teams/"+teamA.ID+"/members", "")
@@ -1312,11 +1318,38 @@ func TestConsoleTeamMembersIncludeInherited(t *testing.T) {
 	if total != 2 {
 		t.Fatalf("member total=%d, want 2 (%+v)", total, byUser)
 	}
-	if d := byUser[direct.ID]; d.Role != "write" || d.JoinedAt == nil {
-		t.Errorf("direct member = %+v, want role=write with a non-null joinedAt", d)
+	if d := byUser[direct.ID]; d.Role != "write" || d.JoinedAt != wireTime(directGrant.GrantedAt) {
+		t.Errorf("direct member = %+v, want role=write joinedAt=%s", d, wireTime(directGrant.GrantedAt))
 	}
-	if b := byUser[boss.ID]; b.Account != "boss@x.com" || b.Role != "read" || b.JoinedAt != nil {
-		t.Errorf("inherited member = %+v, want account=boss@x.com role=read joinedAt=null", b)
+	if b := byUser[boss.ID]; b.Account != "boss@x.com" || b.Role != "read" || b.JoinedAt != wireTime(bossGrant.GrantedAt) {
+		t.Errorf("inherited member = %+v, want account=boss@x.com role=read joinedAt=%s", b, wireTime(bossGrant.GrantedAt))
+	}
+
+	// The header/tree counts use the same effective-member meaning as list total.
+	_, detailBody := f.do(t, http.MethodGet, "/teams/"+teamA.ID, "")
+	var detail struct {
+		MemberCount int `json:"memberCount"`
+	}
+	if err := json.Unmarshal(detailBody, &detail); err != nil || detail.MemberCount != total {
+		t.Fatalf("team detail memberCount=%d, list total=%d (err=%v, body=%s)", detail.MemberCount, total, err, detailBody)
+	}
+	_, treeBody := f.do(t, http.MethodGet, "/teams/tree", "")
+	var tree []struct {
+		ID          string `json:"id"`
+		MemberCount int    `json:"memberCount"`
+	}
+	if err := json.Unmarshal(treeBody, &tree); err != nil {
+		t.Fatalf("unmarshal tree: %v (body=%s)", err, treeBody)
+	}
+	var treeCount int
+	for _, node := range tree {
+		if node.ID == teamA.ID {
+			treeCount = node.MemberCount
+			break
+		}
+	}
+	if treeCount != total {
+		t.Fatalf("tree memberCount=%d, list total=%d", treeCount, total)
 	}
 
 	// Promote the inherited boss to write on TeamA via the team role batch — a
@@ -1341,8 +1374,15 @@ func TestConsoleTeamMembersIncludeInherited(t *testing.T) {
 	if total != 2 {
 		t.Fatalf("post-promotion total=%d, want 2 (%+v)", total, byUser)
 	}
-	if b := byUser[boss.ID]; b.Role != "write" || b.JoinedAt == nil {
-		t.Errorf("after promotion boss = %+v, want role=write with a non-null joinedAt", b)
+	var promoted groups.Membership
+	for _, m := range gs.ListMemberships() {
+		if m.User == boss.ID && m.GroupID == teamA.ID {
+			promoted = m
+			break
+		}
+	}
+	if b := byUser[boss.ID]; b.Role != "write" || b.JoinedAt != wireTime(promoted.GrantedAt) {
+		t.Errorf("after promotion boss = %+v, want role=write joinedAt=%s", b, wireTime(promoted.GrantedAt))
 	}
 }
 

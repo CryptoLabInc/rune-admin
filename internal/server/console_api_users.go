@@ -330,6 +330,17 @@ func (idx *userIndex) userDTO(m members.Member) userDTO {
 
 // memberDTO builds the team-member-table row for a membership.
 func (idx *userIndex) memberDTO(m groups.Membership) memberDTO {
+	return idx.consoleTeamMemberDTO(groups.ConsoleTeamMember{
+		User:          m.User,
+		Role:          m.Role,
+		SourceGroupID: m.GroupID,
+		GrantedAt:     m.GrantedAt,
+	})
+}
+
+// consoleTeamMemberDTO attaches member identity/status fields to the groups
+// store's consistent direct-or-inherited team-member projection.
+func (idx *userIndex) consoleTeamMemberDTO(m groups.ConsoleTeamMember) memberDTO {
 	account, username := "", ""
 	st := memberStatuses{invitation: "invite_pending", session: "offline"}
 	if mem, ok := idx.memberByID[m.User]; ok {
@@ -342,31 +353,9 @@ func (idx *userIndex) memberDTO(m groups.Membership) memberDTO {
 		Role:             string(m.Role),
 		InvitationStatus: st.invitation,
 		SessionStatus:    st.session,
-		// joinedAt == the membership's granted_at, truncated to the wire's
-		// second precision (storage is canonical millisecond RFC3339). A direct
-		// grant always carries a granted_at, so this is never null here.
-		JoinedAt: wireTimePtr(m.GrantedAt),
-	}
-}
-
-// inheritedMemberDTO builds a team-member row for a user who reaches the team
-// only by downward inheritance (no stored membership row): the role is always
-// read and joinedAt is null, since there is no grant to timestamp. Shown in the
-// team member table alongside direct members without distinction.
-func (idx *userIndex) inheritedMemberDTO(userID string) memberDTO {
-	account, username := "", ""
-	st := memberStatuses{invitation: "invite_pending", session: "offline"}
-	if mem, ok := idx.memberByID[userID]; ok {
-		account, username, st = mem.Email, mem.DisplayName, idx.statuses(mem)
-	}
-	return memberDTO{
-		UserID:           userID,
-		Account:          account,
-		Username:         username,
-		Role:             string(groups.RoleRead),
-		InvitationStatus: st.invitation,
-		SessionStatus:    st.session,
-		JoinedAt:         nil,
+		// GrantedAt is the target membership timestamp for a direct row or the
+		// nearest source membership timestamp for an inherited row.
+		JoinedAt: wireTime(m.GrantedAt),
 	}
 }
 
