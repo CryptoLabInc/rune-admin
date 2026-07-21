@@ -45,6 +45,22 @@ describe("RequireAuth", () => {
     expect(await screen.findByText("TEAMS CONTENT")).toBeInTheDocument();
   });
 
+  it("shows the owner-locked notice for a non-owner (soft block)", async () => {
+    vi.spyOn(authAPIs, "getConsoleSession").mockResolvedValue(
+      jsonRes({
+        logged_in: true,
+        expires_at: "2026-07-16T21:00:00Z",
+        me: { email: "bob@corp.com" },
+        is_owner: false,
+        owner_email: "alice@corp.com",
+      }),
+    );
+    renderGuard();
+    expect(await screen.findByText("사용할 수 없는 계정")).toBeInTheDocument();
+    expect(screen.getByText("alice@corp.com")).toBeInTheDocument();
+    expect(screen.queryByText("TEAMS CONTENT")).not.toBeInTheDocument();
+  });
+
   it("redirects to /login when logged out", async () => {
     vi.spyOn(authAPIs, "getConsoleSession").mockResolvedValue(
       jsonRes({ logged_in: false }),

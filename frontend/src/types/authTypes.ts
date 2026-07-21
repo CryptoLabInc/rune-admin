@@ -15,7 +15,19 @@ export type TSessionMe = {
 /**
  * TSession is the /console/session response — the single truth for the route
  * guard. It always resolves 200; the discriminant is `logged_in`.
+ *
+ * The console is a single-admin surface: the first account to sign in claims it
+ * as the owner. `is_owner` is false when a DIFFERENT account is signed in (soft
+ * block) — it reaches the app but cannot use it, and `owner_email` names the
+ * owner so the UI can say whom to ask. Both are optional for forward-compat with
+ * an older backend that omits them (treated as owner — no gate).
  */
 export type TSession =
   | { logged_in: false }
-  | { logged_in: true; expires_at: string; me: TSessionMe };
+  | {
+      logged_in: true;
+      expires_at: string;
+      me: TSessionMe;
+      is_owner?: boolean;
+      owner_email?: string;
+    };

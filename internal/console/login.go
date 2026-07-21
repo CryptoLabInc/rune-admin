@@ -113,9 +113,14 @@ func (s *Service) handleCallback(w http.ResponseWriter, r *http.Request) {
 		me = raw
 	}
 
-	// Single-admin binding: the FIRST account to log in claims this console; a
-	// later login by a different account is refused (BFF spec: the console is a
-	// single-admin surface). The principal email is the stable ownership key.
+	// Single-admin ownership: the FIRST account to log in claims this console as
+	// its owner (the org admin). A later login by a DIFFERENT account is a SOFT
+	// block — it still receives a console session and reaches the app, but it is
+	// not granted org-admin authority and the app surfaces an owner-locked notice
+	// (GET /console/session → is_owner:false). This replaced a hard refusal that
+	// dead-ended the browser on the login screen: a non-owner (e.g. after the
+	// owner withdrew their cloud account) could not even learn who owns the
+	// console or switch accounts. The principal email is the stable ownership key.
 	email := emailFromMe(me)
 	if email == "" {
 		// No principal email means ownership cannot be established or verified —
@@ -131,24 +136,24 @@ func (s *Service) handleCallback(w http.ResponseWriter, r *http.Request) {
 		s.failCallback(w, r, "exchange_failed")
 		return
 	}
-	if !strings.EqualFold(own.Email, email) {
-		// A different account already owns this console. Best-effort revoke the
-		// cloud session we just minted (this login gets no console session) and
-		// bounce to the locked-out login screen naming the owning account.
-		_ = s.cloud.RevokeSession(r.Context(), tok.CookieName+"="+tok.SessionToken)
-		s.log.Warn("console: login refused — console is bound to another admin", "owner", own.Email, "attempted", email)
-		s.failOwnerLocked(w, r, own.Email)
-		return
+	if strings.EqualFold(own.Email, email) {
+		// The owner (first-login claim, or any subsequent owner login): derive the
+		// single org admin from the console owner (grant authority via SetOrgAdmin).
+		// The admin is a management-plane identity and is NOT seeded a member
+		// registry row — an admin who wants to appear in member listings invites an
+		// email through the normal flow, which creates a real row. Idempotent,
+		// creates zero group memberships (admin reach is granted, never implied),
+		// and never blocks login (see the helper).
+		s.registerOwnerBestEffort(email, me, "login")
+	} else {
+		// A different account owns this console. Grant the session (soft block) but
+		// withhold org-admin authority: the registrar never runs for a non-owner,
+		// so this account cannot take over the incumbent's admin reach. The app
+		// reads is_owner:false from /console/session and shows the owner-locked
+		// notice instead of the admin surfaces.
+		s.log.Warn("console: non-owner login — session granted, org-admin withheld",
+			"owner", own.Email, "account", email)
 	}
-
-	// First-login registration: derive the single org admin from the console
-	// owner (grant authority via SetOrgAdmin). The admin is a management-plane
-	// identity and is NOT seeded a member registry row — an admin who wants to
-	// appear in member listings and/or be granted memberships invites an email
-	// (their own or another) through the normal flow, which creates a real row.
-	// Idempotent, creates zero group memberships (admin reach is granted, never
-	// implied), and never blocks login (see the helper).
-	s.registerOwnerBestEffort(email, me, "login")
 
 	sess, err := s.sessions.create(tok.SessionToken, tok.CookieName, me)
 	if err != nil {
@@ -186,17 +191,6 @@ func (s *Service) handleLogout(w http.ResponseWriter, r *http.Request) {
 func (s *Service) failCallback(w http.ResponseWriter, r *http.Request, code string) {
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", HttpOnly: true, MaxAge: -1})
 	http.Redirect(w, r, s.selfBase+"/login?error="+url.QueryEscape(code), http.StatusFound)
-}
-
-// failOwnerLocked clears any cookie and bounces to the login page with the
-// admin_locked code plus the owning account, so the SPA can tell the user which
-// account manages this console (and whom to contact). Naming the owner is a
-// deliberate choice: the console is a loopback-only surface, the owner email is
-// not otherwise sensitive here, and the message is useless without it.
-func (s *Service) failOwnerLocked(w http.ResponseWriter, r *http.Request, ownerAccount string) {
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", HttpOnly: true, MaxAge: -1})
-	loc := s.selfBase + "/login?error=admin_locked&owner=" + url.QueryEscape(ownerAccount)
-	http.Redirect(w, r, loc, http.StatusFound)
 }
 
 func randToken(nbytes int) (string, error) {
