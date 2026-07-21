@@ -236,28 +236,66 @@ func (s *Service) registerOwnerBestEffort(email string, me json.RawMessage, at s
 }
 
 // handleSession (GET /console/session) is the route guard's single source of
-// truth, so it always returns 200 — never 401.
+// truth, so it always returns 200 — never 401. A live local session is
+// revalidated against the cloud before it is reported as logged-in: an account
+// whose cloud session no longer exists — most importantly a WITHDRAWN account,
+// whose cloud sessions are cascade-deleted — must not keep reporting logged-in
+// off the local snapshot, so such a session is expired here on the spot.
 func (s *Service) handleSession(w http.ResponseWriter, r *http.Request) {
-	if c, err := r.Cookie(cookieName); err == nil {
-		if sess := s.sessions.get(c.Value); sess != nil {
-			resp := map[string]any{
-				"logged_in":        true,
-				"expires_at":       sess.ExpiresAt.UTC().Format(time.RFC3339),
-				"engine_connected": s.engineReady(),
-				// TODO(plan-source): the account's subscription plan. The cloud
-				// source is undecided (workspace tier vs principal vs billing
-				// API), so this is a placeholder. Replace this one line with the
-				// real lookup once the source is settled; the wire contract
-				// (lowercase string, open value set) stays the same.
-				"plan": "free",
-			}
-			if len(sess.Me) > 0 {
-				resp["me"] = meWithAvatar(sess.Me)
-			}
-			writeJSON(w, http.StatusOK, resp)
-			return
+	c, err := r.Cookie(cookieName)
+	if err != nil {
+		s.writeLoggedOut(w)
+		return
+	}
+	sess := s.sessions.get(c.Value)
+	if sess == nil {
+		s.writeLoggedOut(w)
+		return
+	}
+
+	// Revalidate against the cloud. Me() returns a nil principal with a nil error
+	// ONLY on a 401 — the "this cloud session no longer exists" signal, which a
+	// withdrawn account produces. Any other error is transient (network / 5xx):
+	// keep the local session rather than log the owner out over a blip.
+	if raw, merr := s.cloud.Me(r.Context(), sess.CloudCookie()); merr == nil && raw == nil {
+		s.log.Info("console: cloud session gone (account withdrawn or revoked) — expiring console login")
+		s.sessions.delete(sess.ID)
+		http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", HttpOnly: true, MaxAge: -1})
+		s.writeLoggedOut(w)
+		return
+	}
+
+	resp := map[string]any{
+		"logged_in":        true,
+		"expires_at":       sess.ExpiresAt.UTC().Format(time.RFC3339),
+		"engine_connected": s.engineReady(),
+		// TODO(plan-source): the account's subscription plan. The cloud source is
+		// undecided (workspace tier vs principal vs billing API), so this is a
+		// placeholder. Replace this one line with the real lookup once the source
+		// is settled; the wire contract (lowercase string, open value set) stays.
+		"plan": "free",
+	}
+	if len(sess.Me) > 0 {
+		resp["me"] = meWithAvatar(sess.Me)
+	}
+	// Owner status (single-admin surface). The owner is the account that first
+	// claimed the console; any other logged-in account is a soft block — the app
+	// shows an owner-locked notice instead of the admin surfaces. Naming the owner
+	// lets that notice say whom to ask. A read failure fails OPEN (is_owner:true):
+	// the alternative would lock the real owner out over a transient DB error.
+	isOwner := true
+	if o, oerr := s.owner.get(); oerr == nil && o != nil {
+		isOwner = strings.EqualFold(o.Email, emailFromMe(sess.Me))
+		if !isOwner {
+			resp["owner_email"] = o.Email
 		}
 	}
+	resp["is_owner"] = isOwner
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// writeLoggedOut emits the single logged-out session body (always 200).
+func (s *Service) writeLoggedOut(w http.ResponseWriter) {
 	writeJSON(w, http.StatusOK, map[string]any{"logged_in": false, "engine_connected": s.engineReady()})
 }
 

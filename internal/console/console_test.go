@@ -169,11 +169,20 @@ func TestSessionEndpointNoCookie(t *testing.T) {
 }
 
 func TestSessionEndpointLoggedInIncludesPlan(t *testing.T) {
+	// The session check revalidates a live session against the cloud, so point at
+	// a mock whose /me returns 200 (the cloud session still exists).
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/me", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"email": "a@x.io"})
+	})
+	ts := httptest.NewServer(mux)
+	t.Cleanup(ts.Close)
+
 	db := openTestDB(t)
 	h, _, err := NewHandler(Deps{
 		Port:       8787,
-		APIBaseURL: "http://cloud.invalid",
-		WebBaseURL: "http://web.invalid",
+		APIBaseURL: ts.URL,
+		WebBaseURL: ts.URL,
 		DB:         db,
 	})
 	if err != nil {
