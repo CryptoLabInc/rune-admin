@@ -105,8 +105,8 @@ done
 
 # ── Platform detection ─────────────────────────────────────────────────────────
 case "$(uname -s)" in
-  Linux)  OS_SLUG=linux ;;
-  Darwin) OS_SLUG=darwin ;;
+  Linux)  OS_SLUG=linux;  ROOT_GROUP=root ;;
+  Darwin) OS_SLUG=darwin; ROOT_GROUP=wheel ;;
   *)      die "Unsupported OS: $(uname -s). Only Linux and macOS are supported." ;;
 esac
 case "$(uname -m)" in
@@ -1097,7 +1097,7 @@ setup_system() {
     # the consumer can verify that its gid matches the trusted parent.
     install -d -m 2770 -o root -g "$SERVICE_USER" "$UPDATE_INBOX_DIR"
     install -d -m 2770 -o root -g "$SERVICE_USER" "$UPDATE_STAGING_DIR"
-    install -d -m 0700 -o root -g root "$UPDATE_BACKUP_DIR"
+    install -d -m 0700 -o root -g "$ROOT_GROUP" "$UPDATE_BACKUP_DIR"
   fi
 
   # /opt may not exist on fresh macOS
