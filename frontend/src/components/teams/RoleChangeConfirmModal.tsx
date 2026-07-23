@@ -1,6 +1,7 @@
 import Button from "@/components/elements/Button";
 import ModalLayout from "@/components/layout/ModalLayout";
 import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
+import { L } from "@/locales";
 
 export interface TRoleChange {
   account: string;
@@ -35,12 +36,12 @@ const RoleChangeConfirmModal = ({
   return (
     <ModalLayout title={MODAL_TITLES.roleChange} isOpen>
       <div className="flex w-full flex-col gap-4">
-        <p className="text-base">다음 멤버의 권한을 변경합니다:</p>
+        <p className="text-base">{L.teams.roleChangeIntro}</p>
         <table className={styles.table}>
           <thead>
             <tr>
-              <th className={styles.th}>멤버 이름</th>
-              <th className={styles.th}>권한 변경</th>
+              <th className={styles.th}>{L.common.memberName}</th>
+              <th className={styles.th}>{L.teams.roleChangeCol}</th>
             </tr>
           </thead>
           <tbody>

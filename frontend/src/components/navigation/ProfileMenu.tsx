@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import TextButton from "@/components/elements/TextButton";
 import { BTN_TEXT } from "@/constants/commonConstants";
+import { L } from "@/locales";
 
 interface ProfileMenuProps {
   // avatar is optional: the backend omits it when the principal has no picture,
@@ -59,7 +60,7 @@ const ProfileMenu = ({ me, onSignOut }: ProfileMenuProps) => {
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="프로필 메뉴"
+        aria-label={L.profile.menu}
         className="block cursor-pointer rounded-full"
         onClick={() => setOpen((v) => !v)}
       >
@@ -68,7 +69,7 @@ const ProfileMenu = ({ me, onSignOut }: ProfileMenuProps) => {
         ) : (
           <img
             src={me.avatar}
-            alt="프로필 이미지"
+            alt={L.profile.image}
             className="size-8 rounded-full object-cover"
             onError={() => setImgError(true)}
           />
@@ -83,7 +84,7 @@ const ProfileMenu = ({ me, onSignOut }: ProfileMenuProps) => {
           <div className="text-foreground text-md truncate font-medium">
             {me.email}
           </div>
-          <div className="text-subtle text-sm">플랜: Free</div>
+          <div className="text-subtle text-sm">{L.profile.plan}</div>
           <hr className="border-border my-2" />
           <TextButton
             btnText={BTN_TEXT.signOut}

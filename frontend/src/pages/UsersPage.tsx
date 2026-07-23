@@ -37,6 +37,7 @@ import { useUsersQuery } from "@/hooks/queries/useUsersQuery";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { parseErrorCode } from "@/api/parseError";
 import { BTN_TEXT } from "@/constants/commonConstants";
+import { L } from "@/locales";
 import type { TDropdownOption } from "@/types/commonTypes";
 import type { TTeamMemberRole, TTeamTree } from "@/types/teamTypes";
 import type {
@@ -59,9 +60,9 @@ const styles = {
 /* Filter/sort option sets (SC-11 no.2–3). "all" stands in for 전체. The list
    shows only the session axis, so the filter matches it. */
 const STATUS_OPTIONS: TDropdownOption[] = [
-  { value: "all", label: "전체" },
-  { value: "online", label: "온라인" },
-  { value: "offline", label: "오프라인" },
+  { value: "all", label: L.common.all },
+  { value: "online", label: L.status.member.online },
+  { value: "offline", label: L.status.member.offline },
 ];
 
 /* Depth indent stripped — the 150px filter trigger can't fit deep-tree
@@ -70,13 +71,13 @@ const STATUS_OPTIONS: TDropdownOption[] = [
    Computed in-component (buildTeamOptions depends on the real teams
    query result — no static dummy list anymore). */
 const buildGroupOptions = (teams: TTeamTree): TDropdownOption[] => [
-  { value: "all", label: "전체" },
+  { value: "all", label: L.common.all },
   ...buildTeamOptions(teams).map(({ value, label }) => ({ value, label })),
 ];
 
 const SORT_OPTIONS: TDropdownOption[] = [
-  { value: "last_invited", label: "최근 초대 코드 발송" },
-  { value: "username", label: "멤버 이름" },
+  { value: "last_invited", label: L.members.lastInviteSent },
+  { value: "username", label: L.common.memberName },
 ];
 
 /** First membership as "team · role"; the rest collapse into "+n". */
@@ -93,7 +94,7 @@ const PAGE_SIZE = 10;
 
 /** Batch-delete failure reasons shown by account (DELETE /users). */
 const BATCH_REASON: Record<string, string> = {
-  USER_NOT_FOUND: "사용자를 찾을 수 없습니다",
+  USER_NOT_FOUND: L.teams.userNotFound,
 };
 
 /**
@@ -235,11 +236,18 @@ const UsersPage = () => {
     );
     const failed = targets.filter((_, i) => results[i].status === "rejected");
     if (failed.length === 0) {
-      showNotice("초대 코드 재전송", "초대 코드를 재전송했습니다.", "info");
+      showNotice(
+        BTN_TEXT.resendInvitationCode,
+        L.members.inviteCodeResent,
+        "info",
+      );
       return;
     }
     setBatchFailures(
-      failed.map((u) => ({ account: u.account, reason: "재전송 실패" })),
+      failed.map((u) => ({
+        account: u.account,
+        reason: L.members.resendFailedShort,
+      })),
     );
   };
 
@@ -266,7 +274,7 @@ const UsersPage = () => {
     }
 
     if (result.failed.length === 0) {
-      showNotice("멤버 삭제", "멤버를 삭제했습니다.", "info");
+      showNotice(L.members.deleteMembersTitle, L.members.membersDeleted, "info");
       return;
     }
     if (succeededIds.length === 0) {
@@ -283,11 +291,11 @@ const UsersPage = () => {
   /* ── SC-11 state C — 조회 실패 ──────────────────────────────────── */
   if (usersQuery.isError) {
     return (
-      <section className={styles.page} aria-label="멤버 관리">
+      <section className={styles.page} aria-label={L.nav.users}>
         <Feedback
           state="error"
-          title="멤버 정보를 불러올 수 없습니다."
-          description="새로고침 후 다시 시도해 주세요."
+          title={L.members.membersLoadError}
+          description={L.common.refreshRetry}
           action={
             <Button
               btnText={BTN_TEXT.refresh}
@@ -306,11 +314,11 @@ const UsersPage = () => {
      all hidden) ─── */
   if (!usersQuery.isPending && total === 0 && !hasActiveFilter) {
     return (
-      <section className={styles.page} aria-label="멤버 관리">
+      <section className={styles.page} aria-label={L.nav.users}>
         <Feedback
           state="empty"
-          title="아직 초대한 멤버가 없습니다"
-          description="멤버를 초대하면 초대 코드가 이메일로 발송됩니다"
+          title={L.members.noMembersYet}
+          description={L.members.inviteHint}
           action={
             <Button
               btnText={BTN_TEXT.inviteMember}
@@ -333,7 +341,7 @@ const UsersPage = () => {
   }
 
   return (
-    <section className={styles.page} aria-label="멤버 관리">
+    <section className={styles.page} aria-label={L.nav.users}>
       <Table
         fluid
         /* Fixed page height: thead 36px + 10 rows × 49px (h-8 status chip
@@ -347,42 +355,44 @@ const UsersPage = () => {
                 <SearchInput
                   value={search}
                   onChange={withPageReset(setSearch)}
-                  placeholder="이름 검색"
+                  placeholder={L.members.searchByName}
                   maxLength={100}
                   className="w-50"
                 />
                 {/* filter/order dropdown */}
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-md text-faint">정렬 기준</span>
+                    <span className="text-md text-faint">{L.common.sortBy}</span>
                     <Dropdown
                       options={SORT_OPTIONS}
                       value={sort}
                       onChange={withPageReset(setSort)}
                       size="sm"
-                      ariaLabel="정렬"
+                      ariaLabel={L.common.sort}
                       className="w-36"
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-md text-faint">멤버 상태</span>
+                    <span className="text-md text-faint">
+                      {L.common.memberStatus}
+                    </span>
                     <Dropdown
                       options={STATUS_OPTIONS}
                       value={statusFilter}
                       onChange={withPageReset(setStatusFilter)}
                       size="sm"
-                      ariaLabel="status 필터"
+                      ariaLabel={L.members.statusFilterAria}
                       className="w-32"
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-md text-faint">팀</span>
+                    <span className="text-md text-faint">{L.common.team}</span>
                     <Dropdown
                       options={groupOptions}
                       value={groupFilter}
                       onChange={withPageReset(setGroupFilter)}
                       size="sm"
-                      ariaLabel="group 필터"
+                      ariaLabel={L.members.teamFilterAria}
                       className="w-40"
                     />
                   </div>
@@ -420,7 +430,7 @@ const UsersPage = () => {
         }
         foot={
           <TableFoot
-            info={`총 ${total}명 · ${PAGE_SIZE}명/페이지`}
+            info={L.teams.memberPageInfo(total, PAGE_SIZE)}
             className="flex-row"
           >
             <Pagination
@@ -436,14 +446,20 @@ const UsersPage = () => {
             <Checkbox
               checked={allSelected}
               onChange={toggleAll}
-              ariaLabel="전체 선택"
+              ariaLabel={L.common.selectAll}
             />
           </TableHeaderCell>
           {/* Fixed column widths — auto layout would resize per page's
               content and shift the headers while paginating. */}
-          <TableHeaderCell className="w-[40%]">멤버 이름</TableHeaderCell>
-          <TableHeaderCell className="w-[20%]">멤버 상태</TableHeaderCell>
-          <TableHeaderCell className="w-[40%]">팀 (권한)</TableHeaderCell>
+          <TableHeaderCell className="w-[40%]">
+            {L.common.memberName}
+          </TableHeaderCell>
+          <TableHeaderCell className="w-[20%]">
+            {L.common.memberStatus}
+          </TableHeaderCell>
+          <TableHeaderCell className="w-[40%]">
+            {L.members.teamRoleHeader}
+          </TableHeaderCell>
         </TableHead>
         <tbody>
           {usersQuery.isPending && (
@@ -452,7 +468,7 @@ const UsersPage = () => {
                 colSpan={4}
                 className="text-faint px-3 py-8 text-center text-sm"
               >
-                불러오는 중…
+                {L.common.loading}
               </td>
             </tr>
           )}
@@ -462,7 +478,7 @@ const UsersPage = () => {
                 colSpan={4}
                 className="text-muted-foreground border-t px-3 py-8 text-center text-sm"
               >
-                검색 결과가 없습니다.
+                {L.common.noResults}
               </td>
             </tr>
           )}
@@ -480,7 +496,7 @@ const UsersPage = () => {
                     <Checkbox
                       checked={selectedIds.has(user.userId)}
                       onChange={(checked) => toggleOne(user.userId, checked)}
-                      ariaLabel={`${user.account} 선택`}
+                      ariaLabel={L.common.selectName(user.account)}
                     />
                   </div>
                 </TableCell>

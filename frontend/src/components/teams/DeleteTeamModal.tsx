@@ -9,6 +9,7 @@ import ModalLayout from "@/components/layout/ModalLayout";
 import { buildTeamOptions } from "@/components/teams/teamOptions";
 import { cn } from "@/utils/cn";
 import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
+import { L } from "@/locales";
 import type { TTeamTree } from "@/types/teamTypes";
 
 const styles = {
@@ -69,9 +70,9 @@ const DeleteTeamModal = ({
     return (
       <ModalLayout title={MODAL_TITLES.deleteTeam(teamName)} isOpen>
         <p className="text-center text-base">
-          하위 팀이 있는 팀은 삭제할 수 없습니다.
+          {L.teams.hasChildrenAlert1}
           <br />
-          하위 팀을 먼저 삭제한 후 다시 시도해 주세요.
+          {L.teams.hasChildrenAlert2}
         </p>
         <Button
           btnText={BTN_TEXT.close}
@@ -113,9 +114,7 @@ const DeleteTeamModal = ({
   return (
     <ModalLayout title={MODAL_TITLES.deleteTeam(teamName)} isOpen isWide>
       <div className="flex w-full flex-col gap-4">
-        <Notice tone="info">
-          삭제하려는 팀의 기억 처리 방식을 선택해 주세요.
-        </Notice>
+        <Notice tone="info">{L.teams.memoryChoiceInfo}</Notice>
 
         {/* Option ① — transfer (default): the card is the selection area */}
         <div
@@ -129,14 +128,14 @@ const DeleteTeamModal = ({
             name="memory-action"
             checked={action === "transfer"}
             onChange={selectTransfer}
-            label="① 다른 팀으로 이전"
-            desc="(기본값)"
+            label={L.teams.transferOption}
+            desc={L.teams.defaultTag}
             className={styles.optionRadio}
           />
           <div className={styles.optionFields}>
             <Dropdown
-              label="이전받을 팀"
-              placeholder="팀 선택"
+              label={L.teams.destinationTeam}
+              placeholder={L.teams.selectTeam}
               options={targetOptions}
               value={targetTeamId}
               onChange={setTargetTeamId}
@@ -144,15 +143,13 @@ const DeleteTeamModal = ({
             />
             <Input
               id="delete-team-transfer-confirm"
-              labelText="확인 - 타겟 팀명 입력"
-              placeholder={targetName || "팀을 먼저 선택하세요"}
+              labelText={L.teams.confirmTargetLabel}
+              placeholder={targetName || L.teams.selectTeamFirst}
               maxLength={50}
               value={transferConfirm}
               setValue={setTransferConfirm}
               disabled={action !== "transfer"}
-              error={
-                transferMismatch ? "타겟 팀명이 일치하지 않습니다." : undefined
-              }
+              error={transferMismatch ? L.teams.targetNameMismatch : undefined}
             />
           </div>
         </div>
@@ -169,20 +166,20 @@ const DeleteTeamModal = ({
             name="memory-action"
             checked={action === "purge"}
             onChange={selectPurge}
-            label="② 팀 내 기억 삭제"
-            desc="다른 팀과 공유 중인 기억은 해당 팀에서 계속 조회할 수 있습니다."
+            label={L.teams.purgeOption}
+            desc={L.teams.purgeDesc}
             className={styles.optionRadio}
           />
           <div className={styles.optionFields}>
             <Input
               id="delete-team-purge-confirm"
-              labelText="확인 - 삭제할 팀명 입력"
+              labelText={L.teams.confirmDeleteLabel}
               placeholder={teamName}
               maxLength={50}
               value={purgeConfirm}
               setValue={setPurgeConfirm}
               disabled={action !== "purge"}
-              error={purgeMismatch ? "팀명이 일치하지 않습니다." : undefined}
+              error={purgeMismatch ? L.teams.nameMismatch : undefined}
             />
           </div>
         </div>

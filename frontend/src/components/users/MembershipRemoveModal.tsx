@@ -5,9 +5,10 @@ import Notice from "@/components/elements/Notice";
 import ModalLayout from "@/components/layout/ModalLayout";
 import ModalTable from "@/components/users/ModalTable";
 import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
+import { L } from "@/locales";
 import type { TMembershipRemoveTarget } from "@/types/userTypes";
 
-const REMOVE_FAILED_MESSAGE = `멤버십 제거에 실패했습니다. 다시 시도해 주세요.`;
+const REMOVE_FAILED_MESSAGE = L.members.removeFailed;
 
 interface MembershipRemoveModalProps {
   /** SC-06 entry: selected members × current team · SC-13 entry:
@@ -67,9 +68,9 @@ const MembershipRemoveModal = ({
   return (
     <ModalLayout title={MODAL_TITLES.removeMembership} isOpen>
       <div className="flex flex-col gap-4">
-        <p className="text-base">다음 멤버십을 제거합니다:</p>
+        <p className="text-base">{L.teams.removeIntro}</p>
         <ModalTable
-          head={["account", "팀", "권한"]}
+          head={["account", L.common.team, L.common.role]}
           rows={targets.map((target) => [
             target.account,
             target.teamName,
@@ -77,9 +78,7 @@ const MembershipRemoveModal = ({
           ])}
         />
         {subteamNotice && (
-          <Notice>
-            하위 팀 소속은 유지됩니다. 필요할 경우 개별 선택 후 제거하세요.
-          </Notice>
+          <Notice>{L.teams.removeKeepSubteams}</Notice>
         )}
       </div>
       <div className="flex w-full items-center gap-4">

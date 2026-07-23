@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom";
 
 import { cn } from "@/utils/cn";
+import { L } from "@/locales";
 import { useToastStore } from "@/stores/toastStore";
 
 const styles = {
@@ -33,7 +34,7 @@ const ToastContainer = () => {
           key={toast.id}
           role={toast.tone === "error" ? "alert" : "status"}
           className={cn(styles.toast, toast.leaving && styles.toastLeaving)}
-          title="클릭하여 닫기"
+          title={L.elements.clickToDismiss}
           onClick={() => dismissToast(toast.id)}
         >
           <span

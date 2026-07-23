@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import RuneMark from "@/components/elements/RuneMark";
 import WorkspaceStatus from "@/components/elements/WorkspaceStatus";
+import LanguageToggle from "@/components/navigation/LanguageToggle";
 import ProfileMenu from "@/components/navigation/ProfileMenu";
 import WorkspaceModal from "@/components/workspace/WorkspaceModal";
 import { useSessionQuery } from "@/hooks/queries/useSessionQuery";
@@ -13,6 +14,7 @@ import {
   PATH_LIST,
   QUERY_KEYS,
 } from "@/constants/commonConstants";
+import { L } from "@/locales";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 /**
@@ -64,21 +66,23 @@ const Navbar = () => {
             }`}
             onClick={workspace ? openModal : undefined}
           >
-            <span className="text-foreground text-sm">워크스페이스</span>
+            <span className="text-foreground text-sm">
+              {L.workspace.badgeLabel}
+            </span>
             {workspace ? (
               workspace.orphaned ? (
                 /* Reinstall detected: the workspace no longer matches this
                    console. Flag it so the badge doesn't read as healthy;
                    clicking opens the modal's 재생성 prompt. */
                 <span className="border-negative text-negative rounded border px-2 py-1 text-xs">
-                  재생성 필요
+                  {L.workspace.badgeRecreate}
                 </span>
               ) : workspace.reconnectRequired ? (
                 /* Data-plane credential expired: the cloud workspace is fine but
                    the local engine link is stale. Flag it (not the healthy pill);
                    clicking opens the modal's 재연결 prompt. */
                 <span className="border-warning text-warning rounded border px-2 py-1 text-xs">
-                  재연결 필요
+                  {L.workspace.badgeReconnect}
                 </span>
               ) : (
                 <WorkspaceStatus status={workspace.status} />
@@ -89,10 +93,11 @@ const Navbar = () => {
                 className="text-muted-foreground hover:text-foreground cursor-pointer rounded border px-2 py-1 text-xs"
                 onClick={() => navigate(PATH_LIST.workspace)}
               >
-                워크스페이스 없음
+                {L.workspace.badgeNone}
               </button>
             ) : null}
           </div>
+          <LanguageToggle />
           {me && <ProfileMenu me={me} onSignOut={handleSignOut} />}
         </div>
       </div>

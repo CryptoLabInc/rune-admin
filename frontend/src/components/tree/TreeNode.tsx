@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import IconMinus from "@/components/icons/IconMinus";
 import IconPlus from "@/components/icons/IconPlus";
 import { cn } from "@/utils/cn";
+import { L } from "@/locales";
 import type { TTeamNode } from "@/types/commonTypes";
 
 const styles = {
@@ -81,7 +82,11 @@ const TreeNode = ({
           <button
             type="button"
             className={styles.toggle}
-            aria-label={`${node.name} ${isOpen ? "접기" : "펼치기"}`}
+            aria-label={
+              isOpen
+                ? L.teams.collapseName(node.name)
+                : L.teams.expandName(node.name)
+            }
             aria-expanded={isOpen}
             onClick={() => onToggle(node.id)}
           >

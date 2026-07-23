@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { cn } from "@/utils/cn";
+import { L } from "@/locales";
 import type { TTeamNode, TTeamTree } from "@/types/teamTypes";
 
 const styles = {
@@ -139,7 +140,7 @@ const OrgNode = ({
           connector === "none" && rootBorderById.get(node.id),
           isMatch && styles.orgBoxMatch,
         )}
-        aria-label={`${node.name} 상세 보기`}
+        aria-label={L.teams.viewDetails(node.name)}
         onClick={() => onSelect(node.id)}
       >
         <b className={styles.orgBoxName} title={node.name}>
@@ -235,7 +236,7 @@ const OrgChart = ({ teams, query, onSelectTeam }: OrgChartProps) => {
         <button
           type="button"
           className={styles.zoomButton}
-          aria-label="축소"
+          aria-label={L.teams.zoomOut}
           disabled={zoomStep >= ZOOM_SCALES.length - 1}
           onClick={() => setZoomStep((step) => step + 1)}
         >
@@ -245,7 +246,7 @@ const OrgChart = ({ teams, query, onSelectTeam }: OrgChartProps) => {
         <button
           type="button"
           className={styles.zoomButton}
-          aria-label="확대"
+          aria-label={L.teams.zoomIn}
           disabled={zoomStep === 0}
           onClick={() => setZoomStep((step) => step - 1)}
         >

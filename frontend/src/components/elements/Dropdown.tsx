@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
 
 import { cn } from "@/utils/cn";
+import { L } from "@/locales";
 import type { TDropdownOption } from "@/types/commonTypes";
 
 const styles = {
@@ -91,7 +92,7 @@ interface DropdownProps {
 const Dropdown = ({
   options,
   label,
-  placeholder = "선택",
+  placeholder = L.common.select,
   hint,
   error,
   value,

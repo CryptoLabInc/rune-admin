@@ -37,6 +37,7 @@ import { parseErrorCode } from "@/api/parseError";
 import { CHIP_STATUS } from "@/components/users/memberStatusMap";
 import { formatDate } from "@/utils/formatDate";
 import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
+import { L } from "@/locales";
 import type { TTeamNode } from "@/types/commonTypes";
 import type { TTeamMemberRole, TTeamTree } from "@/types/teamTypes";
 import { useNoticeStore } from "@/stores/noticeStore";
@@ -187,12 +188,14 @@ const TreeDetailView = ({
 
   const flatTeam = flatById.get(selectedTeam.id);
   const parentName = detail?.parentId
-    ? (flatById.get(detail.parentId)?.name ?? "없음")
+    ? (flatById.get(detail.parentId)?.name ?? L.common.none)
     : flatTeam?.parentId
-      ? (flatById.get(flatTeam.parentId)?.name ?? "없음")
-      : "없음";
+      ? (flatById.get(flatTeam.parentId)?.name ?? L.common.none)
+      : L.common.none;
   const childCount = detail?.children.length ?? flatTeam?.childCount ?? 0;
-  const childrenLabel = childCount ? `${childCount}개` : "없음";
+  const childrenLabel = childCount
+    ? L.teams.countItems(childCount)
+    : L.common.none;
   const memberCount = detail?.memberCount ?? selectedTeam.members;
 
   /* Select-all is page-scoped; selections persist across page moves. */
@@ -236,11 +239,7 @@ const TreeDetailView = ({
   const applyRoleChanges = () => {
     setSavedRoles((prev) => new Map([...prev, ...pendingRoles]));
     setPendingRoles(new Map());
-    showNotice(
-      MODAL_TITLES.roleChange,
-      "변경사항이 저장되었습니다.",
-      "success",
-    );
+    showNotice(MODAL_TITLES.roleChange, L.teams.changesSaved, "success");
   };
 
   /* Modals (SC-07~10 + SC-06 state E). All confirm handlers below call
@@ -261,9 +260,9 @@ const TreeDetailView = ({
     closeModal();
   };
   const TEAM_REASON: Record<string, string> = {
-    TEAM_NAME_DUPLICATE: "같은 상위 팀에 동일한 이름이 이미 있습니다.",
-    TEAM_NAME_INVALID: "팀 이름 형식이 올바르지 않습니다.",
-    TEAM_HAS_CHILDREN: "하위 팀이 있어 삭제할 수 없습니다.",
+    TEAM_NAME_DUPLICATE: L.teams.dupName,
+    TEAM_NAME_INVALID: L.teams.invalidTeamName,
+    TEAM_HAS_CHILDREN: L.teams.cannotDeleteHasChildren,
   };
 
   /* Partial-failure surface for the two batch endpoints (role change,
@@ -273,21 +272,21 @@ const TreeDetailView = ({
     { account: string; reason: string }[] | null
   >(null);
   const BATCH_REASON: Record<string, string> = {
-    USER_NOT_FOUND: "사용자를 찾을 수 없습니다",
-    NOT_TEAM_MEMBER: "팀 멤버가 아닙니다",
+    USER_NOT_FOUND: L.teams.userNotFound,
+    NOT_TEAM_MEMBER: L.teams.notTeamMember,
   };
   // Any other code (e.g. a transient INTERNAL) shows a generic retry message
   // instead of leaking the raw backend code into the failure modal.
-  const BATCH_REASON_FALLBACK = "처리에 실패했습니다. 다시 시도해 주세요.";
+  const BATCH_REASON_FALLBACK = L.common.processFailed;
   const accountOf = (userId: string) =>
     members.find((m) => m.userId === userId)?.account ?? userId;
 
   const [addError, setAddError] = useState<string | null>(null);
   const ADD_REASON: Record<string, string> = {
-    ALREADY_TEAM_MEMBER: "이미 초대된 사용자입니다.",
-    USER_NOT_FOUND: "등록되지 않은 계정입니다.",
-    CANNOT_INVITE_ADMIN: "콘솔 관리자 계정은 추가할 수 없습니다.",
-    MAIL_UPSTREAM_ERROR: "초대 코드 전송에 실패했습니다. 다시 시도해 주세요.",
+    ALREADY_TEAM_MEMBER: L.teams.alreadyInvited,
+    USER_NOT_FOUND: L.teams.notRegistered,
+    CANNOT_INVITE_ADMIN: L.teams.cannotAddAdmin,
+    MAIL_UPSTREAM_ERROR: L.teams.inviteSendFailed,
   };
 
   const roleChanges = [...pendingRoles.entries()].map(([userId, to]) => {
@@ -306,11 +305,11 @@ const TreeDetailView = ({
       {
         onSuccess: () => {
           closeModal();
-          showNotice("팀 생성", "팀이 생성되었습니다.", "success");
+          showNotice(L.teams.createTeamTitle, L.teams.teamCreated, "success");
         },
         onError: async (res) => {
           const code = await parseErrorCode(res);
-          setTeamError(TEAM_REASON[code] ?? "팀 생성에 실패했습니다.");
+          setTeamError(TEAM_REASON[code] ?? L.teams.createTeamFailed);
         },
       },
     );
@@ -322,11 +321,11 @@ const TreeDetailView = ({
       {
         onSuccess: () => {
           closeModal();
-          showNotice("팀 이름 변경", "팀 이름이 변경되었습니다.", "success");
+          showNotice(MODAL_TITLES.renameTeam, L.teams.teamRenamed, "success");
         },
         onError: async (res) => {
           const code = await parseErrorCode(res);
-          setTeamError(TEAM_REASON[code] ?? "이름 변경에 실패했습니다.");
+          setTeamError(TEAM_REASON[code] ?? L.teams.renameFailed);
         },
       },
     );
@@ -341,16 +340,22 @@ const TreeDetailView = ({
       {
         onSuccess: () => {
           closeModal();
-          showNotice("팀 삭제", "팀이 삭제되었습니다.", "success", () => {
-            onSelectTeam(
-              teams.find((t) => t.parentId === null && t.id !== selectedTeam.id)
-                ?.id ?? "",
-            );
-          });
+          showNotice(
+            L.teams.deleteTeamTitle,
+            L.teams.teamDeleted,
+            "success",
+            () => {
+              onSelectTeam(
+                teams.find(
+                  (t) => t.parentId === null && t.id !== selectedTeam.id,
+                )?.id ?? "",
+              );
+            },
+          );
         },
         onError: async (res) => {
           const code = await parseErrorCode(res);
-          setTeamError(TEAM_REASON[code] ?? "팀 삭제에 실패했습니다.");
+          setTeamError(TEAM_REASON[code] ?? L.teams.deleteFailed);
         },
       },
     );
@@ -362,11 +367,11 @@ const TreeDetailView = ({
       {
         onSuccess: () => {
           closeModal();
-          showNotice("멤버 추가", "멤버를 추가했습니다.", "success");
+          showNotice(L.teams.addMemberTitle, L.teams.memberAdded, "success");
         },
         onError: async (res) => {
           const code = await parseErrorCode(res);
-          setAddError(ADD_REASON[code] ?? "멤버 추가에 실패했습니다.");
+          setAddError(ADD_REASON[code] ?? L.teams.addMemberFailed);
         },
       },
     );
@@ -410,11 +415,7 @@ const TreeDetailView = ({
         },
         onError: () => {
           closeModal();
-          showNotice(
-            MODAL_TITLES.roleChange,
-            "권한 변경에 실패했습니다.",
-            "error",
-          );
+          showNotice(MODAL_TITLES.roleChange, L.teams.roleChangeFailed, "error");
         },
       },
     );
@@ -435,7 +436,7 @@ const TreeDetailView = ({
         } else {
           showNotice(
             MODAL_TITLES.removeMembership,
-            "멤버십이 제거되었습니다.",
+            L.teams.membershipsRemoved,
             "success",
           );
         }
@@ -444,7 +445,7 @@ const TreeDetailView = ({
         closeModal();
         showNotice(
           MODAL_TITLES.removeMembership,
-          "멤버십 제거에 실패했습니다.",
+          L.teams.removeFailed,
           "error",
         );
       },
@@ -464,7 +465,7 @@ const TreeDetailView = ({
     <div className={styles.body}>
       {/* Left panel — create + tree (SC-06 no.3–5); search lives in the
           TeamsPage header */}
-      <aside className={styles.side} aria-label="팀 트리">
+      <aside className={styles.side} aria-label={L.teams.teamTree}>
         <Button
           btnText={BTN_TEXT.createGroup}
           btnSize="sm"
@@ -508,13 +509,17 @@ const TreeDetailView = ({
             />
           </div>
           <p className={styles.teamMeta}>
-            상위 팀: {parentName} | 하위 팀: {childrenLabel} | 멤버:{" "}
-            {memberCount}명 | 생성일: {formatDate(detail?.createdAt)}
+            {L.teams.teamMeta(
+              parentName,
+              childrenLabel,
+              memberCount,
+              formatDate(detail?.createdAt),
+            )}
           </p>
         </div>
 
         <div className={styles.membersRow}>
-          <h3 className={styles.membersTitle}>멤버 ({total})</h3>{" "}
+          <h3 className={styles.membersTitle}>{L.teams.membersHeading(total)}</h3>{" "}
           <div className={styles.pendingActions}>
             {/* Drops every staged (not yet applied) dropdown pick back to
                 its saved role — the committed savedRoles baseline stays. */}
@@ -557,7 +562,7 @@ const TreeDetailView = ({
           scrollClassName="min-h-[526px]"
           foot={
             <TableFoot
-              info={`총 ${total}명 · ${PAGE_SIZE}명/페이지`}
+              info={L.teams.memberPageInfo(total, PAGE_SIZE)}
               className="flex-row items-center"
             >
               <div className="flex flex-col items-end gap-3">
@@ -575,15 +580,23 @@ const TreeDetailView = ({
               <Checkbox
                 checked={allSelected}
                 onChange={toggleAll}
-                ariaLabel="전체 선택"
+                ariaLabel={L.common.selectAll}
               />
             </TableHeaderCell>
             {/* Fixed column widths — auto layout would resize per
                 page's content and shift the headers while paginating. */}
-            <TableHeaderCell className="w-[36%]">멤버 이름</TableHeaderCell>
-            <TableHeaderCell className="w-[18%]">멤버 상태</TableHeaderCell>
-            <TableHeaderCell className="w-[28%]">역할</TableHeaderCell>
-            <TableHeaderCell className="w-[18%]">합류일</TableHeaderCell>
+            <TableHeaderCell className="w-[36%]">
+              {L.common.memberName}
+            </TableHeaderCell>
+            <TableHeaderCell className="w-[18%]">
+              {L.common.memberStatus}
+            </TableHeaderCell>
+            <TableHeaderCell className="w-[28%]">
+              {L.teams.roleHeader}
+            </TableHeaderCell>
+            <TableHeaderCell className="w-[18%]">
+              {L.teams.joinedAt}
+            </TableHeaderCell>
           </TableHead>
           <tbody>
             {membersQuery.isPending ? (
@@ -592,21 +605,18 @@ const TreeDetailView = ({
                   colSpan={5}
                   className="text-faint px-3 py-6 text-center text-sm"
                 >
-                  불러오는 중…
+                  {L.common.loading}
                 </td>
               </tr>
             ) : membersQuery.isError ? (
-              <TableErrorRow
-                message="멤버 목록을 불러올 수 없습니다."
-                colSpan={5}
-              />
+              <TableErrorRow message={L.teams.membersLoadError} colSpan={5} />
             ) : total === 0 ? (
               <tr>
                 <td
                   colSpan={5}
                   className="text-faint px-3 py-6 text-center text-sm"
                 >
-                  멤버가 없습니다.
+                  {L.teams.noMembers}
                 </td>
               </tr>
             ) : (
@@ -620,7 +630,7 @@ const TreeDetailView = ({
                     <Checkbox
                       checked={selectedIds.has(member.userId)}
                       onChange={(checked) => toggleOne(member.userId, checked)}
-                      ariaLabel={`${member.account} 선택`}
+                      ariaLabel={L.common.selectName(member.account)}
                     />
                   </TableCell>
                   <TableCell className={styles.usernameCell}>

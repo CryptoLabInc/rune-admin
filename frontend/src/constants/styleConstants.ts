@@ -3,6 +3,7 @@
  * Visual values are translated from UIKIT modules/rune-ui-buttons and
  * modules/rune-admin-kit CSS — UIKIT is the design source of truth.
  */
+import { L } from "@/locales";
 
 /* Form controls embed w-full: the parent container constrains width.
    Metrics are UIKIT values normalized to even px (project rule). */
@@ -79,25 +80,31 @@ export const BADGE_TONE_VAR = {
   neutral: "bg-muted-foreground/12 text-muted-foreground",
 } as const;
 
+/* Status labels come from the locale table (src/locales, chosen once at page
+   load); colors are style concerns and stay here. */
+
 /* Session chips — the only status a list view shows. */
 export const MEMBER_STATUS_VAR = {
-  online: { label: "온라인", color: "text-mint" },
-  offline: { label: "오프라인", color: "text-faint" },
+  online: { label: L.status.member.online, color: "text-mint" },
+  offline: { label: L.status.member.offline, color: "text-faint" },
 } as const;
 
 /* Invitation-status labels — shown only in the member detail drawer. */
 export const INVITATION_STATUS_VAR = {
-  invite_pending: { label: "초대 수락 대기", color: "text-warning" },
-  invite_expired: { label: "초대 코드 만료", color: "text-faint" },
-  invite_redeemed: { label: "초대 코드 사용됨", color: "text-accent-blue" },
+  invite_pending: { label: L.status.invitation.pending, color: "text-warning" },
+  invite_expired: { label: L.status.invitation.expired, color: "text-faint" },
+  invite_redeemed: {
+    label: L.status.invitation.redeemed,
+    color: "text-accent-blue",
+  },
 } as const;
 
 export const WORKSPACE_STATUS_VAR = {
-  provisioning: { label: "생성 중", color: "text-warning" },
-  running: { label: "실행 중", color: "text-mint" },
-  stopping: { label: "정지 중", color: "text-warning" },
-  stopped: { label: "정지", color: "text-faint" },
-  starting: { label: "재실행 중", color: "text-warning" },
-  deleting: { label: "삭제 중", color: "text-warning" },
-  error: { label: "사용 불가", color: "text-negative" },
+  provisioning: { label: L.status.workspace.provisioning, color: "text-warning" },
+  running: { label: L.status.workspace.running, color: "text-mint" },
+  stopping: { label: L.status.workspace.stopping, color: "text-warning" },
+  stopped: { label: L.status.workspace.stopped, color: "text-faint" },
+  starting: { label: L.status.workspace.starting, color: "text-warning" },
+  deleting: { label: L.status.workspace.deleting, color: "text-warning" },
+  error: { label: L.status.workspace.error, color: "text-negative" },
 } as const;

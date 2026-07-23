@@ -1,6 +1,7 @@
 import { Search } from "lucide-react";
 
 import { cn } from "@/utils/cn";
+import { L } from "@/locales";
 
 const styles = {
   wrap: "relative inline-flex h-8 w-full items-center rounded-[8px] border border-border-strong bg-well/70 transition-[border-color,box-shadow] duration-[160ms] focus-within:border-mint/60 focus-within:shadow-[0_0_0_3px] focus-within:shadow-mint/10",
@@ -29,7 +30,7 @@ interface SearchInputProps {
 const SearchInput = ({
   value,
   onChange,
-  placeholder = "검색",
+  placeholder = L.elements.search,
   maxLength,
   disabled = false,
   ariaLabel,
@@ -60,7 +61,7 @@ const SearchInput = ({
         <button
           type="button"
           className={styles.clear}
-          aria-label="지우기"
+          aria-label={L.elements.clear}
           onClick={() => onChange("")}
         >
           ✕

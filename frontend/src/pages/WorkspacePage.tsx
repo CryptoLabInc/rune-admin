@@ -9,6 +9,7 @@ import {
   useWorkspaceQuery,
 } from "@/hooks/queries/useWorkspaceQuery";
 import { PATH_LIST } from "@/constants/commonConstants";
+import { L } from "@/locales";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 const panelClass =
@@ -62,7 +63,7 @@ const WorkspacePage = () => {
   const exists = workspace != null;
   const transitional = exists && isTransitionalStatus(workspace.status);
 
-  if (isLoading) return <section aria-label="워크스페이스 관리" />;
+  if (isLoading) return <section aria-label={L.workspace.pageAria} />;
 
   /* A workspace exists → go to the console. The one exception is our own
      create still provisioning: stay and keep the spinner until it runs. */
@@ -84,29 +85,29 @@ const WorkspacePage = () => {
     transitional;
 
   return (
-    <section aria-label="워크스페이스 관리">
+    <section aria-label={L.workspace.pageAria}>
       {creating ? (
         <Feedback
           state="loading"
-          title="워크스페이스를 생성하는 중입니다…"
-          description="생성까지 약 3~5분 정도 소요됩니다."
+          title={L.workspace.creatingTitle}
+          description={L.workspace.creatingDesc}
           className={panelClass}
         />
       ) : createMutation.isError ? (
         <Feedback
           state="error"
-          title="워크스페이스 생성 실패"
-          description="워크스페이스를 생성할 수 없습니다. 다시 시도해 주세요."
+          title={L.workspace.createFailedTitle}
+          description={L.workspace.createFailedDesc}
           className={panelClass}
-          action={createButton("워크스페이스 생성", handleCreate)}
+          action={createButton(L.workspace.createWorkspace, handleCreate)}
         />
       ) : (
         <Feedback
           state="empty"
-          title="생성된 워크스페이스가 없습니다."
-          description="워크스페이스를 생성하면 기억(memory)을 저장할 수 있습니다."
+          title={L.workspace.emptyTitle}
+          description={L.workspace.emptyDesc}
           className={panelClass}
-          action={createButton("워크스페이스 생성", handleCreate)}
+          action={createButton(L.workspace.createWorkspace, handleCreate)}
         />
       )}
     </section>

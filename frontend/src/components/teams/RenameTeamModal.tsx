@@ -9,6 +9,7 @@ import {
   TEAM_NAME_RULE_TEXT,
 } from "@/components/teams/teamOptions";
 import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
+import { L } from "@/locales";
 import type { TTeamTree } from "@/types/teamTypes";
 
 interface RenameTeamModalProps {
@@ -58,7 +59,7 @@ const RenameTeamModal = ({
   const nameError = isInvalidFormat
     ? TEAM_NAME_RULE_TEXT
     : isDuplicate
-      ? "같은 상위 팀에 동일한 이름이 이미 있습니다."
+      ? L.teams.dupName
       : undefined;
 
   return (
@@ -66,7 +67,7 @@ const RenameTeamModal = ({
       <div className="flex w-full flex-col gap-5">
         <Input
           id="rename-team-name"
-          labelText="팀 이름"
+          labelText={L.teams.teamName}
           maxLength={50}
           value={name}
           setValue={setName}

@@ -6,6 +6,7 @@ import RuneMark from "@/components/elements/RuneMark";
 import PublicNavbar from "@/components/navigation/PublicNavbar";
 import { postLogout } from "@/api/authAPIs";
 import { BTN_TEXT, PATH_LIST, QUERY_KEYS } from "@/constants/commonConstants";
+import { L } from "@/locales";
 
 /**
  * OwnerLockedNotice is the soft-block screen shown when a signed-in account is
@@ -35,18 +36,18 @@ const OwnerLockedNotice = ({ owner }: { owner?: string }) => {
         <div className="border-border bg-panel-solid flex w-100 flex-col gap-8 rounded-lg border p-7 text-center">
           <div className="flex items-center justify-center gap-2">
             <RuneMark />
-            <h1 className="text-lg font-semibold">사용할 수 없는 계정</h1>
+            <h1 className="text-lg font-semibold">{L.auth.ownerLockedTitle}</h1>
           </div>
           <p className="text-muted-foreground text-md">
-            이 콘솔은{" "}
+            {L.auth.ownerLockedPrefix}
             {owner ? (
               <span className="text-foreground font-medium">{owner}</span>
             ) : (
-              "다른 계정"
+              L.auth.ownerFallback
             )}
-            이(가) 관리하고 있어요.
+            {L.auth.ownerLockedSuffix}
             <br />
-            이 계정으로는 콘솔을 사용할 수 없습니다.
+            {L.auth.ownerLockedBody}
           </p>
           <Button
             btnText={BTN_TEXT.signOut}

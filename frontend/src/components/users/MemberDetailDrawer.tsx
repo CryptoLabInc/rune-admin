@@ -25,6 +25,7 @@ import { parseErrorCode } from "@/api/parseError";
 import { formatDate, formatDateTime } from "@/utils/formatDate";
 import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
 import { INVITATION_STATUS_VAR } from "@/constants/styleConstants";
+import { L } from "@/locales";
 import type { TBatchResult, TTeamTree } from "@/types/teamTypes";
 import type { TUserListItem } from "@/types/userTypes";
 import { useNoticeStore } from "@/stores/noticeStore";
@@ -47,14 +48,14 @@ const styles = {
     an online member shows last access; otherwise the invitation axis drives it. */
 const subtitleFor = (user: TUserListItem): string => {
   if (user.sessionStatus === "online") {
-    return `최근 접속 ${formatDate(user.lastAccessAt)}`;
+    return L.members.lastAccessed(formatDate(user.lastAccessAt));
   }
   switch (user.invitationStatus) {
     case "invite_redeemed":
-      return "초대 코드 사용됨 · 연결 대기 중";
+      return L.members.redeemedAwaiting;
     case "invite_pending":
     case "invite_expired":
-      return `최근 초대 코드 발송 ${formatDateTime(user.lastInvitedAt)}`;
+      return L.members.lastInviteSentAt(formatDateTime(user.lastInvitedAt));
   }
 };
 
@@ -78,12 +79,12 @@ type TDrawerModal =
 /** Batch-endpoint failure reasons shown by team name (SC-13 — shared
     with the team-side codes; the drawer only ever sees these two). */
 const BATCH_REASON: Record<string, string> = {
-  TEAM_NOT_FOUND: "팀을 찾을 수 없습니다",
-  NOT_TEAM_MEMBER: "팀 멤버가 아닙니다",
+  TEAM_NOT_FOUND: L.members.teamNotFound,
+  NOT_TEAM_MEMBER: L.teams.notTeamMember,
 };
 // Any other code (e.g. a transient INTERNAL) shows a generic retry message
 // rather than leaking the raw backend code into the failure modal.
-const BATCH_REASON_FALLBACK = "처리에 실패했습니다. 다시 시도해 주세요.";
+const BATCH_REASON_FALLBACK = L.common.processFailed;
 
 interface MemberDetailDrawerProps {
   user: TUserListItem;
@@ -178,11 +179,15 @@ const MemberDetailDrawer = ({
     setResending(true);
     try {
       await onResendCode();
-      showNotice("초대 코드 재전송", "초대 코드를 재전송했습니다.", "info");
+      showNotice(
+        BTN_TEXT.resendInvitationCode,
+        L.members.inviteCodeResent,
+        "info",
+      );
     } catch {
       showNotice(
-        "초대 코드 재전송",
-        "초대 코드 재전송에 실패했습니다. 다시 시도해 주세요.",
+        BTN_TEXT.resendInvitationCode,
+        L.members.resendCodeFailed,
         "error",
       );
     } finally {
@@ -222,15 +227,15 @@ const MemberDetailDrawer = ({
           checked: false,
         },
       ]);
-      showNotice("팀 추가", "팀에 추가되었습니다.", "info");
+      showNotice(L.members.addTeamTitle, L.members.addedToTeam, "info");
       resetAdd();
     } catch (err) {
       const code = err instanceof Response ? await parseErrorCode(err) : "";
       showNotice(
-        "팀 추가",
+        L.members.addTeamTitle,
         code === "ALREADY_TEAM_MEMBER"
-          ? "이미 소속된 팀입니다."
-          : "팀 추가에 실패했습니다. 다시 시도해 주세요.",
+          ? L.members.alreadyTeamMember
+          : L.members.addTeamFailed,
         "error",
       );
     } finally {
@@ -295,7 +300,9 @@ const MemberDetailDrawer = ({
 
         <section className="flex flex-col gap-4">
           <div className={styles.sectionHead}>
-            <b className="text-md">소속 팀 ({memberships.length})</b>
+            <b className="text-md">
+              {L.members.teamsHeading(memberships.length)}
+            </b>
             {selected.length > 0 && (
               <span className={styles.selectedCount}>
                 {selected.length} selected
@@ -313,11 +320,13 @@ const MemberDetailDrawer = ({
                       prev.map((m) => ({ ...m, checked })),
                     )
                   }
-                  ariaLabel="전체선택"
+                  ariaLabel={L.members.selectAll}
                 />
               </TableHeaderCell>
-              <TableHeaderCell>팀</TableHeaderCell>
-              <TableHeaderCell className="w-[104px]">권한</TableHeaderCell>
+              <TableHeaderCell>{L.common.team}</TableHeaderCell>
+              <TableHeaderCell className="w-[104px]">
+                {L.common.role}
+              </TableHeaderCell>
             </TableHead>
             <tbody>
               {memberships.length === 0 ? (
@@ -396,22 +405,24 @@ const MemberDetailDrawer = ({
               <Dropdown
                 options={addableTeams}
                 placeholder={
-                  addableTeams.length === 0 ? "추가할 팀 없음" : "팀 선택"
+                  addableTeams.length === 0
+                    ? L.members.noTeamsToAdd
+                    : L.members.selectTeam
                 }
                 value={addTeamId}
                 onChange={setAddTeamId}
                 size="sm"
-                ariaLabel="추가할 팀"
+                ariaLabel={L.members.teamToAdd}
                 className="flex-1"
                 disabled={addableTeams.length === 0}
               />
               <Dropdown
                 options={ROLE_OPTIONS}
-                placeholder="권한 선택"
+                placeholder={L.members.selectRole}
                 value={addRole}
                 onChange={setAddRole}
                 size="sm"
-                ariaLabel="추가할 role"
+                ariaLabel={L.members.roleToAdd}
                 className="w-24"
                 /* No team left to join (all already joined) → the role
                    picker has nothing to apply to, so disable it too. */
@@ -433,7 +444,7 @@ const MemberDetailDrawer = ({
 
         <section className="flex flex-col gap-4">
           <div className={styles.sectionHead}>
-            <b className="text-md">멤버 관리</b>
+            <b className="text-md">{L.nav.users}</b>
           </div>
 
           {/* Account-level actions: 세션 비활성화 · 멤버 삭제 (SC-15) —
@@ -464,7 +475,7 @@ const MemberDetailDrawer = ({
 
       {openModal === "role-confirm" && (
         <RoleChangeConfirmModal
-          subjectLabel="팀"
+          subjectLabel={L.common.team}
           changes={changes.map((m) => ({
             label: m.teamName,
             from: m.baseRole,
@@ -520,7 +531,7 @@ const MemberDetailDrawer = ({
             if (result.failed.length === 0) {
               showNotice(
                 MODAL_TITLES.removeMembership,
-                "멤버십이 제거되었습니다.",
+                L.teams.membershipsRemoved,
                 "success",
               );
             } else {
@@ -561,16 +572,20 @@ const MemberDetailDrawer = ({
             try {
               await onDeactivateSession();
               setOpenModal(null);
-              showNotice("세션 비활성화", "세션을 비활성화했습니다.", "info");
+              showNotice(
+                MODAL_TITLES.deactivateSession,
+                L.members.sessionDeactivated,
+                "info",
+              );
             } catch (err) {
               const code =
                 err instanceof Response ? await parseErrorCode(err) : "";
               setOpenModal(null);
               showNotice(
-                "세션 비활성화",
+                MODAL_TITLES.deactivateSession,
                 code === "SESSION_NOT_ACTIVE"
-                  ? "이미 만료된 세션입니다."
-                  : "세션 비활성화에 실패했습니다. 다시 시도해 주세요.",
+                  ? L.members.sessionAlreadyExpired
+                  : L.members.deactivateFailed,
                 "error",
               );
             }
@@ -586,16 +601,20 @@ const MemberDetailDrawer = ({
             try {
               await onCancelInvitation();
               setOpenModal(null);
-              showNotice("초대 취소", "초대를 취소했습니다.", "info");
+              showNotice(
+                MODAL_TITLES.cancelInvitation,
+                L.members.invitationCanceled,
+                "info",
+              );
             } catch (err) {
               const code =
                 err instanceof Response ? await parseErrorCode(err) : "";
               setOpenModal(null);
               showNotice(
-                "초대 취소",
+                MODAL_TITLES.cancelInvitation,
                 code === "INVITATION_NOT_PENDING"
-                  ? "취소할 초대가 없습니다."
-                  : "초대 취소에 실패했습니다. 다시 시도해 주세요.",
+                  ? L.members.noInvitationToCancel
+                  : L.members.cancelInvitationFailed,
                 "error",
               );
             }

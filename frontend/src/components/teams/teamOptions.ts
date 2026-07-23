@@ -1,11 +1,11 @@
+import { L } from "@/locales";
 import type { TDropdownOption } from "@/types/commonTypes";
 import type { TTeamTree } from "@/types/teamTypes";
 
 /** Team name rule: digits, Hangul, Latin letters, and - _ only. */
 export const TEAM_NAME_PATTERN = /^[0-9A-Za-z가-힣_-]+$/;
 
-export const TEAM_NAME_RULE_TEXT =
-  "숫자·한글·영어와 - _ 만 사용할 수 있습니다.";
+export const TEAM_NAME_RULE_TEXT = L.teams.teamNameRule;
 
 /** Grantable member roles (Admin is console-account only — API §0). */
 export const ROLE_OPTIONS: TDropdownOption[] = [

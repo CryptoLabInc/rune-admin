@@ -14,6 +14,7 @@ import { useInvitationHistoryQuery } from "@/hooks/queries/useInvitationHistoryQ
 import { cn } from "@/utils/cn";
 import { formatDateTime } from "@/utils/formatDate";
 import { BTN_TEXT } from "@/constants/commonConstants";
+import { L } from "@/locales";
 import type { TDropdownOption } from "@/types/commonTypes";
 
 const styles = {
@@ -26,9 +27,9 @@ const styles = {
    sort query params (console API design §6). No status filter or
    issuance button: issuance lives in user/team management. */
 const SORT_OPTIONS: TDropdownOption[] = [
-  { value: "username", label: "멤버 이름" },
-  { value: "issued_at", label: "최근 발급 시간" },
-  { value: "last_access", label: "최근 접속 시간" },
+  { value: "username", label: L.common.memberName },
+  { value: "issued_at", label: L.members.lastIssued },
+  { value: "last_access", label: L.members.lastAccessedAt },
 ];
 
 /* 10 rows per page, fixed (SC-16 no.4) — the ?size=10 query param. */
@@ -74,15 +75,15 @@ const SessionsPage = () => {
   /* ── SC-16 state B — 조회 실패 ──────────────────────────────────── */
   if (historyQuery.isError) {
     return (
-      <section className={styles.page} aria-label="세션 기록">
+      <section className={styles.page} aria-label={L.nav.sessions}>
         <Feedback
           state="error"
           /* Taller, fully centered variant — the SC-16 state B canvas
              centers icon/text/button in a 180px-min panel, unlike the
              default left-aligned 92px row. */
           className="flex min-h-45 flex-col items-center justify-center text-center"
-          title="이력 정보를 불러올 수 없습니다."
-          description="새로고침 후 다시 시도해 주세요."
+          title={L.members.historyLoadError}
+          description={L.common.refreshRetry}
           action={
             <Button
               btnText={BTN_TEXT.refresh}
@@ -99,7 +100,7 @@ const SessionsPage = () => {
 
   /* ── SC-16 state A — 기본 ───────────────────────────────────────── */
   return (
-    <section className={styles.page} aria-label="세션 기록">
+    <section className={styles.page} aria-label={L.nav.sessions}>
       <Table
         fluid
         /* Fixed page height: thead 34px + 10 rows × 36px (h-9). Short
@@ -108,20 +109,20 @@ const SessionsPage = () => {
         scrollClassName="min-h-[394px]"
         toolbar={
           <div className="flex items-center gap-2 px-4 py-4">
-            <span className="text-md text-faint">정렬 기준</span>
+            <span className="text-md text-faint">{L.common.sortBy}</span>
             <Dropdown
               options={SORT_OPTIONS}
               value={sort}
               onChange={changeSort}
               size="sm"
-              ariaLabel="정렬"
+              ariaLabel={L.common.sort}
               className="w-40"
             />
           </div>
         }
         foot={
           <TableFoot
-            info={`총 ${total}건 · ${PAGE_SIZE}건/페이지`}
+            info={L.members.sessionPageInfo(total, PAGE_SIZE)}
             className="flex-row"
           >
             <Pagination
@@ -135,9 +136,13 @@ const SessionsPage = () => {
         {/* Fixed column widths — auto layout would resize per page's
             content and shift the headers while paginating. */}
         <TableHead>
-          <TableHeaderCell className="w-2/5">사용자</TableHeaderCell>
-          <TableHeaderCell className="w-[30%]">발급 시간</TableHeaderCell>
-          <TableHeaderCell className="w-[30%]">최근 접속 시간</TableHeaderCell>
+          <TableHeaderCell className="w-2/5">{L.common.users}</TableHeaderCell>
+          <TableHeaderCell className="w-[30%]">
+            {L.members.issuedAt}
+          </TableHeaderCell>
+          <TableHeaderCell className="w-[30%]">
+            {L.members.lastAccessedAt}
+          </TableHeaderCell>
         </TableHead>
         <tbody>
           {historyQuery.isPending && (
@@ -146,7 +151,7 @@ const SessionsPage = () => {
                 colSpan={3}
                 className="text-faint px-3 py-8 text-center text-sm"
               >
-                불러오는 중…
+                {L.common.loading}
               </td>
             </tr>
           )}
@@ -156,7 +161,7 @@ const SessionsPage = () => {
                 colSpan={3}
                 className="text-muted-foreground border-t px-3 py-8 text-center text-sm"
               >
-                이력이 없습니다.
+                {L.members.noHistory}
               </td>
             </tr>
           )}

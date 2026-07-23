@@ -1,10 +1,11 @@
 /** Username (표시용 사용자 이름) rules — API design §공통 계약 (2026-07-20):
  * 한글·영문 소문자만, 단어 사이 공백 1칸(양끝 공백 금지), 1~50자. */
 
+import { L } from "@/locales";
+
 export const USERNAME_MAX_LENGTH = 50;
 
-export const USERNAME_FORMAT_ERROR =
-  "한글, 영문 소문자, 단어 사이 공백 1칸만 입력할 수 있습니다.";
+export const USERNAME_FORMAT_ERROR = L.validation.usernameRule;
 
 /* Compatibility jamo (ㄱ-ㅎ·ㅏ-ㅣ) are accepted while typing so an
    in-progress IME composition never flags as invalid mid-keystroke;

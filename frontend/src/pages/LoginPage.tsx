@@ -7,6 +7,7 @@ import PublicNavbar from "@/components/navigation/PublicNavbar";
 import { useSessionQuery } from "@/hooks/queries/useSessionQuery";
 import { postAuthStart } from "@/api/authAPIs";
 import { redirectTo } from "@/utils/redirect";
+import { L } from "@/locales";
 import {
   BRAND_WORDMARK,
   BTN_TEXT,
@@ -56,9 +57,9 @@ const LoginPage = () => {
           {failed && (
             <p role="alert" className="text-negative text-md mb-4">
               <span className="text-muted-foreground">
-                로그인 중 문제가 발생했습니다.
+                {L.login.failed1}
                 <br />
-                다시 시도해 주세요.
+                {L.login.failed2}
               </span>
             </p>
           )}
@@ -72,7 +73,7 @@ const LoginPage = () => {
             />
             {!failed && (
               <p className="text-muted-foreground mt-3 text-sm">
-                콘솔을 사용하기 위해 RUNE 계정이 필요합니다.
+                {L.login.accountRequired}
               </p>
             )}
           </div>

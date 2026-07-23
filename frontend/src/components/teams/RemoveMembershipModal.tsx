@@ -2,6 +2,7 @@ import Button from "@/components/elements/Button";
 import Notice from "@/components/elements/Notice";
 import ModalLayout from "@/components/layout/ModalLayout";
 import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
+import { L } from "@/locales";
 import type { TTeamMemberRole } from "@/types/teamTypes";
 
 export interface TMembershipRemoval {
@@ -37,13 +38,13 @@ const RemoveMembershipModal = ({
   return (
     <ModalLayout title={MODAL_TITLES.removeMembership} isOpen>
       <div className="flex w-full flex-col gap-4">
-        <p className="text-base">다음 멤버십을 제거합니다:</p>
+        <p className="text-base">{L.teams.removeIntro}</p>
         <table className={styles.table}>
           <thead>
             <tr>
-              <th className={styles.th}>멤버 이름</th>
-              <th className={styles.th}>팀</th>
-              <th className={styles.th}>권한</th>
+              <th className={styles.th}>{L.common.memberName}</th>
+              <th className={styles.th}>{L.common.team}</th>
+              <th className={styles.th}>{L.common.role}</th>
             </tr>
           </thead>
           <tbody>
@@ -56,9 +57,7 @@ const RemoveMembershipModal = ({
             ))}
           </tbody>
         </table>
-        <Notice tone="info">
-          하위 팀 소속은 유지됩니다. 필요할 경우 개별 선택 후 제거하세요.
-        </Notice>
+        <Notice tone="info">{L.teams.removeKeepSubteams}</Notice>
       </div>
       <div className="flex w-full gap-2">
         <Button

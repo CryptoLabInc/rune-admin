@@ -14,6 +14,7 @@ import {
   validateUsername,
 } from "@/utils/username";
 import { BTN_TEXT, MODAL_TITLES } from "@/constants/commonConstants";
+import { L } from "@/locales";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -56,37 +57,37 @@ const AddMemberModal = ({
       <div className="flex w-full flex-col gap-6">
         <Input
           id="add-member-account"
-          labelText="이메일 (account)"
+          labelText={L.teams.emailLabel}
           type="email"
           placeholder="user@corp.com"
           maxLength={100}
           value={account}
           setValue={setAccount}
-          error={invalidFormat ? "올바른 이메일 형식이 아닙니다." : undefined}
+          error={invalidFormat ? L.teams.invalidEmail : undefined}
         />
         <Input
           id="add-member-username"
-          labelText="사용자 이름 (username)"
-          placeholder="사용자 이름"
+          labelText={L.teams.usernameLabel}
+          placeholder={L.teams.usernamePlaceholder}
           maxLength={USERNAME_MAX_LENGTH}
           value={username}
           setValue={(value) => setUsername(normalizeUsernameInput(value))}
           error={usernameError}
         />
         <Dropdown
-          label="권한 (role)"
-          placeholder="권한 선택"
+          label={L.teams.roleLabel}
+          placeholder={L.teams.selectRole}
           options={ROLE_OPTIONS}
           value={role}
           onChange={setRole}
         />
         <Notice tone="info">
-          초대받은 사용자가 rune을 연결하면{" "}
+          {L.teams.invitePrefix}
           <MemberStatus
             status="online"
             className="bg-mint/10 h-auto cursor-default gap-1 rounded-sm px-1.5 py-0.5 align-middle"
           />
-          으로 전환됩니다.
+          {L.teams.inviteSuffix}
         </Notice>
         {error && <Notice tone="error">{error}</Notice>}
       </div>

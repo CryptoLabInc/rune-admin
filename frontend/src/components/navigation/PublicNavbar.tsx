@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 
 import Button from "@/components/elements/Button";
 import RuneMark from "@/components/elements/RuneMark";
+import LanguageToggle from "@/components/navigation/LanguageToggle";
 import {
   BRAND_WORDMARK,
   BTN_TEXT,
@@ -31,15 +32,18 @@ const PublicNavbar = () => {
           <RuneMark />
           {BRAND_WORDMARK}
         </Link>
-        {!onLoginPage && (
-          <Button
-            btnText={BTN_TEXT.getStarted}
-            btnSize="sm"
-            btnColor="mintFilled"
-            handleClick={() => navigate(PATH_LIST.login)}
-            className="w-auto"
-          />
-        )}
+        <div className="flex items-center gap-4">
+          <LanguageToggle />
+          {!onLoginPage && (
+            <Button
+              btnText={BTN_TEXT.getStarted}
+              btnSize="sm"
+              btnColor="mintFilled"
+              handleClick={() => navigate(PATH_LIST.login)}
+              className="w-auto"
+            />
+          )}
+        </div>
       </div>
     </header>
   );

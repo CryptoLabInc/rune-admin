@@ -1,4 +1,5 @@
 import { cn } from "@/utils/cn";
+import { L } from "@/locales";
 
 const styles = {
   wrap: "flex w-fit items-center gap-2 font-mono text-sm",
@@ -29,11 +30,11 @@ const Pagination = ({
   className,
 }: PaginationProps) => {
   return (
-    <nav className={cn(styles.wrap, className)} aria-label="페이지네이션">
+    <nav className={cn(styles.wrap, className)} aria-label={L.elements.pagination}>
       <button
         type="button"
         className={styles.arrow}
-        aria-label="이전 페이지"
+        aria-label={L.elements.prevPage}
         disabled={page <= 1}
         onClick={() => onChange(page - 1)}
       >
@@ -53,7 +54,7 @@ const Pagination = ({
       <button
         type="button"
         className={styles.arrow}
-        aria-label="다음 페이지"
+        aria-label={L.elements.nextPage}
         disabled={page >= totalPages}
         onClick={() => onChange(page + 1)}
       >
